@@ -1,0 +1,37 @@
+[tool.poetry]
+name = "marketing-research-swarm"
+version = "0.1.0"
+description = "AI-powered marketing research analysis using CrewAI multi-agent swarm for personalized content creation, campaign optimization, and advanced analytics"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<=3.13"
+crewai = {extras = ["tools"], version = "^0.83.0"}
+crewai-tools = "^0.12.1"
+langchain-openai = "^0.2.1"
+langchain-community = "^0.3.1"
+pandas = "^2.2.0"
+numpy = "^1.26.0"
+matplotlib = "^3.8.0"
+seaborn = "^0.13.0"
+plotly = "^5.17.0"
+scikit-learn = "^1.4.0"
+statsmodels = "^0.14.0"
+yfinance = "^0.2.28"
+requests = "^2.31.0"
+beautifulsoup4 = "^4.12.0"
+python-dotenv = "^1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+black = "^23.7.0"
+isort = "^5.12.0"
+flake8 = "^6.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+marketing_research_swarm = "marketing_research_swarm.main:run"
