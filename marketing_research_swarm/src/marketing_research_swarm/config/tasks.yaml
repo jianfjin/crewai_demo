@@ -1,0 +1,31 @@
+research_task:
+  description: "Conduct comprehensive market research on the beverage industry, focusing on trends, consumer preferences, and competitive landscape. Identify key opportunities and threats."
+  expected_output: "A detailed market research report with actionable insights."
+  agent: "market_research_analyst"
+
+strategy_task:
+  description: "Develop a content strategy for a new line of organic beverages. The strategy should target health-conscious millennials and include recommendations for social media, blog content, and influencer collaborations."
+  expected_output: "A comprehensive content strategy document."
+  agent: "content_strategist"
+
+copywriting_task:
+  description: "Write compelling copy for a series of social media posts to promote the new organic beverage line. The copy should be engaging, persuasive, and tailored to the target audience."
+  expected_output: "A set of social media posts ready for publication."
+  agent: "creative_copywriter"
+
+data_analysis_task:
+  description: "Analyze the provided sales data (data/beverage_sales.csv) to identify sales patterns, top-performing products, and regional performance. Create visualizations to support the analysis."
+  expected_output: "A data analysis report with key findings and visualizations."
+  agent: "data_analyst"
+  tools:
+    - "python_repl"
+
+optimization_task:
+  description: "Based on the market research and data analysis, provide recommendations for optimizing the marketing campaign for the new beverage line. Include suggestions for budget allocation and channel focus."
+  expected_output: "A set of optimization recommendations."
+  agent: "campaign_optimizer"
+
+brand_performance_task:
+  description: "Monitor and report on the brand performance of the new beverage line after the first quarter of launch. Track key metrics such as brand awareness, customer sentiment, and market share."
+  expected_output: "A brand performance report with key metrics and analysis."
+  agent: "brand_performance_specialist"
