@@ -3,7 +3,7 @@ name = "marketing-research-swarm"
 version = "0.1.0"
 description = "AI-powered marketing research analysis using CrewAI multi-agent swarm for personalized content creation, campaign optimization, and advanced analytics"
 # Corrected authors format to be a list of strings
-authors = ["jianfjin <jianfjin@gmail.com>"]
+authors = [{ name = "jianfjin", email = "jianfjin@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.10, <=3.13"
 
@@ -29,5 +29,5 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
