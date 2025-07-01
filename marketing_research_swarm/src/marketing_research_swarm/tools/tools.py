@@ -1,16 +1,20 @@
-from langchain.tools import tool
+from crewai.tools import BaseTool
 from .file_io import read_file, read_csv
 
-@tool("Read File")
-def read_file_tool(file_path: str) -> str:
-    """
-    Reads the content of a file and returns it as a string.
-    """
-    return read_file(file_path)
+class ReadFileTool(BaseTool):
+    name: str = "Read File"
+    description: str = "Reads the content of a file and returns it as a string."
 
-@tool("Read CSV")
-def read_csv_tool(file_path: str):
-    """
-    Reads a CSV file and returns a pandas DataFrame.
-    """
-    return read_csv(file_path)
+    def _run(self, file_path: str) -> str:
+        return read_file(file_path)
+
+class ReadCSVTool(BaseTool):
+    name: str = "Read CSV"
+    description: str = "Reads a CSV file and returns its content as a dictionary."
+
+    def _run(self, file_path: str) -> dict:
+        df = read_csv(file_path)
+        return df.to_dict()
+
+read_file_tool = ReadFileTool()
+read_csv_tool = ReadCSVTool()

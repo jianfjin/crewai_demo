@@ -17,8 +17,6 @@ data_analysis_task:
   description: "Analyze the provided sales data (data/beverage_sales.csv) to identify sales patterns, top-performing products, and regional performance. Create visualizations to support the analysis."
   expected_output: "A data analysis report with key findings and visualizations."
   agent: "data_analyst"
-  tools:
-    - "python_repl"
 
 optimization_task:
   description: "Based on the market research and data analysis, provide recommendations for optimizing the marketing campaign for the new beverage line. Include suggestions for budget allocation and channel focus."

@@ -1,6 +1,5 @@
 market_research_analyst:
-  role: >
-    Senior a market research analyst.
+  role: "market_research_analyst"
   goal: >
     Gather and analyze market data, trends, and competitive intelligence.
     Provide actionable insights to drive business growth.
@@ -13,10 +12,11 @@ market_research_analyst:
   tools:
     - "read_csv_tool"
     - "read_file_tool"
+    - "time_series_analysis"
+    - "cross_sectional_analysis"
 
 content_strategist:
-  role: > 
-    Content Strategist
+  role: "content_strategist"
   goal: > 
     Create personalized content strategies and campaign frameworks.
   backstory: >
@@ -30,8 +30,7 @@ content_strategist:
     - "web_search"
 
 creative_copywriter:
-  role: > 
-    Creative Copywriter
+  role: "creative_copywriter"
   goal: > 
     Generate high-quality, targeted marketing copy and creative assets.
   backstory: >
@@ -45,8 +44,7 @@ creative_copywriter:
     - "web_search"
 
 data_analyst:
-  role: > 
-    Data Analyst
+  role: "data_analyst"
   goal: > 
     Perform advanced analytics, ROI calculations, and statistical analysis.
   backstory: >
@@ -57,9 +55,12 @@ data_analyst:
   allow_delegation: false
   tools:
     - "python_repl"
+    - "calculate_roi"
+    - "analyze_kpis"
+    - "forecast_sales"
 
 campaign_optimizer:
-  role: "Campaign Optimizer"
+  role: "campaign_optimizer"
   goal: "Optimize campaign performance and budget allocation"
   backstory: "A strategic thinker with a focus on results. The Campaign Optimizer continuously monitors campaign performance, identifies areas for improvement, and adjusts strategies to maximize ROI."
   llm:
@@ -69,9 +70,11 @@ campaign_optimizer:
   tools:
     - "search"
     - "web_search"
+    - "plan_budget"
+    - "calculate_roi"
 
 brand_performance_specialist:
-  role: "Brand Performance Specialist"
+  role: "brand_performance_specialist"
   goal: "Monitor brand metrics and market positioning"
   backstory: "An analytical professional who tracks brand health and market presence. The Brand Performance Specialist provides insights into brand perception, awareness, and competitive standing."
   llm:
@@ -81,3 +84,5 @@ brand_performance_specialist:
   tools:
     - "search"
     - "web_search"
+    - "analyze_brand_performance"
+    - "calculate_market_share"
