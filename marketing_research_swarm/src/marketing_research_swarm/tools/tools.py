@@ -1,5 +1,17 @@
 from crewai.tools import BaseTool
 from .file_io import read_file, read_csv
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+import warnings
+warnings.filterwarnings('ignore')
 
 class ReadFileTool(BaseTool):
     name: str = "Read File"

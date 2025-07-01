@@ -1,9 +1,13 @@
 import yaml
 import os
 import requests
+from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
+
+# Load environment variables
+load_dotenv()
 from .tools import read_file_tool, read_csv_tool
 from .tools.advanced_tools import (
     calculate_roi,
