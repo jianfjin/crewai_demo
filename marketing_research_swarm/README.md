@@ -16,6 +16,7 @@ A comprehensive marketing research analysis platform powered by CrewAI's multi-a
 - **Brand Performance**: Track and analyze brand metrics
 - **Market Share Analysis**: Competitive positioning insights
 - **Budget Planning**: AI-recommended budget allocation strategies
+- **Token Usage Tracking**: Real-time LLM cost monitoring and optimization
 
 ### 🔬 Research Capabilities
 - **Time-Series Analysis**: Trend analysis over time periods
@@ -80,10 +81,17 @@ marketing_research_swarm/
 
 2. **Run the marketing research swarm**:
    ```bash
+   crewai run
+   # or
    python src/marketing_research_swarm/main.py
    ```
 
-3. **Customize agents and tasks** by editing:
+3. **View comprehensive results** including:
+   - Marketing analysis and insights
+   - Token usage and cost analysis
+   - Performance optimization recommendations
+
+4. **Customize agents and tasks** by editing:
    - `src/marketing_research_swarm/config/agents.yaml`
    - `src/marketing_research_swarm/config/tasks.yaml`
 
@@ -107,19 +115,55 @@ marketing_research_swarm/
 5. **Optimization Phase**: Campaign Optimizer refines strategies
 6. **Monitoring Phase**: Brand Performance Specialist tracks results
 
+## Token Usage Tracking
+
+The platform includes comprehensive token usage tracking and cost analysis:
+
+### Real-Time Monitoring
+- **Token Consumption**: Track prompt and completion tokens for each LLM call
+- **Cost Analysis**: Real-time cost calculation based on model pricing
+- **Performance Metrics**: Monitor efficiency and response times
+- **Agent Breakdown**: Individual performance analysis for each agent
+
+### Sample Token Report
+```
+## Token Usage Analysis
+
+### Executive Summary
+- Total Duration: 4.25 minutes
+- Total Tokens: 15,847 tokens
+- Model Used: gpt-4o-mini
+- Total Cost: $0.0238 USD
+- Tasks Completed: 6
+
+### Agent Performance Breakdown
+Market Research Analyst: 4,523 tokens ($0.0068)
+Data Analyst: 3,891 tokens ($0.0058)
+Content Strategist: 2,456 tokens ($0.0037)
+
+### Optimization Recommendations
+1. Consider using gpt-4o-mini for cost optimization
+2. Optimize prompts for market_research_analyst
+3. Break down complex tasks taking over 2 minutes
+```
+
 ## Usage Examples
 
-### Generate Personalized Campaign Content
+### Generate Personalized Campaign Content with Token Tracking
 ```python
-from marketing_research_swarm.crew import MarketingResearchCrew
+from marketing_research_swarm.crew_with_tracking import MarketingResearchCrew
 
-crew = MarketingResearchCrew()
+crew = MarketingResearchCrew(
+    'src/marketing_research_swarm/config/agents.yaml',
+    'src/marketing_research_swarm/config/tasks.yaml'
+)
 result = crew.kickoff({
     "target_audience": "millennials interested in sustainable fashion",
     "campaign_type": "social media",
     "budget": 50000,
     "duration": "3 months"
 })
+# Result includes both marketing insights AND comprehensive token analysis
 ```
 
 ### Perform ROI Analysis

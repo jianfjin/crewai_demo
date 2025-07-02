@@ -48,7 +48,7 @@ def main():
     
     try:
         # Import here to avoid module path issues
-        from marketing_research_swarm.crew import MarketingResearchCrew
+        from marketing_research_swarm.crew_with_tracking import MarketingResearchCrew
         
         # Initialize and run the crew
         crew = MarketingResearchCrew(agents_config_path, tasks_config_path)

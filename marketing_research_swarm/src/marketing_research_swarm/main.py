@@ -1,4 +1,4 @@
-from .crew import MarketingResearchCrew
+from .crew_with_tracking import MarketingResearchCrew
 import os
 from datetime import datetime
 
