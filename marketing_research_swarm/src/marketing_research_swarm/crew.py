@@ -42,10 +42,8 @@ class MarketingResearchCrew:
         except:
             web_search_tool = None
             
-        try:
-            python_repl_tool = CodeInterpreterTool()
-        except:
-            python_repl_tool = None
+        # Disable Code Interpreter to prevent string formatting issues
+        python_repl_tool = None
         
         self.tools = {
             "read_file_tool": read_file_tool,

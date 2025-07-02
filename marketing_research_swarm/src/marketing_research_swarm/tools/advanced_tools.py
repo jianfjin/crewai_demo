@@ -19,7 +19,10 @@ class CalculateROITool(BaseTool):
     def _run(self, revenue: float, cost: float, additional_costs: float = 0) -> str:
         try:
             total_cost = cost + additional_costs
-            roi = ((revenue - total_cost) / total_cost) * 100
+            if total_cost > 0:
+                roi = ((revenue - total_cost) / total_cost) * 100
+            else:
+                roi = 0
             
             result = f"""
 ROI Analysis Results:
@@ -52,19 +55,19 @@ class AnalyzeKPIsTool(BaseTool):
             # Calculate common KPIs
             results = "KPI Analysis Results:\n\n"
             
-            if 'clicks' in kwargs and 'impressions' in kwargs:
+            if 'clicks' in kwargs and 'impressions' in kwargs and kwargs['impressions'] > 0:
                 ctr = (kwargs['clicks'] / kwargs['impressions']) * 100
                 results += f"Click-Through Rate (CTR): {ctr:.2f}%\n"
             
-            if 'conversions' in kwargs and 'clicks' in kwargs:
+            if 'conversions' in kwargs and 'clicks' in kwargs and kwargs['clicks'] > 0:
                 conversion_rate = (kwargs['conversions'] / kwargs['clicks']) * 100
                 results += f"Conversion Rate: {conversion_rate:.2f}%\n"
             
-            if 'cost' in kwargs and 'conversions' in kwargs:
+            if 'cost' in kwargs and 'conversions' in kwargs and kwargs['conversions'] > 0:
                 cac = kwargs['cost'] / kwargs['conversions']
                 results += f"Customer Acquisition Cost (CAC): ${cac:.2f}\n"
             
-            if 'revenue' in kwargs and 'conversions' in kwargs:
+            if 'revenue' in kwargs and 'conversions' in kwargs and kwargs['conversions'] > 0:
                 avg_order_value = kwargs['revenue'] / kwargs['conversions']
                 results += f"Average Order Value: ${avg_order_value:.2f}\n"
             
@@ -224,7 +227,10 @@ class CalculateMarketShareTool(BaseTool):
 
     def _run(self, company_revenue: float, total_market_revenue: float, competitors: dict = None) -> str:
         try:
-            market_share = (company_revenue / total_market_revenue) * 100
+            if total_market_revenue > 0:
+                market_share = (company_revenue / total_market_revenue) * 100
+            else:
+                market_share = 0
             
             result = f"""
 Market Share Analysis:
@@ -243,7 +249,7 @@ Market Position:
             else:
                 result += "- Niche Player\n"
             
-            if competitors:
+            if competitors and total_market_revenue > 0:
                 result += "\nCompetitor Analysis:\n"
                 for competitor, revenue in competitors.items():
                     comp_share = (revenue / total_market_revenue) * 100
@@ -287,6 +293,10 @@ class TimeSeriesAnalysisTool(BaseTool):
             mean_revenue = daily_data[value_column].mean()
             std_revenue = daily_data[value_column].std()
             trend_slope = np.polyfit(range(len(daily_data)), daily_data[value_column], 1)[0]
+            
+            # Protect against division by zero
+            if mean_revenue == 0:
+                mean_revenue = 0.01
             
             mean_units = daily_data['units_sold'].mean()
             mean_profit = daily_data['profit'].mean()
@@ -364,7 +374,10 @@ class CrossSectionalAnalysisTool(BaseTool):
             
             # Calculate market share by segment
             total_value = df[value_column].sum()
-            segment_stats['market_share'] = (segment_stats[f'{value_column}_sum'] / total_value * 100).round(2)
+            if total_value > 0:
+                segment_stats['market_share'] = (segment_stats[f'{value_column}_sum'] / total_value * 100).round(2)
+            else:
+                segment_stats['market_share'] = 0
             
             result = f"""
 Cross-Sectional Analysis by {segment_column.title()}:
@@ -443,7 +456,10 @@ class BeverageMarketAnalysisTool(BaseTool):
                 'units_sold': 'sum',
                 'profit_margin': 'mean'
             }).round(2)
-            brand_performance['market_share'] = (brand_performance['total_revenue'] / total_revenue * 100).round(2)
+            if total_revenue > 0:
+                brand_performance['market_share'] = (brand_performance['total_revenue'] / total_revenue * 100).round(2)
+            else:
+                brand_performance['market_share'] = 0
             brand_performance = brand_performance.sort_values('market_share', ascending=False)
             
             # Category analysis
@@ -453,7 +469,10 @@ class BeverageMarketAnalysisTool(BaseTool):
                 'price_per_unit': 'mean',
                 'profit_margin': 'mean'
             }).round(2)
-            category_performance['market_share'] = (category_performance['total_revenue'] / total_revenue * 100).round(2)
+            if total_revenue > 0:
+                category_performance['market_share'] = (category_performance['total_revenue'] / total_revenue * 100).round(2)
+            else:
+                category_performance['market_share'] = 0
             category_performance = category_performance.sort_values('market_share', ascending=False)
             
             # Regional analysis
@@ -462,7 +481,10 @@ class BeverageMarketAnalysisTool(BaseTool):
                 'units_sold': 'sum',
                 'profit_margin': 'mean'
             }).round(2)
-            regional_performance['market_share'] = (regional_performance['total_revenue'] / total_revenue * 100).round(2)
+            if total_revenue > 0:
+                regional_performance['market_share'] = (regional_performance['total_revenue'] / total_revenue * 100).round(2)
+            else:
+                regional_performance['market_share'] = 0
             
             result = f"""
 Comprehensive Beverage Market Analysis:
@@ -558,7 +580,10 @@ Profitability Breakdown:
 """
             for item in profit_analysis.index:
                 data = profit_analysis.loc[item]
-                roi = ((data['total_revenue'] - data['total_cost']) / data['total_cost'] * 100)
+                if data['total_cost'] > 0:
+                    roi = ((data['total_revenue'] - data['total_cost']) / data['total_cost'] * 100)
+                else:
+                    roi = 0
                 result += f"""
 {item}:
 - Revenue: ${data['total_revenue']:,.2f}

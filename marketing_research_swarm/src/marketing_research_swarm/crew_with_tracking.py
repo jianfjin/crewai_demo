@@ -28,6 +28,8 @@ from .tools.advanced_tools import (
     calculate_market_share,
     time_series_analysis,
     cross_sectional_analysis,
+    beverage_market_analysis,
+    profitability_analysis,
 )
 from crewai_tools import SerperDevTool, WebsiteSearchTool, CodeInterpreterTool
 from .utils.token_tracker import get_token_tracker, TokenAnalyzer, reset_token_tracker
@@ -89,10 +91,8 @@ class MarketingResearchCrewWithTracking:
         except:
             web_search_tool = None
             
-        try:
-            python_repl_tool = CodeInterpreterTool()
-        except:
-            python_repl_tool = None
+        # Disable Code Interpreter to prevent string formatting issues
+        python_repl_tool = None
         
         self.tools = {
             "read_file_tool": read_file_tool,
@@ -105,6 +105,8 @@ class MarketingResearchCrewWithTracking:
             "calculate_market_share": calculate_market_share,
             "time_series_analysis": time_series_analysis,
             "cross_sectional_analysis": cross_sectional_analysis,
+            "beverage_market_analysis": beverage_market_analysis,
+            "profitability_analysis": profitability_analysis,
         }
         
         # Add optional tools if available
