@@ -28,6 +28,14 @@ dependencies = [
     "PyYAML>=6.0",
 ]
 
+[project.scripts]
+marketing-research-swarm = "marketing_research_swarm.main:main"
+run_crew = "run_crew:main"
+
+[tool.crewai]
+# CrewAI specific configuration
+entry_point = "marketing_research_swarm.crew_runner:run"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
