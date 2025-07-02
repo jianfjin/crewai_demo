@@ -1,6 +1,6 @@
 research_task:
-  description: "Conduct comprehensive market research on the beverage industry, focusing on trends, consumer preferences, and competitive landscape. Identify key opportunities and threats."
-  expected_output: "A detailed market research report with actionable insights."
+  description: "Conduct comprehensive market research on the beverage industry, focusing on trends, consumer preferences, and competitive landscape for {target_audience}. Analyze the provided sales data from {data_file_path} to understand current market performance. Use time series analysis and cross-sectional analysis tools to identify patterns, trends, and regional differences. Focus on {product_lines} products and {market_segments} regions. Identify key opportunities and threats in the {competitive_landscape}."
+  expected_output: "A detailed market research report with data-driven insights, trend analysis, regional performance comparison, and strategic recommendations for the beverage market."
   agent: "market_research_analyst"
 
 strategy_task:
@@ -14,13 +14,13 @@ copywriting_task:
   agent: "creative_copywriter"
 
 data_analysis_task:
-  description: "Analyze the provided sales data (data/beverage_sales.csv) to identify sales patterns, top-performing products, and regional performance. Create visualizations to support the analysis."
-  expected_output: "A data analysis report with key findings and visualizations."
+  description: "Analyze the provided beverage sales data from {data_file_path} to identify sales patterns, top-performing products, and regional performance. Use time series analysis and cross-sectional analysis tools to examine trends over time and compare performance across regions (North vs South) and products (Green Tea vs Latte). Calculate key metrics including sales forecasts, growth rates, and performance indicators."
+  expected_output: "A comprehensive data analysis report with key findings, statistical insights, sales forecasts, and actionable recommendations based on the beverage sales data."
   agent: "data_analyst"
 
 optimization_task:
-  description: "Based on the market research and data analysis, provide recommendations for optimizing the marketing campaign for the new beverage line. Include suggestions for budget allocation and channel focus."
-  expected_output: "A set of optimization recommendations."
+  description: "Based on the market research and data analysis results, provide comprehensive recommendations for optimizing the marketing campaign for the beverage line targeting {target_audience}. Use the budget planning and ROI calculation tools to create optimal budget allocation across channels. Consider the {budget} total budget and {duration} campaign duration. Focus on {campaign_goals} and provide specific recommendations for improving performance in underperforming regions and products."
+  expected_output: "A comprehensive optimization strategy with budget allocation recommendations, channel focus suggestions, ROI projections, and specific action plans for campaign improvement."
   agent: "campaign_optimizer"
 
 brand_performance_task:
