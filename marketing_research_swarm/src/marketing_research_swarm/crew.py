@@ -18,6 +18,8 @@ from .tools.advanced_tools import (
     calculate_market_share,
     time_series_analysis,
     cross_sectional_analysis,
+    beverage_market_analysis,
+    profitability_analysis,
 )
 from crewai_tools import SerperDevTool, WebsiteSearchTool, CodeInterpreterTool
 
@@ -56,6 +58,8 @@ class MarketingResearchCrew:
             "calculate_market_share": calculate_market_share,
             "time_series_analysis": time_series_analysis,
             "cross_sectional_analysis": cross_sectional_analysis,
+            "beverage_market_analysis": beverage_market_analysis,
+            "profitability_analysis": profitability_analysis,
         }
         
         # Add optional tools if available

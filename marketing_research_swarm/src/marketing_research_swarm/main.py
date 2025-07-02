@@ -13,23 +13,25 @@ def main():
     
     # Comprehensive inputs for the marketing research analysis
     inputs = {
-        "target_audience": "health-conscious millennials interested in premium beverages",
-        "campaign_type": "multi-channel digital marketing",
-        "budget": 100000,
-        "duration": "6 months",
+        "target_audience": "health-conscious millennials and premium beverage consumers",
+        "campaign_type": "multi-channel global marketing campaign",
+        "budget": 250000,
+        "duration": "12 months",
         "data_file_path": data_path,
-        "analysis_focus": "beverage market performance and optimization",
-        "business_objective": "Launch new organic beverage line and optimize existing product performance",
-        "key_metrics": ["sales_trends", "regional_performance", "product_performance", "roi_analysis"],
-        "competitive_landscape": "premium beverage market with focus on organic and health-conscious products",
-        "market_segments": ["North", "South"],
-        "product_lines": ["Green Tea", "Latte"],
+        "analysis_focus": "global beverage market performance and brand optimization",
+        "business_objective": "Optimize beverage portfolio performance across global markets and develop data-driven marketing strategies",
+        "key_metrics": ["brand_performance", "category_trends", "regional_dynamics", "profitability_analysis", "pricing_optimization"],
+        "competitive_landscape": "global beverage market with diverse categories including Cola, Juice, Energy, Sports drinks, and enhanced water",
+        "market_segments": ["North America", "Europe", "Asia Pacific", "Latin America", "Middle East", "Africa", "Australia"],
+        "product_categories": ["Cola", "Juice", "Energy", "Sports", "Citrus", "Lemon-Lime", "Orange", "Water", "Enhanced Water"],
+        "brands": ["Coca-Cola", "Pepsi", "Red Bull", "Monster Energy", "Gatorade", "Powerade", "Tropicana", "Simply Orange", "Minute Maid", "Sprite", "Fanta", "7UP", "Mountain Dew", "Dr Pepper", "Dasani Water", "Aquafina", "Vitamin Water"],
         "campaign_goals": [
-            "Increase market share in underperforming regions",
-            "Optimize product mix based on sales data",
-            "Develop targeted marketing strategies for each region",
-            "Forecast sales for budget planning",
-            "Create compelling content for health-conscious consumers"
+            "Optimize brand portfolio performance across global markets",
+            "Identify high-margin opportunities by category and region",
+            "Develop pricing strategies based on profitability analysis",
+            "Create targeted marketing strategies for different beverage categories",
+            "Forecast sales and revenue for strategic planning",
+            "Enhance brand positioning in competitive categories"
         ]
     }
     

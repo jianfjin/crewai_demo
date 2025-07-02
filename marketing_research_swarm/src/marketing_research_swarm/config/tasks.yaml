@@ -1,29 +1,29 @@
 research_task:
-  description: "Conduct comprehensive market research on the beverage industry, focusing on trends, consumer preferences, and competitive landscape for {target_audience}. Analyze the provided sales data from {data_file_path} to understand current market performance. Use time series analysis and cross-sectional analysis tools to identify patterns, trends, and regional differences. Focus on {product_lines} products and {market_segments} regions. Identify key opportunities and threats in the {competitive_landscape}."
-  expected_output: "A detailed market research report with data-driven insights, trend analysis, regional performance comparison, and strategic recommendations for the beverage market."
+  description: "Conduct comprehensive market research on the beverage industry using the enhanced sales data from {data_file_path}. Analyze brand performance, category trends, regional dynamics, and competitive positioning. Use the beverage market analysis tool to understand market structure, then apply time series analysis to identify temporal patterns and cross-sectional analysis to compare performance across regions, brands, and categories. Focus on identifying opportunities for {target_audience} and provide insights on pricing strategies, profit margins, and market share dynamics across different beverage categories (Cola, Juice, Energy, Sports, etc.) and global regions."
+  expected_output: "A comprehensive market research report with detailed analysis of brand performance, category dynamics, regional insights, pricing strategies, profit margin analysis, and strategic recommendations for the global beverage market."
   agent: "market_research_analyst"
 
 strategy_task:
-  description: "Develop a content strategy for a new line of organic beverages. The strategy should target health-conscious millennials and include recommendations for social media, blog content, and influencer collaborations."
-  expected_output: "A comprehensive content strategy document."
+  description: "Develop a comprehensive content strategy for beverage brands based on the market research insights. The strategy should target {target_audience} and leverage insights about regional preferences, category trends, and competitive positioning. Include recommendations for social media campaigns, influencer collaborations, seasonal promotions, and brand positioning strategies that align with beverage consumption patterns and lifestyle trends."
+  expected_output: "A comprehensive content strategy document with channel-specific recommendations, seasonal campaign ideas, and brand positioning strategies for the beverage market."
   agent: "content_strategist"
 
 copywriting_task:
-  description: "Write compelling copy for a series of social media posts to promote the new organic beverage line. The copy should be engaging, persuasive, and tailored to the target audience."
-  expected_output: "A set of social media posts ready for publication."
+  description: "Create compelling marketing copy for beverage campaigns targeting {target_audience}. Develop copy that resonates with beverage consumers, highlights product benefits, and addresses category-specific needs (refreshment, energy, health, taste). Include social media posts, product descriptions, and campaign taglines that reflect regional preferences and seasonal consumption patterns identified in the market research."
+  expected_output: "A collection of marketing copy including social media posts, product descriptions, campaign taglines, and promotional content tailored for the beverage market."
   agent: "creative_copywriter"
 
 data_analysis_task:
-  description: "Analyze the provided beverage sales data from {data_file_path} to identify sales patterns, top-performing products, and regional performance. Use time series analysis and cross-sectional analysis tools to examine trends over time and compare performance across regions (North vs South) and products (Green Tea vs Latte). Calculate key metrics including sales forecasts, growth rates, and performance indicators."
-  expected_output: "A comprehensive data analysis report with key findings, statistical insights, sales forecasts, and actionable recommendations based on the beverage sales data."
+  description: "Perform comprehensive data analysis on the beverage sales data from {data_file_path}. Use profitability analysis to examine profit margins across brands, categories, and regions. Apply time series analysis to identify seasonal patterns and growth trends. Conduct cross-sectional analysis to compare performance across different dimensions (brands, categories, regions, countries). Calculate sales forecasts, ROI metrics, and identify the most profitable segments. Analyze pricing strategies and cost structures to provide insights for optimization."
+  expected_output: "A detailed data analysis report with profitability insights, sales forecasts, trend analysis, performance comparisons, and recommendations for pricing and cost optimization in the beverage market."
   agent: "data_analyst"
 
 optimization_task:
-  description: "Based on the market research and data analysis results, provide comprehensive recommendations for optimizing the marketing campaign for the beverage line targeting {target_audience}. Use the budget planning and ROI calculation tools to create optimal budget allocation across channels. Consider the {budget} total budget and {duration} campaign duration. Focus on {campaign_goals} and provide specific recommendations for improving performance in underperforming regions and products."
-  expected_output: "A comprehensive optimization strategy with budget allocation recommendations, channel focus suggestions, ROI projections, and specific action plans for campaign improvement."
+  description: "Based on the market research and data analysis results, develop comprehensive optimization strategies for beverage marketing campaigns targeting {target_audience}. Use profitability analysis and budget planning tools to create optimal budget allocation across channels, regions, and categories. Consider the {budget} total budget and {duration} campaign duration. Focus on {campaign_goals} and provide specific recommendations for improving performance in underperforming regions, optimizing pricing strategies, and maximizing profit margins across different beverage categories."
+  expected_output: "A comprehensive optimization strategy with budget allocation recommendations, regional focus strategies, pricing optimization suggestions, ROI projections, and specific action plans for campaign improvement in the beverage market."
   agent: "campaign_optimizer"
 
 brand_performance_task:
-  description: "Monitor and report on the brand performance of the new beverage line after the first quarter of launch. Track key metrics such as brand awareness, customer sentiment, and market share."
-  expected_output: "A brand performance report with key metrics and analysis."
+  description: "Analyze brand performance in the beverage market using the comprehensive sales data. Use the beverage market analysis tool to assess brand positioning, market share, and competitive landscape. Evaluate brand performance across different categories, regions, and price points. Track key metrics such as revenue share, profit margins, pricing strategies, and market penetration. Provide insights on brand health, competitive threats, and growth opportunities in the beverage industry."
+  expected_output: "A comprehensive brand performance report with market share analysis, competitive positioning insights, brand health metrics, and strategic recommendations for brand growth in the beverage market."
   agent: "brand_performance_specialist"
