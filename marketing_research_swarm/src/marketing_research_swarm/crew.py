@@ -75,7 +75,7 @@ class MarketingResearchCrew:
         # Try to configure LLM based on available API keys and configuration
         if 'OPENAI_API_KEY' in os.environ and os.environ['OPENAI_API_KEY'] != 'your_openai_api_key_here':
             llm = ChatOpenAI(
-                model="gpt-3.5-turbo",
+                model="gpt-4o-mini",
                 temperature=0.7
             )
         else:

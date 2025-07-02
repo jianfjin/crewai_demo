@@ -5,7 +5,7 @@ market_research_analyst:
     Provide actionable insights to drive business growth.
   backstory: >
     An expert in market research, skilled in identifying trends, analyzing competitor strategies, and providing actionable insights to drive business growth.
-  llm: google/gemini-2.5-flash
+  llm: openai/gpt-4o-mini
   allow_delegation: true
   tools: [read_csv_tool, read_file_tool, time_series_analysis, cross_sectional_analysis]
 
@@ -15,7 +15,7 @@ content_strategist:
     Create personalized content strategies and campaign frameworks.
   backstory: >
     A creative thinker with a knack for crafting compelling narratives. The Content Strategist develops content strategies that resonate with target audiences and align with brand goals.
-  llm: google/gemini-2.5-flash
+  llm: openai/gpt-4o-mini
   allow_delegation: true
   tools: [search, web_search]
 
@@ -25,7 +25,7 @@ creative_copywriter:
     Generate high-quality, targeted marketing copy and creative assets.
   backstory: >
     A master of words, the Creative Copywriter crafts persuasive and engaging copy for various marketing channels, from social media to email campaigns.
-  llm: google/gemini-2.5-flash
+  llm: openai/gpt-4o-mini
   allow_delegation: false
   tools: [search, web_search]
 
@@ -35,7 +35,7 @@ data_analyst:
     Perform advanced analytics, ROI calculations, and statistical analysis.
   backstory: >
     A quantitative expert with a passion for data. The Data Analyst uses statistical methods and data visualization to uncover insights, measure campaign performance, and inform strategic decisions.
-  llm: google/gemini-2.5-flash
+  llm: openai/gpt-4o-mini
   allow_delegation: false
   tools: [python_repl, calculate_roi, analyze_kpis, forecast_sales]
 
@@ -43,7 +43,7 @@ campaign_optimizer:
   role: "campaign_optimizer"
   goal: "Optimize campaign performance and budget allocation"
   backstory: "A strategic thinker with a focus on results. The Campaign Optimizer continuously monitors campaign performance, identifies areas for improvement, and adjusts strategies to maximize ROI."
-  llm: google/gemini-2.5-flash
+  llm: openai/gpt-4o-mini
   allow_delegation: true
   tools: [search, web_search, plan_budget, calculate_roi]
 
@@ -51,6 +51,6 @@ brand_performance_specialist:
   role: "brand_performance_specialist"
   goal: "Monitor brand metrics and market positioning"
   backstory: "An analytical professional who tracks brand health and market presence. The Brand Performance Specialist provides insights into brand perception, awareness, and competitive standing."
-  llm: google/gemini-2.5-flash
+  llm: openai/gpt-4o-mini
   allow_delegation: false
   tools: [search, web_search, analyze_brand_performance, calculate_market_share]
