@@ -6,6 +6,7 @@ This script demonstrates how to use the marketing research tools for beverage sa
 
 import sys
 import os
+import argparse
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -23,11 +24,21 @@ def main():
     print("6. Develop budget allocation plans")
     print("=" * 60)
     
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Run Marketing Research Swarm Analysis")
+    parser.add_argument(
+        "--type",
+        type=str,
+        default="comprehensive",
+        help="Type of analysis to run: comprehensive, sales_forecast, roi_analysis, brand_performance (default: comprehensive)"
+    )
+    args = parser.parse_args()
+
     # Import and run the main analysis
-    from marketing_research_swarm.main import main as run_analysis
+    from marketing_research_swarm.main import run_specific_analysis
     
     try:
-        run_analysis()
+        run_specific_analysis(args.type)
     except ImportError as e:
         print(f"Import Error: {e}")
         print("Please ensure all dependencies are installed:")

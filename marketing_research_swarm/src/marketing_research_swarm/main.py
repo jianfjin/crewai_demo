@@ -1,8 +1,9 @@
 from .crew_with_tracking import MarketingResearchCrew
 import os
 from datetime import datetime
+import argparse
 
-def main():
+def run_comprehensive_analysis():
     """
     Main function to run the Marketing Research Crew analysis on beverage sales data.
     This will generate a comprehensive marketing analysis report.
@@ -138,7 +139,7 @@ def run_specific_analysis(analysis_type="comprehensive"):
         }
     else:
         # Default to comprehensive analysis
-        return main()
+        return run_comprehensive_analysis()
     
     agents_config_path = 'src/marketing_research_swarm/config/agents.yaml'
     tasks_config_path = 'src/marketing_research_swarm/config/tasks.yaml'
@@ -153,4 +154,12 @@ def run_specific_analysis(analysis_type="comprehensive"):
     return result
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Run Marketing Research Swarm Analysis")
+    parser.add_argument(
+        "--type",
+        type=str,
+        default="comprehensive",
+        help="Type of analysis to run: comprehensive, sales_forecast, roi_analysis, brand_performance (default: comprehensive)"
+    )
+    args = parser.parse_args()
+    run_specific_analysis(args.type)
