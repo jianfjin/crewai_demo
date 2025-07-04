@@ -1,0 +1,9 @@
+market_intelligence_task:
+  description: "Conduct comprehensive market intelligence analysis on the beverage sales data from {data_file_path}. Use the beverage market analysis tool to assess overall market structure and competitive landscape. Apply cross-sectional analysis by brand to compare market positioning and performance metrics. Use time series analysis to identify brand performance trends over time. Calculate market share for each brand to understand competitive positioning and identify market leaders and challengers."
+  expected_output: "A detailed market intelligence report with competitive landscape analysis, brand positioning insights, market share calculations, and trend analysis that will inform brand performance evaluation."
+  agent: "market_research_analyst"
+
+brand_analysis_task:
+  description: "Perform comprehensive brand performance analysis using the beverage sales data from {data_file_path}. Use the analyze_brand_performance tool to evaluate brand health metrics and positioning. Apply profitability analysis with analysis_dimension='brand' to assess brand profitability and margins. Use calculate_market_share tool to determine each brand's competitive position. Analyze brand performance across different categories and regions using cross-sectional analysis. Focus on identifying brand strengths, weaknesses, growth opportunities, and competitive threats."
+  expected_output: "A comprehensive brand performance report with brand health metrics, profitability analysis, market share insights, competitive positioning, and strategic recommendations for brand growth and optimization in the beverage market."
+  agent: "brand_performance_specialist"

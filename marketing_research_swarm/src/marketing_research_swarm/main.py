@@ -150,10 +150,12 @@ def run_specific_analysis(analysis_type="comprehensive"):
             **base_inputs,
             "analysis_focus": "sales forecasting and trend analysis",
             "forecast_periods": 30,
-            "business_objective": "Predict future sales performance for strategic planning"
+            "quarterly_periods": 90,
+            "business_objective": "Predict future sales performance for strategic planning and inventory management"
         }
-        agents_config_path = 'src/marketing_research_swarm/config/agents.yaml'
-        tasks_config_path = 'src/marketing_research_swarm/config/tasks.yaml'
+        # Use specific sales forecast analysis configuration
+        agents_config_path = 'src/marketing_research_swarm/config/agents_sales_forecast.yaml'
+        tasks_config_path = 'src/marketing_research_swarm/config/tasks_sales_forecast.yaml'
         
     elif analysis_type == "roi_analysis":
         inputs = {
@@ -175,10 +177,13 @@ def run_specific_analysis(analysis_type="comprehensive"):
                 "sentiment_score": 7.5,
                 "market_position": 3
             },
-            "business_objective": "Assess brand health and competitive positioning"
+            "competitive_analysis": True,
+            "market_share_analysis": True,
+            "business_objective": "Assess brand health, competitive positioning, and growth opportunities"
         }
-        agents_config_path = 'src/marketing_research_swarm/config/agents.yaml'
-        tasks_config_path = 'src/marketing_research_swarm/config/tasks.yaml'
+        # Use specific brand performance analysis configuration
+        agents_config_path = 'src/marketing_research_swarm/config/agents_brand_performance.yaml'
+        tasks_config_path = 'src/marketing_research_swarm/config/tasks_brand_performance.yaml'
         
     else:
         # Default to comprehensive analysis

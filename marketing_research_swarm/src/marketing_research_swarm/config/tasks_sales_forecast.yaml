@@ -1,0 +1,9 @@
+market_analysis_task:
+  description: "Conduct comprehensive market trend analysis on the beverage sales data from {data_file_path}. Use the beverage market analysis tool to understand current market structure and dynamics. Apply time series analysis to identify seasonal patterns, growth trends, and cyclical behaviors in beverage consumption. Use cross-sectional analysis to compare performance across regions, brands, and categories to identify factors that influence sales patterns and forecasting accuracy."
+  expected_output: "A detailed market trend analysis report with seasonal patterns, growth trends, regional variations, and market dynamics that will inform accurate sales forecasting for the beverage industry."
+  agent: "market_research_analyst"
+
+forecasting_task:
+  description: "Perform comprehensive sales forecasting analysis on the beverage sales data from {data_file_path}. Use the forecast_sales tool with periods=30 to generate short-term forecasts and periods=90 for quarterly projections. Apply time series analysis with date_column='sale_date' and value_column='total_revenue' to identify trends and seasonality. Analyze KPIs to validate forecast accuracy and provide confidence intervals. Focus on creating actionable forecasts for inventory planning, budget allocation, and strategic decision-making."
+  expected_output: "A comprehensive sales forecasting report with 30-day and 90-day projections, trend analysis, seasonal adjustments, confidence intervals, and strategic recommendations for inventory and budget planning in the beverage market."
+  agent: "data_analyst"
