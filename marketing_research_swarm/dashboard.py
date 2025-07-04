@@ -21,7 +21,16 @@ import uuid
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 try:
-    from marketing_research_swarm.crew import MarketingResearchCrew
+    from marketing_research_swarm.crew_with_tracking import MarketingResearchCrewWithTracking
+    from marketing_research_swarm.utils.token_tracker import TokenTracker, get_global_tracker
+    from marketing_research_swarm.context.context_manager import AdvancedContextManager, ContextStrategy
+    from marketing_research_swarm.memory.mem0_integration import Mem0Integration
+    from marketing_research_swarm.persistence.analysis_cache import get_analysis_cache
+    from marketing_research_swarm.tools.optimized_tools import (
+        optimized_profitability_analyzer, 
+        optimized_roi_calculator, 
+        optimized_budget_planner
+    )
     from marketing_research_swarm.main import run_specific_analysis
 except ImportError as e:
     st.error(f"Import error: {e}")
@@ -165,7 +174,69 @@ def create_custom_task_config(selected_agents: List[str], task_params: Dict[str,
     
     return config_path
 
-def parse_analysis_results(result: Any) -> Dict[str, Any]:
+def parse_token_metrics(tracker: TokenTracker) -> Dict[str, Any]:
+    """Parse token tracking metrics for visualization"""
+    if not tracker:
+        return {}
+    
+    metrics = tracker.get_metrics()
+    return {
+        'total_tokens': metrics.get('total_tokens_used', 0),
+        'total_cost': metrics.get('total_cost_usd', 0.0),
+        'requests_made': metrics.get('total_requests', 0),
+        'average_tokens_per_request': metrics.get('average_tokens_per_request', 0),
+        'cost_breakdown': metrics.get('cost_breakdown', {}),
+        'token_breakdown': metrics.get('token_breakdown', {}),
+        'efficiency_score': metrics.get('efficiency_metrics', {}).get('tokens_per_insight', 0)
+    }
+
+def parse_optimization_metrics(context_manager, cache, memory_manager) -> Dict[str, Any]:
+    """Parse optimization metrics from various components"""
+    metrics = {}
+    
+    # Context management metrics
+    if context_manager:
+        try:
+            context_stats = context_manager.get_optimization_stats()
+            metrics['context_optimization'] = {
+                'elements_managed': context_stats.get('total_elements', 0),
+                'memory_saved_mb': context_stats.get('memory_saved_mb', 0),
+                'compression_ratio': context_stats.get('compression_ratio', 1.0),
+                'pruning_efficiency': context_stats.get('pruning_efficiency', 0)
+            }
+        except:
+            metrics['context_optimization'] = {'status': 'unavailable'}
+    
+    # Cache performance metrics
+    if cache:
+        try:
+            cache_stats = cache.get_cache_stats()
+            metrics['cache_performance'] = {
+                'hit_rate': cache_stats.get('hit_rate', 0),
+                'total_hits': cache_stats.get('total_hits', 0),
+                'total_misses': cache_stats.get('total_misses', 0),
+                'cache_size_mb': cache_stats.get('cache_size_mb', 0),
+                'items_cached': cache_stats.get('total_items', 0)
+            }
+        except:
+            metrics['cache_performance'] = {'status': 'unavailable'}
+    
+    # Memory management metrics
+    if memory_manager:
+        try:
+            memory_stats = memory_manager.get_memory_stats()
+            metrics['memory_management'] = {
+                'total_memories': memory_stats.get('total_memories', 0),
+                'memory_efficiency': memory_stats.get('efficiency_score', 0),
+                'retrieval_accuracy': memory_stats.get('retrieval_accuracy', 0)
+            }
+        except:
+            metrics['memory_management'] = {'status': 'unavailable'}
+    
+    return metrics
+
+def parse_analysis_results(result: Any, tracker: TokenTracker = None, 
+                         context_manager=None, cache=None, memory_manager=None) -> Dict[str, Any]:
     """Parse and structure analysis results for visualization"""
     if isinstance(result, str):
         return {
@@ -185,7 +256,9 @@ def parse_analysis_results(result: Any) -> Dict[str, Any]:
         'summary': result_text[:500] + "..." if len(result_text) > 500 else result_text,
         'full_text': result_text,
         'metrics': {},
-        'recommendations': []
+        'recommendations': [],
+        'token_metrics': parse_token_metrics(tracker) if tracker else {},
+        'optimization_metrics': parse_optimization_metrics(context_manager, cache, memory_manager)
     }
     
     # Try to extract metrics and recommendations
@@ -209,10 +282,213 @@ def parse_analysis_results(result: Any) -> Dict[str, Any]:
     
     return parsed_result
 
+def create_token_visualizations(token_metrics: Dict[str, Any]):
+    """Create token usage and cost visualizations"""
+    if not token_metrics:
+        return
+    
+    st.markdown('<div class="section-header">🔢 Token Usage & Cost Analysis</div>', unsafe_allow_html=True)
+    
+    # Token usage metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "Total Tokens Used",
+            f"{token_metrics.get('total_tokens', 0):,}",
+            help="Total number of tokens consumed during analysis"
+        )
+    
+    with col2:
+        st.metric(
+            "Total Cost",
+            f"${token_metrics.get('total_cost', 0):.4f}",
+            help="Total cost in USD for the analysis"
+        )
+    
+    with col3:
+        st.metric(
+            "API Requests",
+            f"{token_metrics.get('requests_made', 0)}",
+            help="Number of API requests made"
+        )
+    
+    with col4:
+        st.metric(
+            "Avg Tokens/Request",
+            f"{token_metrics.get('average_tokens_per_request', 0):.0f}",
+            help="Average tokens per API request"
+        )
+    
+    # Token breakdown visualization
+    if token_metrics.get('token_breakdown'):
+        st.subheader("Token Usage Breakdown")
+        
+        breakdown_df = pd.DataFrame([
+            {'Component': k, 'Tokens': v} 
+            for k, v in token_metrics['token_breakdown'].items()
+        ])
+        
+        if not breakdown_df.empty:
+            fig_tokens = px.pie(
+                breakdown_df,
+                values='Tokens',
+                names='Component',
+                title="Token Distribution by Component",
+                color_discrete_sequence=px.colors.qualitative.Set3
+            )
+            st.plotly_chart(fig_tokens, use_container_width=True)
+    
+    # Cost breakdown visualization
+    if token_metrics.get('cost_breakdown'):
+        st.subheader("Cost Breakdown")
+        
+        cost_df = pd.DataFrame([
+            {'Component': k, 'Cost': v} 
+            for k, v in token_metrics['cost_breakdown'].items()
+        ])
+        
+        if not cost_df.empty:
+            fig_cost = px.bar(
+                cost_df,
+                x='Component',
+                y='Cost',
+                title="Cost Distribution by Component ($)",
+                color='Cost',
+                color_continuous_scale='Blues'
+            )
+            fig_cost.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig_cost, use_container_width=True)
+
+def create_optimization_visualizations(optimization_metrics: Dict[str, Any]):
+    """Create optimization performance visualizations"""
+    if not optimization_metrics:
+        return
+    
+    st.markdown('<div class="section-header">⚡ Optimization Performance</div>', unsafe_allow_html=True)
+    
+    # Context optimization metrics
+    if 'context_optimization' in optimization_metrics:
+        context_metrics = optimization_metrics['context_optimization']
+        if context_metrics.get('status') != 'unavailable':
+            st.subheader("Context Management")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "Elements Managed",
+                    f"{context_metrics.get('elements_managed', 0)}",
+                    help="Number of context elements managed"
+                )
+            
+            with col2:
+                st.metric(
+                    "Memory Saved",
+                    f"{context_metrics.get('memory_saved_mb', 0):.1f} MB",
+                    help="Memory saved through optimization"
+                )
+            
+            with col3:
+                st.metric(
+                    "Compression Ratio",
+                    f"{context_metrics.get('compression_ratio', 1.0):.2f}x",
+                    help="Context compression efficiency"
+                )
+    
+    # Cache performance metrics
+    if 'cache_performance' in optimization_metrics:
+        cache_metrics = optimization_metrics['cache_performance']
+        if cache_metrics.get('status') != 'unavailable':
+            st.subheader("Cache Performance")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(
+                    "Cache Hit Rate",
+                    f"{cache_metrics.get('hit_rate', 0):.1f}%",
+                    help="Percentage of cache hits"
+                )
+            
+            with col2:
+                st.metric(
+                    "Total Hits",
+                    f"{cache_metrics.get('total_hits', 0)}",
+                    help="Number of cache hits"
+                )
+            
+            with col3:
+                st.metric(
+                    "Cache Size",
+                    f"{cache_metrics.get('cache_size_mb', 0):.1f} MB",
+                    help="Current cache size"
+                )
+            
+            with col4:
+                st.metric(
+                    "Items Cached",
+                    f"{cache_metrics.get('items_cached', 0)}",
+                    help="Number of items in cache"
+                )
+            
+            # Cache efficiency visualization
+            if cache_metrics.get('total_hits', 0) > 0 or cache_metrics.get('total_misses', 0) > 0:
+                cache_data = pd.DataFrame({
+                    'Type': ['Hits', 'Misses'],
+                    'Count': [cache_metrics.get('total_hits', 0), cache_metrics.get('total_misses', 0)]
+                })
+                
+                fig_cache = px.pie(
+                    cache_data,
+                    values='Count',
+                    names='Type',
+                    title="Cache Hit/Miss Ratio",
+                    color_discrete_map={'Hits': '#2ecc71', 'Misses': '#e74c3c'}
+                )
+                st.plotly_chart(fig_cache, use_container_width=True)
+    
+    # Memory management metrics
+    if 'memory_management' in optimization_metrics:
+        memory_metrics = optimization_metrics['memory_management']
+        if memory_metrics.get('status') != 'unavailable':
+            st.subheader("Memory Management")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "Total Memories",
+                    f"{memory_metrics.get('total_memories', 0)}",
+                    help="Number of memories stored"
+                )
+            
+            with col2:
+                st.metric(
+                    "Memory Efficiency",
+                    f"{memory_metrics.get('memory_efficiency', 0):.1f}%",
+                    help="Memory management efficiency score"
+                )
+            
+            with col3:
+                st.metric(
+                    "Retrieval Accuracy",
+                    f"{memory_metrics.get('retrieval_accuracy', 0):.1f}%",
+                    help="Accuracy of memory retrieval"
+                )
+
 def create_visualizations(parsed_results: Dict[str, Any], task_params: Dict[str, Any]):
     """Create visualizations based on analysis results"""
     
     st.markdown('<div class="section-header">📊 Analysis Visualizations</div>', unsafe_allow_html=True)
+    
+    # Token usage visualizations
+    if parsed_results.get('token_metrics'):
+        create_token_visualizations(parsed_results['token_metrics'])
+    
+    # Optimization performance visualizations
+    if parsed_results.get('optimization_metrics'):
+        create_optimization_visualizations(parsed_results['optimization_metrics'])
     
     # Metrics visualization
     if parsed_results.get('metrics'):
@@ -509,6 +785,57 @@ def main():
                 help="Current market position"
             )
         
+        # Optimization settings
+        st.markdown('<div class="section-header">⚡ Optimization Settings</div>', unsafe_allow_html=True)
+        
+        col7, col8 = st.columns(2)
+        
+        with col7:
+            st.subheader("Performance Optimization")
+            
+            token_budget = st.number_input(
+                "Token Budget",
+                min_value=1000,
+                max_value=50000,
+                value=4000,
+                step=500,
+                help="Maximum tokens to use for the analysis"
+            )
+            
+            context_strategy = st.selectbox(
+                "Context Strategy",
+                ["progressive_pruning", "abstracted_summaries", "minimal_context", "stateless"],
+                index=0,
+                help="Context optimization strategy"
+            )
+            
+            enable_caching = st.checkbox(
+                "Enable Caching",
+                value=True,
+                help="Enable result caching for faster subsequent runs"
+            )
+        
+        with col8:
+            st.subheader("Memory & Tracking")
+            
+            enable_mem0 = st.checkbox(
+                "Enable Mem0 Memory",
+                value=True,
+                help="Enable long-term memory management with Mem0"
+            )
+            
+            enable_token_tracking = st.checkbox(
+                "Enable Token Tracking",
+                value=True,
+                help="Track token usage and costs during analysis"
+            )
+            
+            enable_optimization_tools = st.checkbox(
+                "Use Optimized Tools",
+                value=True,
+                help="Use optimized analytical tools for better performance"
+            )
+        
         # Store configuration in session state
         task_params = {
             "target_audience": target_audience,
@@ -531,7 +858,15 @@ def main():
                 "market_position": market_position
             },
             "competitive_analysis": competitive_analysis,
-            "market_share_analysis": market_share_analysis
+            "market_share_analysis": market_share_analysis,
+            "optimization_settings": {
+                "token_budget": token_budget,
+                "context_strategy": context_strategy,
+                "enable_caching": enable_caching,
+                "enable_mem0": enable_mem0,
+                "enable_token_tracking": enable_token_tracking,
+                "enable_optimization_tools": enable_optimization_tools
+            }
         }
         
         st.session_state['task_params'] = task_params
@@ -591,9 +926,57 @@ def main():
                     # Execute the analysis
                     agents_config_path = 'src/marketing_research_swarm/config/agents.yaml'
                     
-                    # Initialize and run the crew
-                    crew = MarketingResearchCrew(agents_config_path, task_config_path)
+                    # Get optimization settings
+                    opt_settings = st.session_state['task_params'].get('optimization_settings', {})
+                    token_budget = opt_settings.get('token_budget', 4000)
+                    context_strategy_str = opt_settings.get('context_strategy', 'progressive_pruning')
+                    enable_caching = opt_settings.get('enable_caching', True)
+                    enable_mem0 = opt_settings.get('enable_mem0', True)
+                    enable_token_tracking = opt_settings.get('enable_token_tracking', True)
+                    
+                    # Map context strategy string to enum
+                    context_strategy_map = {
+                        'progressive_pruning': ContextStrategy.PROGRESSIVE_PRUNING,
+                        'abstracted_summaries': ContextStrategy.ABSTRACTED_SUMMARIES,
+                        'minimal_context': ContextStrategy.MINIMAL_CONTEXT,
+                        'stateless': ContextStrategy.STATELESS
+                    }
+                    context_strategy = context_strategy_map.get(context_strategy_str, ContextStrategy.PROGRESSIVE_PRUNING)
+                    
+                    # Initialize optimization components
+                    context_manager = AdvancedContextManager(token_budget=token_budget) if enable_caching else None
+                    memory_manager = Mem0Integration() if enable_mem0 else None
+                    cache = get_analysis_cache() if enable_caching else None
+                    
+                    # Initialize token tracker
+                    if enable_token_tracking:
+                        tracker = get_global_tracker()
+                        if tracker:
+                            tracker.reset()
+                    else:
+                        tracker = None
+                    
+                    # Initialize and run the crew with tracking
+                    crew = MarketingResearchCrewWithTracking(
+                        agents_config_path, 
+                        task_config_path,
+                        context_manager=context_manager,
+                        memory_manager=memory_manager,
+                        cache=cache
+                    )
+                    
+                    # Get token tracker
+                    tracker = get_global_tracker()
+                    if tracker:
+                        tracker.reset()  # Reset for new analysis
+                    
                     result = crew.kickoff(inputs)
+                    
+                    # Store optimization components for metrics
+                    st.session_state['context_manager'] = context_manager
+                    st.session_state['memory_manager'] = memory_manager
+                    st.session_state['cache'] = cache
+                    st.session_state['token_tracker'] = tracker
                     
                     # Store results in session state
                     st.session_state['analysis_result'] = result
@@ -630,16 +1013,98 @@ def main():
         if 'execution_timestamp' in st.session_state:
             st.info(f"📅 Analysis executed on: {st.session_state['execution_timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
         
-        # Parse and display results
-        parsed_results = parse_analysis_results(st.session_state['analysis_result'])
+        # Parse and display results with tracking data
+        parsed_results = parse_analysis_results(
+            st.session_state['analysis_result'],
+            tracker=st.session_state.get('token_tracker'),
+            context_manager=st.session_state.get('context_manager'),
+            cache=st.session_state.get('cache'),
+            memory_manager=st.session_state.get('memory_manager')
+        )
         
         # Results summary
         st.subheader("📋 Executive Summary")
         st.markdown(f'<div class="metric-card">{parsed_results["summary"]}</div>', unsafe_allow_html=True)
         
+        # Token usage summary
+        if parsed_results.get('token_metrics'):
+            st.subheader("🔢 Token Usage Summary")
+            
+            token_cols = st.columns(4)
+            token_metrics = parsed_results['token_metrics']
+            
+            with token_cols[0]:
+                st.metric(
+                    "Total Tokens",
+                    f"{token_metrics.get('total_tokens', 0):,}",
+                    help="Total tokens used in analysis"
+                )
+            
+            with token_cols[1]:
+                st.metric(
+                    "Total Cost",
+                    f"${token_metrics.get('total_cost', 0):.4f}",
+                    help="Total cost for the analysis"
+                )
+            
+            with token_cols[2]:
+                st.metric(
+                    "API Requests",
+                    f"{token_metrics.get('requests_made', 0)}",
+                    help="Number of API calls made"
+                )
+            
+            with token_cols[3]:
+                efficiency = token_metrics.get('efficiency_score', 0)
+                st.metric(
+                    "Efficiency Score",
+                    f"{efficiency:.1f}" if efficiency > 0 else "N/A",
+                    help="Tokens per insight generated"
+                )
+        
+        # Optimization performance summary
+        if parsed_results.get('optimization_metrics'):
+            st.subheader("⚡ Optimization Summary")
+            
+            opt_metrics = parsed_results['optimization_metrics']
+            opt_cols = st.columns(3)
+            
+            # Context optimization
+            if 'context_optimization' in opt_metrics:
+                context_data = opt_metrics['context_optimization']
+                if context_data.get('status') != 'unavailable':
+                    with opt_cols[0]:
+                        st.metric(
+                            "Memory Saved",
+                            f"{context_data.get('memory_saved_mb', 0):.1f} MB",
+                            help="Memory saved through context optimization"
+                        )
+            
+            # Cache performance
+            if 'cache_performance' in opt_metrics:
+                cache_data = opt_metrics['cache_performance']
+                if cache_data.get('status') != 'unavailable':
+                    with opt_cols[1]:
+                        st.metric(
+                            "Cache Hit Rate",
+                            f"{cache_data.get('hit_rate', 0):.1f}%",
+                            help="Percentage of successful cache hits"
+                        )
+            
+            # Memory management
+            if 'memory_management' in opt_metrics:
+                memory_data = opt_metrics['memory_management']
+                if memory_data.get('status') != 'unavailable':
+                    with opt_cols[2]:
+                        st.metric(
+                            "Memory Efficiency",
+                            f"{memory_data.get('memory_efficiency', 0):.1f}%",
+                            help="Memory management efficiency score"
+                        )
+        
         # Key metrics
         if parsed_results.get('metrics'):
-            st.subheader("📊 Key Metrics")
+            st.subheader("📊 Analysis Metrics")
             
             metrics_cols = st.columns(min(len(parsed_results['metrics']), 4))
             for i, (metric, value) in enumerate(parsed_results['metrics'].items()):
@@ -671,7 +1136,15 @@ def main():
                 'execution_timestamp': st.session_state.get('execution_timestamp', datetime.now()).isoformat(),
                 'task_parameters': st.session_state.get('task_params', {}),
                 'selected_agents': st.session_state.get('selected_agents', []),
-                'results': parsed_results
+                'results': parsed_results,
+                'token_usage': parsed_results.get('token_metrics', {}),
+                'optimization_performance': parsed_results.get('optimization_metrics', {}),
+                'system_performance': {
+                    'context_management_enabled': st.session_state.get('context_manager') is not None,
+                    'memory_management_enabled': st.session_state.get('memory_manager') is not None,
+                    'cache_enabled': st.session_state.get('cache') is not None,
+                    'token_tracking_enabled': st.session_state.get('token_tracker') is not None
+                }
             }
             
             st.download_button(
@@ -683,11 +1156,36 @@ def main():
         
         with col2:
             # Download as text
+            token_metrics = parsed_results.get('token_metrics', {})
+            opt_metrics = parsed_results.get('optimization_metrics', {})
+            
             results_text = f"""Marketing Research Analysis Results
 Generated: {st.session_state.get('execution_timestamp', datetime.now()).strftime('%Y-%m-%d %H:%M:%S')}
 
 EXECUTIVE SUMMARY:
 {parsed_results['summary']}
+
+TOKEN USAGE ANALYSIS:
+- Total Tokens Used: {token_metrics.get('total_tokens', 0):,}
+- Total Cost: ${token_metrics.get('total_cost', 0):.4f}
+- API Requests: {token_metrics.get('requests_made', 0)}
+- Average Tokens per Request: {token_metrics.get('average_tokens_per_request', 0):.0f}
+- Efficiency Score: {token_metrics.get('efficiency_score', 0):.1f}
+
+OPTIMIZATION PERFORMANCE:
+- Context Management: {'Enabled' if st.session_state.get('context_manager') else 'Disabled'}
+- Memory Management: {'Enabled' if st.session_state.get('memory_manager') else 'Disabled'}
+- Cache System: {'Enabled' if st.session_state.get('cache') else 'Disabled'}
+- Token Tracking: {'Enabled' if st.session_state.get('token_tracker') else 'Disabled'}
+
+CACHE PERFORMANCE:
+{f"- Hit Rate: {opt_metrics.get('cache_performance', {}).get('hit_rate', 0):.1f}%" if opt_metrics.get('cache_performance') else "- Cache data unavailable"}
+{f"- Total Hits: {opt_metrics.get('cache_performance', {}).get('total_hits', 0)}" if opt_metrics.get('cache_performance') else ""}
+{f"- Cache Size: {opt_metrics.get('cache_performance', {}).get('cache_size_mb', 0):.1f} MB" if opt_metrics.get('cache_performance') else ""}
+
+CONTEXT OPTIMIZATION:
+{f"- Memory Saved: {opt_metrics.get('context_optimization', {}).get('memory_saved_mb', 0):.1f} MB" if opt_metrics.get('context_optimization') else "- Context data unavailable"}
+{f"- Compression Ratio: {opt_metrics.get('context_optimization', {}).get('compression_ratio', 1.0):.2f}x" if opt_metrics.get('context_optimization') else ""}
 
 FULL RESULTS:
 {parsed_results['full_text']}
