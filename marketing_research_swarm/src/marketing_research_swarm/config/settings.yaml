@@ -1,0 +1,39 @@
+# Marketing Research Swarm Configuration Settings
+
+# Data Sources
+data_sources:
+  beverage_sales: "data/beverage_sales.csv"
+  default_data_path: "data/beverage_sales.csv"
+
+# Model Configuration
+llm:
+  model: "gpt-4o-mini"
+  temperature: 0.7
+  max_tokens: 4000
+
+# Analysis Configuration
+analysis:
+  default_budget: 100000
+  default_duration: "6 months"
+  default_target_audience: "health-conscious millennials and premium beverage consumers"
+  
+# Report Configuration
+reports:
+  output_directory: "reports"
+  include_token_analysis: true
+  save_detailed_breakdown: true
+
+# Tool Configuration
+tools:
+  profitability_analysis:
+    default_dimensions: ["brand", "category", "region"]
+  roi_calculation:
+    default_additional_costs: 0
+  budget_planning:
+    default_channels: ["Social Media", "Search Ads", "Email Marketing", "Content Marketing", "Influencer Marketing"]
+    default_allocation:
+      "Social Media": 0.30
+      "Search Ads": 0.25
+      "Email Marketing": 0.15
+      "Content Marketing": 0.20
+      "Influencer Marketing": 0.10

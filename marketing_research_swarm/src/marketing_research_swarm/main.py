@@ -1,7 +1,26 @@
 from .crew_with_tracking import MarketingResearchCrew
 import os
+import yaml
 from datetime import datetime
 import argparse
+
+def load_settings():
+    """Load configuration settings from settings.yaml"""
+    settings_path = 'src/marketing_research_swarm/config/settings.yaml'
+    try:
+        with open(settings_path, 'r') as file:
+            return yaml.safe_load(file)
+    except FileNotFoundError:
+        print(f"Warning: Settings file not found at {settings_path}, using defaults")
+        return {
+            'data_sources': {'default_data_path': 'data/beverage_sales.csv'},
+            'analysis': {
+                'default_budget': 100000,
+                'default_duration': '6 months',
+                'default_target_audience': 'health-conscious millennials and premium beverage consumers'
+            },
+            'reports': {'output_directory': 'reports'}
+        }
 
 def run_comprehensive_analysis():
     """
@@ -9,8 +28,9 @@ def run_comprehensive_analysis():
     This will generate a comprehensive marketing analysis report.
     """
     
-    # Define the data path for beverage sales
-    data_path = "data/beverage_sales.csv"
+    # Load settings and get data path
+    settings = load_settings()
+    data_path = settings['data_sources']['default_data_path']
     
     # Comprehensive inputs for the marketing research analysis
     inputs = {
@@ -111,14 +131,16 @@ def run_specific_analysis(analysis_type="comprehensive"):
             - "brand_performance": Focus on brand performance metrics
     """
     
-    data_path = "data/beverage_sales.csv"
+    # Load settings and get configuration
+    settings = load_settings()
+    data_path = settings['data_sources']['default_data_path']
     
     # Base inputs that all analysis types need
     base_inputs = {
-        "target_audience": "health-conscious millennials and premium beverage consumers",
+        "target_audience": settings['analysis']['default_target_audience'],
         "campaign_type": "multi-channel digital marketing campaign",
-        "budget": 100000,
-        "duration": "6 months",
+        "budget": settings['analysis']['default_budget'],
+        "duration": settings['analysis']['default_duration'],
         "data_file_path": data_path,
         "business_objective": "Optimize beverage marketing performance and ROI"
     }

@@ -1,5 +1,5 @@
 data_analysis_task:
-  description: "Perform comprehensive ROI and profitability analysis on the beverage sales data. Use the profitability analysis tool with analysis_dimension='brand' to examine profit margins across brands, then use analysis_dimension='category' for categories, and analysis_dimension='region' for regions. Calculate ROI metrics using the calculate_roi tool and analyze KPIs for budget optimization. Focus on identifying high-margin opportunities and cost optimization strategies."
+  description: "Perform comprehensive ROI and profitability analysis on the beverage sales data from {data_file_path}. Use the profitability analysis tool with data_path='{data_file_path}' and analysis_dimension='brand' to examine profit margins across brands, then use analysis_dimension='category' for categories, and analysis_dimension='region' for regions. Calculate ROI metrics using the calculate_roi tool and analyze KPIs for budget optimization. Focus on identifying high-margin opportunities and cost optimization strategies."
   expected_output: "A detailed ROI analysis report with profitability insights across brands, categories, and regions, ROI calculations, budget optimization recommendations, and strategic insights for maximizing returns in the beverage market."
   agent: "data_analyst"
 
