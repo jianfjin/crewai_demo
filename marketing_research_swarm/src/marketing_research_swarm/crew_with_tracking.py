@@ -317,12 +317,12 @@ class MarketingResearchCrewWithTracking:
 - Output tokens: ${analysis['summary']['total_cost']['output_cost']:.6f} per token
 
 **Token Distribution**:
-- Prompt tokens: {(analysis['summary']['prompt_tokens']/analysis['summary']['total_tokens']*100):.1f}%
-- Completion tokens: {(analysis['summary']['completion_tokens']/analysis['summary']['total_tokens']*100):.1f}%
+- Prompt tokens: {(analysis['summary']['prompt_tokens']/max(analysis['summary']['total_tokens'], 1)*100):.1f}%
+- Completion tokens: {(analysis['summary']['completion_tokens']/max(analysis['summary']['total_tokens'], 1)*100):.1f}%
 
 **Cost Efficiency**:
-- Cost per 1K tokens: ${(analysis['summary']['total_cost']['total_cost']/analysis['summary']['total_tokens']*1000):.4f}
-- Tokens per dollar: {(analysis['summary']['total_tokens']/analysis['summary']['total_cost']['total_cost']):.0f}
+- Cost per 1K tokens: ${(analysis['summary']['total_cost']['total_cost']/max(analysis['summary']['total_tokens'], 1)*1000):.4f}
+- Tokens per dollar: {(analysis['summary']['total_tokens']/max(analysis['summary']['total_cost']['total_cost'], 0.0001)):.0f}
 
 ### Performance Insights
 
