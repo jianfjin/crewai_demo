@@ -1,5 +1,5 @@
 # Marketing Research Flows
-from .optimized_roi_flow import OptimizedROIFlow
-from .optimized_flow_runner import OptimizedFlowRunner
+from marketing_research_swarm.flows.optimized_roi_flow import OptimizedROIFlow
+from marketing_research_swarm.flows.optimized_flow_runner import OptimizedFlowRunner
 
 __all__ = ['OptimizedROIFlow', 'OptimizedFlowRunner']

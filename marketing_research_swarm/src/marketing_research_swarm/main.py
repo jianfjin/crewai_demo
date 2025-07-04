@@ -1,4 +1,4 @@
-from .crew_with_tracking import MarketingResearchCrew
+from marketing_research_swarm.crew_with_tracking import MarketingResearchCrew
 import os
 import yaml
 from datetime import datetime

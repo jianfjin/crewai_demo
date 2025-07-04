@@ -10,8 +10,8 @@ import argparse
 from datetime import datetime
 from typing import Dict, Any
 
-from .flows.optimized_flow_runner import OptimizedFlowRunner
-from .context.context_manager import ContextStrategy
+from marketing_research_swarm.flows.optimized_flow_runner import OptimizedFlowRunner
+from marketing_research_swarm.context.context_manager import ContextStrategy
 
 def load_settings():
     """Load configuration settings from settings.yaml"""
@@ -31,7 +31,7 @@ def load_settings():
             'optimization': {
                 'token_budget': 4000,
                 'default_strategy': 'progressive_pruning',
-                'use_mem0': False
+                'use_mem0': True
             },
             'reports': {'output_directory': 'reports'}
         }
@@ -39,7 +39,7 @@ def load_settings():
 def run_optimized_analysis(analysis_type: str = "roi_analysis", 
                           context_strategy: str = "progressive_pruning",
                           token_budget: int = 4000,
-                          use_mem0: bool = False,
+                          use_mem0: bool = True,
                           **kwargs) -> Dict[str, Any]:
     """
     Run optimized analysis with token management

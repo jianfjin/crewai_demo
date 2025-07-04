@@ -43,8 +43,8 @@ class MarketingResearchCrewWithTracking:
         self.model_name = self.settings.get('llm', {}).get('model', 'gpt-4o-mini')
         
         # Initialize tools
-        from .tools import read_file_tool, read_csv_tool
-        from .tools.advanced_tools import (
+        from marketing_research_swarm.tools import read_file_tool, read_csv_tool
+        from marketing_research_swarm.tools.advanced_tools import (
             calculate_roi, analyze_kpis, forecast_sales, plan_budget,
             analyze_brand_performance, calculate_market_share,
             time_series_analysis, cross_sectional_analysis,

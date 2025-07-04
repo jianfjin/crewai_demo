@@ -8,10 +8,10 @@ import pandas as pd
 from typing import Dict, Any, Optional
 import time
 
-from .base_flow import FlowState
-from .optimized_roi_flow import OptimizedROIFlow
-from ..persistence.analysis_cache import get_analysis_cache
-from ..context.context_manager import ContextStrategy
+from marketing_research_swarm.flows.base_flow import FlowState
+from marketing_research_swarm.flows.optimized_roi_flow import OptimizedROIFlow
+from marketing_research_swarm.persistence.analysis_cache import get_analysis_cache
+from marketing_research_swarm.context.context_manager import ContextStrategy
 
 class CachedROIFlow(Flow[FlowState]):
     """ROI analysis flow with intelligent persistent caching"""
@@ -22,9 +22,6 @@ class CachedROIFlow(Flow[FlowState]):
         self.optimized_flow = OptimizedROIFlow()
         self.request_hash = None
         self.cache_hit = False
-        
-        # Initialize state
-        self.state = FlowState()
     
     @start()
     def check_cache_and_execute(self, analysis_parameters: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -117,7 +114,7 @@ class CachedROIFlow(Flow[FlowState]):
         start_time = time.time()
         
         # Configure optimized flow
-        self.optimized_flow.state = self.state
+        # self.optimized_flow.state = self.state
         
         # Execute the optimized flow steps
         try:

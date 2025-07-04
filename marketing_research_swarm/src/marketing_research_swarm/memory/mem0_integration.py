@@ -8,6 +8,10 @@ import time
 import json
 import hashlib
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 try:
     from mem0 import MemoryClient
@@ -61,7 +65,7 @@ class MarketingMemoryManager:
     
     def __init__(self, use_mock: bool = False):
         if MEM0_AVAILABLE and not use_mock:
-            self.memory_client = MemoryClient()
+            self.memory_client = MemoryClient(api_key=os.getenv("MEM0_API_KEY"))
         else:
             self.memory_client = MockMemoryClient()
             if not use_mock:

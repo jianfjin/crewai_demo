@@ -13,7 +13,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from ..memory.mem0_integration import MarketingMemoryManager
+from marketing_research_swarm.memory.mem0_integration import MarketingMemoryManager
 
 class AnalysisCacheManager:
     """

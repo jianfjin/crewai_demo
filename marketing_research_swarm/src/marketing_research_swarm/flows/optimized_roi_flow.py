@@ -8,8 +8,8 @@ from typing import Dict, Any
 from pydantic import BaseModel
 import time
 
-from .base_flow import FlowState
-from ..tools.optimized_tools import (
+from marketing_research_swarm.flows.base_flow import FlowState
+from marketing_research_swarm.tools.optimized_tools import (
     optimized_profitability_analysis,
     optimized_roi_calculator,
     optimized_budget_planner,
@@ -29,9 +29,6 @@ class OptimizedROIFlow(Flow[FlowState]):
         self.cache = get_cache()
         self.context_manager = AdvancedContextManager(token_budget=4000)
         self.memory_manager = MarketingMemoryManager(use_mock=True)
-        
-        # Initialize state
-        self.state = FlowState()
     
     @start()
     def load_and_cache_data(self) -> str:
@@ -79,49 +76,33 @@ class OptimizedROIFlow(Flow[FlowState]):
     def analyze_profitability(self, data_reference: str) -> str:
         """Analyze profitability using cached data"""
         print("Analyzing profitability patterns...")
-        
-        # Retrieve data from cache
-        cached_data = self.cache.retrieve(data_reference)
-        if not cached_data:
-            raise ValueError(f"Could not retrieve data from cache: {data_reference}")
-        
-        df = cached_data['dataframe']
-        
-        # Run profitability analysis across dimensions
+        # No need to retrieve df, just pass cache_key
         analysis_results = {}
-        
         print("  Analyzing by brand...")
-        brand_result = optimized_profitability_analysis._run(data=df, analysis_dimension='brand')
+        brand_result = optimized_profitability_analysis._run(cache_key=data_reference, analysis_dimension='brand')
         analysis_results['brand'] = brand_result
-        
         print("  Analyzing by category...")
-        category_result = optimized_profitability_analysis._run(data=df, analysis_dimension='category')
+        category_result = optimized_profitability_analysis._run(cache_key=data_reference, analysis_dimension='category')
         analysis_results['category'] = category_result
-        
         print("  Analyzing by region...")
-        region_result = optimized_profitability_analysis._run(data=df, analysis_dimension='region')
+        region_result = optimized_profitability_analysis._run(cache_key=data_reference, analysis_dimension='region')
         analysis_results['region'] = region_result
-        
         # Extract key insights for context optimization
         key_insights = self._extract_key_insights(analysis_results)
-        
         # Cache analysis results
         analysis_reference = self.cache.create_data_reference(analysis_results, "profitability_analysis")
-        
         # Store compressed insights in context
         self.context_manager.add_context(
             key="profitability_insights",
             value=key_insights,
             priority=ContextPriority.CRITICAL
         )
-        
         # Store in long-term memory
         self.memory_manager.store_analysis_insights(
             analysis_type="profitability",
             insights=key_insights,
             metadata={'data_source': self.state.data_file_path}
         )
-        
         print(f"Profitability analysis complete. Reference: {analysis_reference}")
         return analysis_reference
     
@@ -129,33 +110,29 @@ class OptimizedROIFlow(Flow[FlowState]):
     def optimize_budget(self, profitability_reference: str) -> str:
         """Optimize budget allocation based on profitability insights"""
         print("Optimizing budget allocation...")
-        
         # Get insights from context (not full analysis to save tokens)
         optimized_context = self.context_manager.get_optimized_context(
             strategy=ContextStrategy.PROGRESSIVE_PRUNING,
             required_keys=['profitability_insights']
         )
-        
         insights = optimized_context.get('profitability_insights', {})
-        
-        # Create budget plan using insights
+        # Create budget plan using insights and cache_key
         budget_result = optimized_budget_planner._run(
             total_budget=100000,  # Default budget
-            insights=insights
+            insights=insights,
+            cache_key=profitability_reference
         )
-        
         # Calculate ROI projections for each channel
         roi_projections = {}
         for channel, allocation in budget_result.channel_allocations.items():
             # Project revenue based on allocation (simplified model)
             projected_revenue = allocation * 2.5  # 2.5x return assumption
-            
             roi_result = optimized_roi_calculator._run(
                 revenue=projected_revenue,
-                cost=allocation
+                cost=allocation,
+                cache_key=profitability_reference
             )
             roi_projections[channel] = roi_result
-        
         # Compile optimization results
         optimization_results = {
             'budget_plan': budget_result,
@@ -163,17 +140,14 @@ class OptimizedROIFlow(Flow[FlowState]):
             'optimization_summary': self._create_optimization_summary(budget_result, roi_projections),
             'recommendations': self._generate_recommendations(insights, budget_result)
         }
-        
         # Cache optimization results
         optimization_reference = self.cache.create_data_reference(optimization_results, "budget_optimization")
-        
         # Store summary in context
         self.context_manager.add_context(
             key="optimization_summary",
             value=optimization_results['optimization_summary'],
             priority=ContextPriority.IMPORTANT
         )
-        
         print(f"Budget optimization complete. Reference: {optimization_reference}")
         return optimization_reference
     

@@ -9,6 +9,9 @@ from typing import Dict, Any, Union, Optional
 from pydantic import BaseModel, ConfigDict
 import hashlib
 import pickle
+import yaml
+import os
+from ..cache.smart_cache import get_cache
 
 class ProfitabilityResult(BaseModel):
     """Structured result for profitability analysis"""
@@ -47,30 +50,25 @@ class BudgetPlan(BaseModel):
 class OptimizedProfitabilityTool(BaseTool):
     name: str = "Optimized Profitability Analysis"
     description: str = "Analyzes profitability using cached DataFrame data and returns structured results"
-    
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = {"arbitrary_types_allowed": True}
 
-    def _run(self, data: Union[pd.DataFrame, str], analysis_dimension: str = 'brand') -> ProfitabilityResult:
+    def _run(self, cache_key: str, analysis_dimension: str = 'brand') -> ProfitabilityResult:
         """
-        Run profitability analysis on cached data
-        
+        Run profitability analysis using a cache key. If not found, load from default_data_path.
         Args:
-            data: DataFrame or cache reference
+            cache_key: Cache reference string (e.g., 'cache://...')
             analysis_dimension: Dimension to analyze (brand, category, region)
         """
+        cache = get_cache()
+        df = cache.retrieve(cache_key)
+        if df is None:
+            # Load default data path from settings.yaml
+            settings_path = os.path.join(os.path.dirname(__file__), '../config/settings.yaml')
+            with open(settings_path, 'r') as f:
+                settings = yaml.safe_load(f)
+            data_path = settings['data_sources']['default_data_path']
+            df = pd.read_csv(data_path)
         try:
-            # Handle cached data reference
-            if isinstance(data, str) and data.startswith('cache://'):
-                # In real implementation, retrieve from cache
-                # For now, assume we have the data
-                raise ValueError("Cache retrieval not implemented in this demo")
-            
-            if not isinstance(data, pd.DataFrame):
-                raise ValueError("Data must be a pandas DataFrame")
-            
-            df = data
-            
-            # Perform profitability analysis
             grouped = df.groupby(analysis_dimension).agg({
                 'total_revenue': 'sum',
                 'total_cost': 'sum', 
@@ -78,33 +76,25 @@ class OptimizedProfitabilityTool(BaseTool):
                 'profit_margin': 'mean',
                 'units_sold': 'sum'
             }).round(2)
-            
-            # Calculate overall metrics
             total_revenue = df['total_revenue'].sum()
             total_cost = df['total_cost'].sum()
             total_profit = df['profit'].sum()
             overall_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
-            
-            # Find top and bottom performers
             grouped['calculated_margin'] = (grouped['profit'] / grouped['total_revenue'] * 100).fillna(0)
             top_performer_idx = grouped['calculated_margin'].idxmax()
             bottom_performer_idx = grouped['calculated_margin'].idxmin()
-            
             top_performer = {
                 'name': top_performer_idx,
                 'revenue': float(grouped.loc[top_performer_idx, 'total_revenue']),
                 'margin': float(grouped.loc[top_performer_idx, 'calculated_margin']),
                 'profit': float(grouped.loc[top_performer_idx, 'profit'])
             }
-            
             bottom_performer = {
                 'name': bottom_performer_idx,
                 'revenue': float(grouped.loc[bottom_performer_idx, 'total_revenue']),
                 'margin': float(grouped.loc[bottom_performer_idx, 'calculated_margin']),
                 'profit': float(grouped.loc[bottom_performer_idx, 'profit'])
             }
-            
-            # Create performance breakdown (top 5)
             top_5 = grouped.nlargest(5, 'calculated_margin')
             performance_breakdown = {}
             for idx, row in top_5.iterrows():
@@ -114,15 +104,12 @@ class OptimizedProfitabilityTool(BaseTool):
                     'profit': float(row['profit']),
                     'units': float(row['units_sold'])
                 }
-            
-            # Generate key insights
             key_insights = {
                 'top_performer_insight': f"{top_performer['name']} leads with {top_performer['margin']:.1f}% margin",
                 'market_concentration': f"Top 5 {analysis_dimension}s represent {(top_5['total_revenue'].sum()/total_revenue*100):.1f}% of revenue",
                 'margin_spread': f"Margin spread: {grouped['calculated_margin'].max():.1f}% - {grouped['calculated_margin'].min():.1f}%",
                 'optimization_opportunity': f"Focus on {top_performer['name']} for highest returns"
             }
-            
             return ProfitabilityResult(
                 analysis_dimension=analysis_dimension,
                 total_revenue=float(total_revenue),
@@ -134,9 +121,7 @@ class OptimizedProfitabilityTool(BaseTool):
                 performance_breakdown=performance_breakdown,
                 key_insights=key_insights
             )
-            
         except Exception as e:
-            # Return error result
             return ProfitabilityResult(
                 analysis_dimension=analysis_dimension,
                 total_revenue=0.0,
@@ -152,27 +137,42 @@ class OptimizedProfitabilityTool(BaseTool):
 class OptimizedROITool(BaseTool):
     name: str = "Optimized ROI Calculator"
     description: str = "Calculates ROI with structured output and categorization"
+    model_config = {"arbitrary_types_allowed": True}
 
-    def _run(self, revenue: float, cost: float, additional_costs: float = 0) -> ROIResult:
-        """Calculate ROI with structured output"""
+    def _run(self, revenue: float = None, cost: float = None, additional_costs: float = 0, cache_key: Optional[str] = None) -> ROIResult:
+        """
+        Calculate ROI. If cache_key is provided, try to retrieve revenue/cost from cache, else use provided values.
+        If revenue or cost is None, and data is available, set revenue = data['total_revenue'].sum() and cost = data['total_cost'].sum().
+        """
+        data = None
+        if cache_key:
+            cache = get_cache()
+            data = cache.retrieve(cache_key)
+            if data is None:
+                # Load default data path from settings.yaml
+                settings_path = os.path.join(os.path.dirname(__file__), '../config/settings.yaml')
+                with open(settings_path, 'r') as f:
+                    settings = yaml.safe_load(f)
+                data_path = settings['data_sources']['default_data_path']
+                data = pd.read_csv(data_path)
+        if (revenue is None or cost is None) and isinstance(data, pd.DataFrame):
+            if revenue is None:
+                revenue = data['total_revenue'].sum()
+            if cost is None:
+                cost = data['total_cost'].sum()
         try:
             total_cost = cost + additional_costs
-            
             if total_cost > 0:
                 roi_percentage = ((revenue - total_cost) / total_cost) * 100
             else:
                 roi_percentage = 0
-            
             net_profit = revenue - total_cost
-            
-            # Categorize ROI
             if roi_percentage > 100:
                 roi_category = "highly_successful"
             elif roi_percentage > 0:
                 roi_category = "profitable"
             else:
                 roi_category = "needs_optimization"
-            
             return ROIResult(
                 revenue=float(revenue),
                 total_cost=float(total_cost),
@@ -180,7 +180,6 @@ class OptimizedROITool(BaseTool):
                 net_profit=float(net_profit),
                 roi_category=roi_category
             )
-            
         except Exception as e:
             return ROIResult(
                 revenue=0.0,
@@ -193,16 +192,31 @@ class OptimizedROITool(BaseTool):
 class OptimizedBudgetTool(BaseTool):
     name: str = "Optimized Budget Planner"
     description: str = "Creates optimized budget allocation with structured output"
+    model_config = {"arbitrary_types_allowed": True}
 
     def _run(self, total_budget: float, insights: Dict[str, Any] = None, 
-             channels: list = None, priorities: Dict[str, float] = None) -> BudgetPlan:
-        """Create optimized budget plan based on insights"""
+             channels: list = None, priorities: Dict[str, float] = None, cache_key: Optional[str] = None) -> BudgetPlan:
+        """
+        Create optimized budget plan. If cache_key is provided, try to retrieve insights from cache, else use provided insights.
+        """
+        if cache_key:
+            cache = get_cache()
+            cached_insights = cache.retrieve(cache_key)
+            if cached_insights is not None:
+                insights = cached_insights
+            else:
+                # Load default data path from settings.yaml and try to generate insights
+                # settings_path = os.path.join(os.path.dirname(__file__), '../config/settings.yaml')
+                # with open(settings_path, 'r') as f:
+                #     settings = yaml.safe_load(f)
+                # data_path = settings['data_sources']['default_data_path']
+                # df = pd.read_csv(data_path)
+                # For demonstration, just pass an empty dict or basic insights
+                insights = {}
         try:
             if not channels:
                 channels = ['Social Media', 'Search Ads', 'Email Marketing', 'Content Marketing', 'Influencer Marketing']
-            
             if not priorities:
-                # Default allocation
                 priorities = {
                     'Social Media': 0.30,
                     'Search Ads': 0.25,
@@ -210,27 +224,17 @@ class OptimizedBudgetTool(BaseTool):
                     'Content Marketing': 0.20,
                     'Influencer Marketing': 0.10
                 }
-            
-            # Adjust priorities based on insights
             if insights:
                 priorities = self._adjust_priorities_from_insights(priorities, insights)
-            
-            # Calculate allocations
             channel_allocations = {}
             allocation_percentages = {}
-            
             for channel in channels:
                 if channel in priorities:
                     allocation = total_budget * priorities[channel]
                     channel_allocations[channel] = float(allocation)
                     allocation_percentages[channel] = float(priorities[channel] * 100)
-            
-            # Generate recommendations
             recommendations = self._generate_budget_recommendations(insights, channel_allocations)
-            
-            # Calculate optimization score
             optimization_score = self._calculate_optimization_score(priorities, insights)
-            
             return BudgetPlan(
                 total_budget=float(total_budget),
                 channel_allocations=channel_allocations,
@@ -238,7 +242,6 @@ class OptimizedBudgetTool(BaseTool):
                 recommendations=recommendations,
                 optimization_score=float(optimization_score)
             )
-            
         except Exception as e:
             return BudgetPlan(
                 total_budget=float(total_budget),
