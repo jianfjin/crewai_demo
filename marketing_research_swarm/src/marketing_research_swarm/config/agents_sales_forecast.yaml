@@ -1,19 +1,17 @@
-data_analyst:
-  role: "data_analyst"
-  goal: > 
-    Perform advanced sales forecasting and trend analysis on beverage sales data using specialized time series and predictive analytics tools.
-  backstory: >
-    A quantitative expert with specialized knowledge in sales forecasting and predictive analytics for the beverage industry. The Data Analyst uses time series analysis, cross-sectional analysis, and forecasting tools to predict future sales trends, identify seasonal patterns, and provide actionable insights for strategic planning in the beverage sector.
-  llm: openai/gpt-4o-mini
-  allow_delegation: false
-  tools: [forecast_sales, time_series_analysis, cross_sectional_analysis, beverage_market_analysis, analyze_kpis]
-
 market_research_analyst:
   role: "market_research_analyst"
   goal: >
-    Analyze market trends, seasonal patterns, and competitive dynamics to support sales forecasting and strategic planning.
+    Analyze current market structure, trends, and seasonal patterns to provide context for sales forecasting.
   backstory: >
-    An expert in beverage market research with deep knowledge of seasonal consumption patterns, market dynamics, and competitive intelligence. Skilled in identifying trends, analyzing market cycles, and providing strategic insights to support accurate sales forecasting and business planning in the beverage industry.
+    An expert in beverage market research with deep knowledge of market dynamics, seasonal consumption patterns, and competitive landscape. Specializes in understanding market structure, identifying cyclical behaviors, and providing market context that informs accurate forecasting models.
+  llm: openai/gpt-4o-mini
+  allow_delegation: false
+  tools: [beverage_market_analysis, time_series_analysis, cross_sectional_analysis]
+
+forecasting_specialist:
+  role: "forecasting_specialist"
+  goal: "Generate accurate sales forecasts and predictive models based on market analysis insights and historical data patterns"
+  backstory: "A predictive analytics expert specializing in beverage industry forecasting. Takes market research insights and applies advanced forecasting techniques to generate reliable sales predictions, confidence intervals, and scenario planning for strategic decision-making."
   llm: openai/gpt-4o-mini
   allow_delegation: true
-  tools: [beverage_market_analysis, time_series_analysis, cross_sectional_analysis, read_csv_tool]
+  tools: [forecast_sales, analyze_kpis]
