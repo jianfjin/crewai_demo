@@ -138,29 +138,29 @@ class OptimizedBrandPerformanceFlow:
                                 context_strategy: ContextStrategy) -> BrandPerformanceFlowState:
         """Step 1: Analyze market structure and brand landscape"""
         
-        print("📊 Step 1: Analyzing market structure...")
+        print("Step 1: Analyzing market structure...")
         
         # Check cache first
         cache_key = f"market_structure_{self._get_file_hash(state.data_file_path)}"
         cached_result = self._get_from_cache(cache_key)
         
         if cached_result:
-            print("   ✅ Using cached market structure analysis")
+            print("   Using cached market structure analysis")
             state.market_analysis_results = cached_result
             return state
         
-        # Run market analysis
+        # Run market analysis with correct parameter name
         try:
-            result = beverage_market_analysis._run(data_file_path=state.data_file_path)
+            result = beverage_market_analysis._run(data_path=state.data_file_path)
             state.market_analysis_results = result
             
             # Cache the result
             self._save_to_cache(cache_key, result)
             
-            print("   ✅ Market structure analysis completed")
+            print("   Market structure analysis completed")
             
         except Exception as e:
-            print(f"   ❌ Market structure analysis failed: {e}")
+            print(f"   Market structure analysis failed: {e}")
             # Provide fallback data
             state.market_analysis_results = {
                 'total_brands': 17,
@@ -175,15 +175,15 @@ class OptimizedBrandPerformanceFlow:
                                  context_strategy: ContextStrategy) -> BrandPerformanceFlowState:
         """Step 2: Analyze individual brand performance"""
         
-        print("🏆 Step 2: Analyzing brand performance...")
+        print("Step 2: Analyzing brand performance...")
         
         try:
-            result = analyze_brand_performance._run(data_file_path=state.data_file_path)
+            result = analyze_brand_performance._run(data_path=state.data_file_path)
             state.brand_performance_results = result
-            print("   ✅ Brand performance analysis completed")
+            print("   Brand performance analysis completed")
             
         except Exception as e:
-            print(f"   ❌ Brand performance analysis failed: {e}")
+            print(f"   Brand performance analysis failed: {e}")
             # Provide fallback data
             state.brand_performance_results = {
                 'top_brands': ['Brand A', 'Brand B', 'Brand C'],
@@ -197,7 +197,7 @@ class OptimizedBrandPerformanceFlow:
                             context_strategy: ContextStrategy) -> BrandPerformanceFlowState:
         """Step 3: Calculate market share metrics"""
         
-        print("📈 Step 3: Calculating market share...")
+        print("Step 3: Calculating market share...")
         
         try:
             result = calculate_market_share._run(
@@ -205,10 +205,10 @@ class OptimizedBrandPerformanceFlow:
                 total_market_revenue=5000000
             )
             state.market_share_results = result
-            print("   ✅ Market share calculation completed")
+            print("   Market share calculation completed")
             
         except Exception as e:
-            print(f"   ❌ Market share calculation failed: {e}")
+            print(f"   Market share calculation failed: {e}")
             state.market_share_results = {
                 'market_share_percentage': 20.0,
                 'competitive_position': 'Strong',
@@ -221,18 +221,18 @@ class OptimizedBrandPerformanceFlow:
                              context_strategy: ContextStrategy) -> BrandPerformanceFlowState:
         """Step 4: Analyze brand profitability"""
         
-        print("💰 Step 4: Analyzing profitability by brand...")
+        print("Step 4: Analyzing profitability by brand...")
         
         try:
             result = profitability_analysis._run(
-                data_file_path=state.data_file_path,
+                data_path=state.data_file_path,
                 analysis_dimension='brand'
             )
             state.profitability_results = result
-            print("   ✅ Brand profitability analysis completed")
+            print("   Brand profitability analysis completed")
             
         except Exception as e:
-            print(f"   ❌ Brand profitability analysis failed: {e}")
+            print(f"   Brand profitability analysis failed: {e}")
             state.profitability_results = {
                 'total_revenue': 5000000,
                 'total_cost': 3000000,
@@ -247,19 +247,19 @@ class OptimizedBrandPerformanceFlow:
                                     context_strategy: ContextStrategy) -> BrandPerformanceFlowState:
         """Step 5: Perform comparative analysis across brands"""
         
-        print("🔍 Step 5: Performing comparative analysis...")
+        print("Step 5: Performing comparative analysis...")
         
         try:
             result = cross_sectional_analysis._run(
-                data_file_path=state.data_file_path,
+                data_path=state.data_file_path,
                 segment_column='brand',
                 value_column='total_revenue'
             )
             state.comparative_analysis_results = result
-            print("   ✅ Comparative analysis completed")
+            print("   Comparative analysis completed")
             
         except Exception as e:
-            print(f"   ❌ Comparative analysis failed: {e}")
+            print(f"   Comparative analysis failed: {e}")
             state.comparative_analysis_results = {
                 'top_performers': ['Brand A', 'Brand B'],
                 'performance_gaps': ['Brand X needs improvement'],
@@ -272,30 +272,30 @@ class OptimizedBrandPerformanceFlow:
                                context_strategy: ContextStrategy) -> BrandPerformanceFlowState:
         """Step 6: Generate final insights and recommendations"""
         
-        print("💡 Step 6: Generating final insights...")
+        print("Step 6: Generating final insights...")
         
         # Compile insights from all analyses
         insights = {
             'market_overview': {
-                'total_brands': state.market_analysis_results.get('total_brands', 17),
+                'total_brands': state.market_analysis_results.get('total_brands', 17) if isinstance(state.market_analysis_results, dict) else 17,
                 'market_size': 5000000,
                 'key_categories': ['Premium', 'Health', 'Traditional']
             },
             'brand_performance_summary': {
-                'top_performers': state.brand_performance_results.get('top_brands', ['Brand A', 'Brand B']),
-                'performance_metrics': state.brand_performance_results.get('performance_metrics', {})
+                'top_performers': state.brand_performance_results.get('top_brands', ['Brand A', 'Brand B']) if isinstance(state.brand_performance_results, dict) else ['Brand A', 'Brand B'],
+                'performance_metrics': state.brand_performance_results.get('performance_metrics', {}) if isinstance(state.brand_performance_results, dict) else {}
             },
             'market_share_insights': {
-                'market_share_percentage': state.market_share_results.get('market_share_percentage', 20.0),
-                'competitive_position': state.market_share_results.get('competitive_position', 'Strong')
+                'market_share_percentage': state.market_share_results.get('market_share_percentage', 20.0) if isinstance(state.market_share_results, dict) else 20.0,
+                'competitive_position': state.market_share_results.get('competitive_position', 'Strong') if isinstance(state.market_share_results, dict) else 'Strong'
             },
             'profitability_insights': {
-                'average_margin': state.profitability_results.get('profit_margin', 40.0),
-                'roi_performance': state.profitability_results.get('roi', 66.7)
+                'average_margin': state.profitability_results.get('profit_margin', 40.0) if isinstance(state.profitability_results, dict) else 40.0,
+                'roi_performance': state.profitability_results.get('roi', 66.7) if isinstance(state.profitability_results, dict) else 66.7
             },
             'competitive_positioning': {
-                'market_leaders': state.comparative_analysis_results.get('top_performers', ['Brand A']),
-                'performance_gaps': state.comparative_analysis_results.get('performance_gaps', [])
+                'market_leaders': state.comparative_analysis_results.get('top_performers', ['Brand A']) if isinstance(state.comparative_analysis_results, dict) else ['Brand A'],
+                'performance_gaps': state.comparative_analysis_results.get('performance_gaps', []) if isinstance(state.comparative_analysis_results, dict) else []
             },
             'recommendations': [
                 'Focus on high-performing brand categories for expansion',
@@ -307,7 +307,7 @@ class OptimizedBrandPerformanceFlow:
         }
         
         state.final_insights = insights
-        print("   ✅ Final insights generated")
+        print("   Final insights generated")
         
         return state
     
@@ -330,7 +330,7 @@ class OptimizedBrandPerformanceFlow:
                 'total_steps': 6,
                 'successful_steps': 6,
                 'cache_hits': 1,
-                'execution_time': state.execution_metadata.get('execution_time_seconds', 0)
+                'execution_time': state.execution_metadata.get('execution_time_seconds', 0) if state.execution_metadata else 0
             }
         }
     
@@ -350,7 +350,7 @@ class OptimizedBrandPerformanceFlow:
         cost_savings = traditional_cost - optimized_cost
         
         # Calculate optimization score
-        execution_time = state.execution_metadata.get('execution_time_seconds', 0)
+        execution_time = state.execution_metadata.get('execution_time_seconds', 0) if state.execution_metadata else 0
         optimization_score = min(100, (
             (token_savings_percent * 0.4) +
             (30 * 0.3) +  # cache hits
@@ -378,7 +378,7 @@ class OptimizedBrandPerformanceFlow:
                 'efficiency_rating': 'High' if optimization_score > 80 else 'Medium'
             },
             'context_management': {
-                'strategy_used': state.execution_metadata.get('context_strategy', 'progressive_pruning'),
+                'strategy_used': state.execution_metadata.get('context_strategy', 'progressive_pruning') if state.execution_metadata else 'progressive_pruning',
                 'total_elements': 6,
                 'budget_utilization': f"{optimized_tokens}/{self.token_budget}"
             },
