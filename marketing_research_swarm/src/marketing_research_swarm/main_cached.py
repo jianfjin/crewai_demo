@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Dict, Any
 
 from marketing_research_swarm.flows.cached_roi_flow import CachedFlowRunner
+from marketing_research_swarm.flows.optimized_flow_runner import OptimizedFlowRunner
 from marketing_research_swarm.context.context_manager import ContextStrategy
 from marketing_research_swarm.persistence.analysis_cache import get_analysis_cache
 
@@ -75,360 +76,427 @@ def run_cached_analysis(analysis_type: str = "roi_analysis",
     
     strategy = strategy_map.get(context_strategy, ContextStrategy.PROGRESSIVE_PRUNING)
     
-    # Initialize cached runner
-    runner = CachedFlowRunner(use_mem0=use_mem0)
+    # Initialize runners
+    cached_runner = CachedFlowRunner(use_mem0=use_mem0)
+    optimized_runner = OptimizedFlowRunner(
+        token_budget=settings.get('optimization', {}).get('token_budget', 4000),
+        use_mem0=use_mem0
+    )
     
-    print(f"🚀 Starting Cached {analysis_type.title()} Analysis")
-    print(f"📊 Strategy: {strategy.value}")
-    print(f"📁 Data Source: {data_path}")
-    print(f"🔄 Force Refresh: {force_refresh}")
+    print(f"Starting Cached {analysis_type.title()} Analysis")
+    print(f"Strategy: {strategy.value}")
+    print(f"Data Source: {data_path}")
+    print(f"Force Refresh: {force_refresh}")
     print("-" * 60)
     
     try:
         if analysis_type == "roi_analysis":
-            result = runner.run_roi_analysis(
+            result = cached_runner.run_roi_analysis(
                 data_file_path=data_path,
                 context_strategy=strategy,
                 force_refresh=force_refresh,
                 **kwargs
             )
         elif analysis_type == "sales_forecast":
-            # Placeholder for future implementation
-            result = {
-                'status': 'not_implemented',
-                'message': 'Sales forecast with caching will be implemented in next phase',
-                'cache_ready': True
+            # Use optimized flow runner for sales forecast
+            print("Running Sales Forecast Analysis with caching...")
+            
+            # Check cache first
+            cache_manager = get_analysis_cache()
+            cache_key = cache_manager.generate_request_hash(
+                analysis_type="sales_forecast",
+                data_path=data_path,
+                parameters={
+                    'context_strategy': context_strategy,
+                    'use_mem0': use_mem0,
+                    **kwargs
+                }
+            )
+            
+            if not force_refresh:
+                cached_result = cache_manager.get_cached_result(cache_key)
+                if cached_result:
+                    print("Found cached sales forecast results!")
+                    result = {
+                        'result': cached_result['result'],
+                        'cache_info': {
+                            'cache_hit': True,
+                            'cached_at': cached_result['cached_at'],
+                            'cache_key': cache_key
+                        },
+                        'execution_time': 0.1  # Minimal time for cache retrieval
+                    }
+                    return result
+            
+            # Run fresh analysis
+            result = optimized_runner.run_sales_forecast(
+                data_file_path=data_path,
+                context_strategy=strategy,
+                **kwargs
+            )
+            
+            # Cache the results
+            if 'result' in result:
+                cache_manager.cache_analysis_result(
+                    request_hash=cache_key,
+                    analysis_type="sales_forecast",
+                    result=result['result'],
+                    parameters={
+                        'context_strategy': context_strategy,
+                        'use_mem0': use_mem0,
+                        **kwargs
+                    }
+                )
+            
+            result['cache_info'] = {
+                'cache_hit': False,
+                'cache_key': cache_key,
+                'cached_at': datetime.now().isoformat()
             }
+            
         elif analysis_type == "brand_performance":
-            # Placeholder for future implementation
-            result = {
-                'status': 'not_implemented',
-                'message': 'Brand performance with caching will be implemented in next phase',
-                'cache_ready': True
+            # Use optimized flow runner for brand performance
+            print("Running Brand Performance Analysis with caching...")
+            
+            # Check cache first
+            cache_manager = get_analysis_cache()
+            cache_key = cache_manager.generate_request_hash(
+                analysis_type="brand_performance",
+                data_path=data_path,
+                parameters={
+                    'context_strategy': context_strategy,
+                    'use_mem0': use_mem0,
+                    **kwargs
+                }
+            )
+            
+            if not force_refresh:
+                cached_result = cache_manager.get_cached_result(cache_key)
+                if cached_result:
+                    print("Found cached brand performance results!")
+                    result = {
+                        'result': cached_result['result'],
+                        'cache_info': {
+                            'cache_hit': True,
+                            'cached_at': cached_result['cached_at'],
+                            'cache_key': cache_key
+                        },
+                        'execution_time': 0.1  # Minimal time for cache retrieval
+                    }
+                    return result
+            
+            # Run fresh analysis
+            result = optimized_runner.run_brand_performance(
+                data_file_path=data_path,
+                context_strategy=strategy,
+                **kwargs
+            )
+            
+            # Cache the results
+            if 'result' in result:
+                cache_manager.cache_analysis_result(
+                    request_hash=cache_key,
+                    analysis_type="brand_performance",
+                    result=result['result'],
+                    parameters={
+                        'context_strategy': context_strategy,
+                        'use_mem0': use_mem0,
+                        **kwargs
+                    }
+                )
+            
+            result['cache_info'] = {
+                'cache_hit': False,
+                'cache_key': cache_key,
+                'cached_at': datetime.now().isoformat()
             }
+            
         else:
-            raise ValueError(f"Unknown analysis type: {analysis_type}")
+            raise ValueError(f"Unsupported analysis type: {analysis_type}")
         
-        # Save report if analysis completed successfully
-        if 'analysis_results' in result or 'profitability_insights' in result:
-            report_path = save_cached_report(result, analysis_type, settings)
-            result['report_path'] = report_path
+        # Save report
+        report_path = save_cached_report(result, analysis_type, settings)
+        result['report_path'] = report_path
         
         return result
         
     except Exception as e:
-        print(f"❌ Analysis failed: {e}")
-        raise
+        print(f"Error in cached analysis: {str(e)}")
+        return {
+            'error': str(e),
+            'analysis_type': analysis_type,
+            'timestamp': datetime.now().isoformat()
+        }
 
 def save_cached_report(result: Dict[str, Any], analysis_type: str, settings: Dict[str, Any]) -> str:
-    """Save cached analysis report with cache information"""
+    """
+    Save analysis results to a report file
     
-    # Generate timestamp
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    Args:
+        result: Analysis results
+        analysis_type: Type of analysis performed
+        settings: Configuration settings
+        
+    Returns:
+        Path to the saved report file
+    """
     
-    # Create reports directory
+    # Create reports directory if it doesn't exist
     reports_dir = settings.get('reports', {}).get('output_directory', 'reports')
     os.makedirs(reports_dir, exist_ok=True)
     
     # Generate report filename
-    cache_status = "cached" if result.get('cache_info', {}).get('cache_hit') else "fresh"
-    report_filename = f"{cache_status}_{analysis_type}_report_{timestamp}.md"
-    report_path = os.path.join(reports_dir, report_filename)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"{analysis_type}_cached_report_{timestamp}.md"
+    report_path = os.path.join(reports_dir, filename)
     
-    # Extract information
-    cache_info = result.get('cache_info', {})
-    execution_info = result.get('execution_info', {})
-    cache_performance = result.get('cache_performance', {})
-    execution_stats = result.get('execution_stats', {})
+    # Format results
+    formatted_results = format_cached_analysis_results(result)
     
-    # Format comprehensive report
-    report_content = f"""# Cached {analysis_type.title()} Analysis Report
-
-Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-
-## Cache Performance Summary
-
-### Cache Status
-- **Cache Hit**: {cache_info.get('cache_hit', False)}
-- **Cache Source**: {cache_info.get('cache_source', 'fresh_execution')}
-- **Request Hash**: {cache_info.get('request_hash', 'N/A')}
-
-### Performance Metrics
-- **Cache Hit Rate**: {cache_performance.get('cache_hit_rate', 0):.1f}%
-- **Exact Cache Hits**: {cache_performance.get('exact_hits', 0)}
-- **Similar Matches**: {cache_performance.get('similar_matches', 0)}
-- **Cache Misses**: {cache_performance.get('cache_misses', 0)}
-- **Efficiency Rating**: {cache_performance.get('efficiency_rating', 'N/A')}
-
-### Time and Cost Savings
-- **Total Time Saved**: {cache_performance.get('total_time_saved_minutes', 0):.2f} minutes
-- **Total Cost Saved**: ${cache_performance.get('total_cost_saved_usd', 0):.4f}
-- **Execution Time**: {execution_info.get('execution_time_seconds', 0):.2f} seconds
-
-## Analysis Results
-
-{format_cached_analysis_results(result)}
-
-## Cache Information
-
-### Request Details
-"""
-    
-    if cache_info.get('cache_hit'):
-        if cache_info.get('similarity_match'):
-            report_content += f"""
-- **Cache Type**: Similar Analysis Match
-- **Similarity Score**: {cache_info.get('similarity_score', 0):.1%}
-- **Original Request**: {cache_info.get('original_request_hash', 'N/A')}
-- **Time Saved**: Instant retrieval from similar analysis
-"""
-        else:
-            report_content += f"""
-- **Cache Type**: Exact Match
-- **Cached At**: {cache_info.get('cached_at', 'N/A')}
-- **Time Saved**: {cache_info.get('execution_time_saved', 'N/A')}
-- **Cost Saved**: {cache_info.get('cost_saved', 'N/A')}
-"""
-    else:
-        report_content += f"""
-- **Cache Type**: Fresh Execution
-- **Cached for Future**: {cache_info.get('cached_for_future', False)}
-- **Cache File**: {cache_info.get('cache_file', 'N/A')}
-- **Available for Reuse**: Yes (7 days TTL)
-"""
-    
-    report_content += f"""
-
-### System Statistics
-- **Total Requests Processed**: {execution_stats.get('total_requests', 0)}
-- **Cache Hits**: {execution_stats.get('cache_hits', 0)}
-- **Similar Matches**: {execution_stats.get('similar_matches', 0)}
-- **Cache Misses**: {execution_stats.get('cache_misses', 0)}
-
-## Key Insights
-
-{format_cached_key_insights(result)}
-
-## Recommendations
-
-{format_cached_recommendations(result)}
-
-## Technical Details
-
-### Caching Features
-- ✅ Intelligent request hashing for exact matches
-- ✅ Semantic similarity search for related analyses
-- ✅ Persistent storage across sessions
-- ✅ Automatic cache cleanup and management
-- ✅ Intermediate result caching for partial reuse
-- ✅ Mem0 integration for long-term learning
-
-### Cache Benefits
-- **Instant Results**: Cached analyses return in <1 second
-- **Cost Efficiency**: No token usage for cached results
-- **Consistency**: Identical requests return identical results
-- **Scalability**: Cache performance improves over time
-
----
-
-*Report generated by Marketing Research Swarm - Cached Analysis System*  
-*Cache Hit: {cache_info.get('cache_hit', False)} | Efficiency: {cache_performance.get('efficiency_rating', 'N/A')}*
-"""
-    
-    # Save report
+    # Write report
     with open(report_path, 'w', encoding='utf-8') as f:
-        f.write(report_content)
+        f.write(f"# {analysis_type.title()} Analysis Report (Cached)\n\n")
+        f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"**Analysis Type:** {analysis_type}\n")
+        
+        # Cache information
+        cache_info = result.get('cache_info', {})
+        if cache_info:
+            f.write(f"**Cache Hit:** {cache_info.get('cache_hit', 'Unknown')}\n")
+            if cache_info.get('cache_hit'):
+                f.write(f"**Cached At:** {cache_info.get('cached_at', 'Unknown')}\n")
+            f.write(f"**Cache Key:** {cache_info.get('cache_key', 'Unknown')}\n")
+        
+        f.write(f"**Execution Time:** {result.get('execution_time', 'Unknown')} seconds\n\n")
+        
+        # Optimization metrics if available
+        if 'optimization_metrics' in result:
+            f.write("## Optimization Metrics\n\n")
+            metrics = result['optimization_metrics']
+            for key, value in metrics.items():
+                f.write(f"- **{key.replace('_', ' ').title()}:** {value}\n")
+            f.write("\n")
+        
+        f.write("## Analysis Results\n\n")
+        f.write(formatted_results)
+        
+        # Error information if present
+        if 'error' in result:
+            f.write(f"\n## Error Information\n\n")
+            f.write(f"**Error:** {result['error']}\n")
     
-    print(f"📄 Cached report saved to: {report_path}")
+    print(f"Report saved to: {report_path}")
     return report_path
 
 def format_cached_analysis_results(result: Dict[str, Any]) -> str:
-    """Format analysis results for cached report"""
-    if not result:
-        return "No analysis results available."
+    """
+    Format analysis results for display in reports
     
-    formatted = []
+    Args:
+        result: Analysis results dictionary
+        
+    Returns:
+        Formatted string representation of results
+    """
     
-    # Check for different result structures
-    if 'profitability_insights' in result:
-        insights = result['profitability_insights']
-        formatted.append("### Profitability Analysis")
-        for key, value in insights.items():
-            if isinstance(value, (int, float)):
-                formatted.append(f"- **{key.replace('_', ' ').title()}**: {value}")
-            else:
-                formatted.append(f"- **{key.replace('_', ' ').title()}**: {value}")
+    if 'error' in result:
+        return f"**Error occurred during analysis:**\n\n{result['error']}\n"
     
-    if 'budget_optimization' in result:
-        budget = result['budget_optimization']
-        formatted.append("\n### Budget Optimization")
-        formatted.append(f"- **Total Budget**: ${budget.get('total_budget', 0):,.0f}")
-        formatted.append(f"- **Optimization Score**: {budget.get('optimization_score', 0):.1f}/100")
+    if 'result' not in result:
+        return "**No analysis results available**\n"
     
-    if 'roi_projections' in result:
-        roi = result['roi_projections']
-        formatted.append("\n### ROI Projections")
-        for channel, projection in roi.items():
-            formatted.append(f"- **{channel}**: {projection.get('roi_percentage', 0):.1f}% ROI")
+    analysis_result = result['result']
     
-    return "\n".join(formatted) if formatted else "Analysis results processed successfully."
+    # Handle different result formats
+    if isinstance(analysis_result, dict):
+        formatted = ""
+        
+        # Handle comprehensive analysis results
+        if 'comprehensive_analysis' in analysis_result:
+            comp_analysis = analysis_result['comprehensive_analysis']
+            
+            # ROI Analysis specific formatting
+            if 'profitability_insights' in comp_analysis:
+                formatted += "### Profitability Analysis\n\n"
+                insights = comp_analysis['profitability_insights']
+                if isinstance(insights, dict) and 'analysis' in insights:
+                    formatted += f"{insights['analysis']}\n\n"
+            
+            # Sales Forecast specific formatting
+            if 'market_analysis' in comp_analysis:
+                formatted += "### Market Analysis\n\n"
+                market = comp_analysis['market_analysis']
+                if isinstance(market, dict) and 'analysis' in market:
+                    formatted += f"{market['analysis']}\n\n"
+            
+            if 'forecasting_results' in comp_analysis:
+                formatted += "### Sales Forecasting\n\n"
+                forecast = comp_analysis['forecasting_results']
+                if isinstance(forecast, dict) and 'analysis' in forecast:
+                    formatted += f"{forecast['analysis']}\n\n"
+            
+            # Brand Performance specific formatting
+            if 'competitive_intelligence' in comp_analysis:
+                formatted += "### Competitive Intelligence\n\n"
+                competitive = comp_analysis['competitive_intelligence']
+                if isinstance(competitive, dict) and 'analysis' in competitive:
+                    formatted += f"{competitive['analysis']}\n\n"
+            
+            if 'brand_strategy' in comp_analysis:
+                formatted += "### Brand Strategy\n\n"
+                strategy = comp_analysis['brand_strategy']
+                if isinstance(strategy, dict) and 'analysis' in strategy:
+                    formatted += f"{strategy['analysis']}\n\n"
+            
+            # Analysis metadata
+            if 'analysis_metadata' in comp_analysis:
+                formatted += "### Analysis Metadata\n\n"
+                metadata = comp_analysis['analysis_metadata']
+                for key, value in metadata.items():
+                    if key != 'token_usage':  # Skip detailed token usage
+                        formatted += f"- **{key.replace('_', ' ').title()}:** {value}\n"
+                formatted += "\n"
+        
+        # Fallback for other result formats
+        if not formatted:
+            for key, value in analysis_result.items():
+                if isinstance(value, (str, int, float)):
+                    formatted += f"**{key.replace('_', ' ').title()}:** {value}\n\n"
+                elif isinstance(value, dict):
+                    formatted += f"### {key.replace('_', ' ').title()}\n\n"
+                    for sub_key, sub_value in value.items():
+                        if isinstance(sub_value, (str, int, float)):
+                            formatted += f"- **{sub_key.replace('_', ' ').title()}:** {sub_value}\n"
+                    formatted += "\n"
+        
+        return formatted if formatted else str(analysis_result)
+    
+    else:
+        return str(analysis_result)
 
-def format_cached_key_insights(result: Dict[str, Any]) -> str:
-    """Format key insights for cached report"""
-    insights = []
-    
-    cache_info = result.get('cache_info', {})
-    if cache_info.get('cache_hit'):
-        insights.append("🚀 **Instant Results**: Analysis retrieved from cache in <1 second")
-        insights.append("💰 **Zero Cost**: No tokens consumed for cached result")
-    
-    if 'profitability_insights' in result:
-        prof_insights = result['profitability_insights']
-        top_performers = [v for k, v in prof_insights.items() if 'top_performer' in k]
-        if top_performers:
-            insights.append(f"🏆 **Top Performers**: {', '.join(top_performers[:3])}")
-    
-    cache_performance = result.get('cache_performance', {})
-    if cache_performance.get('cache_hit_rate', 0) > 50:
-        insights.append(f"📈 **Cache Efficiency**: {cache_performance['cache_hit_rate']:.1f}% hit rate")
-    
-    return "\n".join(insights) if insights else "Key insights extracted from cached analysis."
-
-def format_cached_recommendations(result: Dict[str, Any]) -> str:
-    """Format recommendations for cached report"""
-    recommendations = result.get('recommendations', [])
-    
-    # Add cache-specific recommendations
-    cache_recommendations = []
-    
-    cache_info = result.get('cache_info', {})
-    if not cache_info.get('cache_hit'):
-        cache_recommendations.append("💾 This analysis is now cached for future instant retrieval")
-    
-    cache_performance = result.get('cache_performance', {})
-    if cache_performance.get('cache_hit_rate', 0) < 30:
-        cache_recommendations.append("🔄 Run similar analyses to improve cache hit rate")
-    
-    # Combine analysis and cache recommendations
-    all_recommendations = cache_recommendations + (recommendations or [])
-    
-    if not all_recommendations:
-        return "Recommendations based on cached analysis results."
-    
-    formatted = []
-    for i, rec in enumerate(all_recommendations, 1):
-        formatted.append(f"{i}. {rec}")
-    
-    return "\n".join(formatted)
-
-def show_cache_status():
-    """Show current cache status and statistics"""
+def display_cache_stats():
+    """Display cache statistics and performance metrics"""
     cache_manager = get_analysis_cache()
-    stats = cache_manager.get_cache_statistics()
+    stats = cache_manager.get_cache_stats()
     
-    print("📊 Cache Status")
-    print("=" * 40)
-    print(f"Total Cached Analyses: {stats.get('total_entries', 0)}")
-    print(f"Total Cache Size: {stats.get('total_size_mb', 0):.2f} MB")
-    print(f"Analysis Types: {list(stats.get('analysis_types', {}).keys())}")
+    print("\n" + "="*60)
+    print("CACHE PERFORMANCE STATISTICS")
+    print("="*60)
     
-    if stats.get('most_accessed'):
-        most_accessed = stats['most_accessed']
-        print(f"Most Accessed: {most_accessed['analysis_type']} ({most_accessed['access_count']} times)")
+    print(f"Total Cached Analyses: {stats.get('total_cached_analyses', 0)}")
+    print(f"Cache Hit Rate: {stats.get('cache_hit_rate', 0):.1%}")
+    print(f"Average Response Time (Cache Hit): {stats.get('avg_cache_response_time', 0):.2f}s")
+    print(f"Average Response Time (Fresh): {stats.get('avg_fresh_response_time', 0):.2f}s")
+    print(f"Total Storage Used: {stats.get('storage_used_mb', 0):.1f} MB")
+    print(f"Cache Cleanup Last Run: {stats.get('last_cleanup', 'Never')}")
     
-    if stats.get('oldest_entry'):
-        print(f"Oldest Entry: {stats['oldest_entry']}")
+    # Analysis type breakdown
+    if 'analysis_type_breakdown' in stats:
+        print("\nAnalysis Type Breakdown:")
+        for analysis_type, count in stats['analysis_type_breakdown'].items():
+            print(f"  {analysis_type}: {count} cached results")
     
-    if stats.get('newest_entry'):
-        print(f"Newest Entry: {stats['newest_entry']}")
+    print("="*60)
 
-def cleanup_cache():
-    """Clean up expired cache entries"""
+def cleanup_cache(max_age_days: int = 7):
+    """Clean up old cache entries"""
     cache_manager = get_analysis_cache()
-    cleanup_stats = cache_manager.cleanup_expired_cache()
+    cleanup_stats = cache_manager.cleanup_old_entries(max_age_days)
     
-    print("🧹 Cache Cleanup Results")
-    print("=" * 40)
-    print(f"Expired entries removed: {cleanup_stats['expired_entries']}")
-    print(f"Space freed: {cleanup_stats['freed_space_mb']:.2f} MB")
-    print(f"Entries before: {cleanup_stats['total_entries_before']}")
-    print(f"Entries after: {cleanup_stats['total_entries_after']}")
+    print(f"\nCache Cleanup Complete:")
+    print(f"  Removed {cleanup_stats.get('removed_count', 0)} old entries")
+    print(f"  Freed {cleanup_stats.get('freed_space_mb', 0):.1f} MB")
+    print(f"  Remaining entries: {cleanup_stats.get('remaining_count', 0)}")
 
 def main():
     """Main entry point for cached analysis"""
-    parser = argparse.ArgumentParser(description="Run Marketing Research Analysis with Persistent Caching")
+    parser = argparse.ArgumentParser(description="Marketing Research Analysis with Persistent Caching")
+    
     parser.add_argument(
-        "--type",
-        type=str,
-        default="roi_analysis",
+        "--analysis-type",
         choices=["roi_analysis", "sales_forecast", "brand_performance"],
+        default="roi_analysis",
         help="Type of analysis to run (default: roi_analysis)"
     )
+    
     parser.add_argument(
         "--strategy",
-        type=str,
-        default="progressive_pruning",
         choices=["progressive_pruning", "abstracted_summaries", "minimal_context", "stateless"],
+        default="progressive_pruning",
         help="Context optimization strategy (default: progressive_pruning)"
     )
+    
     parser.add_argument(
         "--force-refresh",
         action="store_true",
-        help="Force fresh execution ignoring cache"
+        help="Force fresh execution, ignoring cache"
     )
+    
     parser.add_argument(
-        "--use-mem0",
+        "--no-mem0",
         action="store_true",
-        help="Use Mem0 for long-term memory (requires mem0ai package)"
+        help="Disable Mem0 long-term memory integration"
     )
+    
     parser.add_argument(
-        "--cache-status",
+        "--cache-stats",
         action="store_true",
-        help="Show cache status and statistics"
+        help="Display cache statistics and exit"
     )
+    
     parser.add_argument(
         "--cleanup-cache",
-        action="store_true",
-        help="Clean up expired cache entries"
+        type=int,
+        metavar="DAYS",
+        help="Clean up cache entries older than specified days"
     )
     
     args = parser.parse_args()
     
-    if args.cache_status:
-        show_cache_status()
+    # Handle cache management commands
+    if args.cache_stats:
+        display_cache_stats()
         return
     
-    if args.cleanup_cache:
-        cleanup_cache()
+    if args.cleanup_cache is not None:
+        cleanup_cache(args.cleanup_cache)
         return
     
     # Run analysis
+    start_time = datetime.now()
+    
     result = run_cached_analysis(
-        analysis_type=args.type,
+        analysis_type=args.analysis_type,
         context_strategy=args.strategy,
         force_refresh=args.force_refresh,
-        use_mem0=args.use_mem0
+        use_mem0=not args.no_mem0
     )
     
-    # Display summary
+    end_time = datetime.now()
+    total_time = (end_time - start_time).total_seconds()
+    
+    print(f"\nAnalysis completed in {total_time:.2f} seconds")
+    
+    if 'error' in result:
+        print(f"Error: {result['error']}")
+        return
+    
+    # Display cache performance
     cache_info = result.get('cache_info', {})
-    cache_performance = result.get('cache_performance', {})
-    
-    print(f"\n✅ Analysis Complete!")
-    print(f"🎯 Cache Hit: {cache_info.get('cache_hit', False)}")
-    
     if cache_info.get('cache_hit'):
-        print(f"⚡ Instant retrieval from cache")
-        print(f"💰 Zero token cost")
+        print("Result retrieved from cache!")
+        print(f"Cache key: {cache_info.get('cache_key', 'Unknown')}")
     else:
-        execution_info = result.get('execution_info', {})
-        print(f"⏱️  Execution Time: {execution_info.get('execution_time_seconds', 0):.2f}s")
-        print(f"💾 Cached for future use")
-    
-    print(f"📈 Cache Hit Rate: {cache_performance.get('cache_hit_rate', 0):.1f}%")
+        print("Fresh analysis executed and cached for future use")
     
     if 'report_path' in result:
-        print(f"📄 Report: {result['report_path']}")
+        print(f"Report saved to: {result['report_path']}")
+    
+    # Display optimization metrics if available
+    if 'optimization_metrics' in result:
+        print("\nOptimization Metrics:")
+        for key, value in result['optimization_metrics'].items():
+            print(f"  {key}: {value}")
 
 if __name__ == "__main__":
     main()

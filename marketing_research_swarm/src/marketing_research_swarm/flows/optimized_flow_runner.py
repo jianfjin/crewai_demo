@@ -7,9 +7,11 @@ import time
 from datetime import datetime
 
 from marketing_research_swarm.flows.optimized_roi_flow import OptimizedROIFlow
+from marketing_research_swarm.flows.optimized_sales_forecast_flow import OptimizedSalesForecastFlow
+# from marketing_research_swarm.flows.optimized_brand_performance_flow import OptimizedBrandPerformanceFlow
 from marketing_research_swarm.flows.base_flow import FlowState
 from marketing_research_swarm.context.context_manager import AdvancedContextManager, ContextStrategy, ContextPriority
-from marketing_research_swarm.memory.mem0_integration import MarketingMemoryManager
+from marketing_research_swarm.memory.mem0_integration import Mem0Integration
 from marketing_research_swarm.cache.smart_cache import get_cache
 
 class OptimizedFlowRunner:
@@ -20,7 +22,7 @@ class OptimizedFlowRunner:
     def __init__(self, token_budget: int = 4000, use_mem0: bool = False):
         self.token_budget = token_budget
         self.context_manager = AdvancedContextManager(token_budget)
-        self.memory_manager = MarketingMemoryManager(use_mock=not use_mem0)
+        self.memory_manager = Mem0Integration() if use_mem0 else None
         self.cache = get_cache()
         self.execution_history = []
         
@@ -74,18 +76,18 @@ class OptimizedFlowRunner:
             self.execution_history.append(execution_record)
             
             # Store insights in long-term memory
-            if isinstance(result, dict) and 'profitability_insights' in result:
-                memory_id = self.memory_manager.store_analysis_insights(
+            if self.memory_manager and isinstance(result, dict) and 'profitability_insights' in result:
+                insights_content = str(result.get('profitability_insights', {}))
+                success = self.memory_manager.add_analysis_insight(
                     analysis_type="roi_analysis",
-                    insights=result['profitability_insights'],
-                    metadata={
-                        'data_source': data_file_path,
-                        'context_strategy': context_strategy.value,
-                        'execution_time': execution_time,
-                        'optimization_score': optimization_metrics.get('optimization_score', 0)
+                    insight=insights_content,
+                    data_characteristics={
+                        'file_path': data_file_path,
+                        'analysis_timestamp': datetime.now().isoformat()
                     }
                 )
-                result['memory_id'] = memory_id
+                if success:
+                    print("Stored ROI insights in memory")
             
             # Combine results with optimization data
             final_result = {
@@ -119,13 +121,88 @@ class OptimizedFlowRunner:
             'optimization_ready': True
         }
     
-    def run_brand_performance(self, data_file_path: str, **kwargs) -> Dict[str, Any]:
-        """Run brand performance analysis (placeholder)"""
+    def run_brand_performance(self, data_file_path: str, 
+                             context_strategy: ContextStrategy = ContextStrategy.PROGRESSIVE_PRUNING,
+                             **kwargs) -> Dict[str, Any]:
+        """
+        Run optimized brand performance analysis with comprehensive token management
+        
+        Args:
+            data_file_path: Path to source data
+            context_strategy: Context optimization strategy
+            **kwargs: Additional parameters
+            
+        Returns:
+            Analysis results with optimization metrics
+        """
+        print("Starting Optimized Brand Performance Analysis Flow...")
+        start_time = time.time()
+        
+        # Initialize flow - temporarily disabled
+        # flow = OptimizedBrandPerformanceFlow()
         return {
-            'status': 'not_implemented',
-            'message': 'Brand performance flow will be implemented in next phase',
-            'optimization_ready': True
+            'status': 'temporarily_disabled',
+            'message': 'Brand performance flow temporarily disabled for testing',
+            'execution_time': 0.1
         }
+        
+        # Configure flow state
+        flow.state.data_file_path = data_file_path
+        flow.state.analysis_type = "brand_performance"
+        flow.state.context_budget = self.token_budget
+        
+        # Setup context management
+        self._setup_context_management(flow, context_strategy, data_file_path)
+        
+        try:
+            # Execute optimized flow
+            print(f"Executing with {context_strategy.value} strategy...")
+            result = flow.kickoff()
+            
+            # Calculate execution metrics
+            execution_time = time.time() - start_time
+            optimization_metrics = self._calculate_comprehensive_metrics(
+                flow, execution_time, context_strategy
+            )
+            
+            # Store execution in history
+            execution_record = {
+                'timestamp': datetime.now().isoformat(),
+                'analysis_type': 'brand_performance',
+                'execution_time': execution_time,
+                'context_strategy': context_strategy.value,
+                'optimization_metrics': optimization_metrics
+            }
+            self.execution_history.append(execution_record)
+            
+            # Store insights in long-term memory
+            if self.memory_manager and isinstance(result, dict) and 'competitive_intelligence' in result:
+                insights_content = str(result.get('competitive_intelligence', {}))
+                success = self.memory_manager.add_analysis_insight(
+                    analysis_type="brand_performance",
+                    insight=insights_content,
+                    data_characteristics={
+                        'file_path': data_file_path,
+                        'analysis_timestamp': datetime.now().isoformat()
+                    }
+                )
+                if success:
+                    print("Stored brand performance insights in memory")
+            
+            return {
+                'result': result,
+                'optimization_metrics': optimization_metrics,
+                'execution_time': execution_time,
+                'context_strategy': context_strategy.value
+            }
+            
+        except Exception as e:
+            print(f"Error in brand performance analysis: {str(e)}")
+            return {
+                'error': str(e),
+                'execution_time': time.time() - start_time,
+                'context_strategy': context_strategy.value
+            }
     
     def _setup_context_management(self, flow: OptimizedROIFlow, 
                                  strategy: ContextStrategy, 

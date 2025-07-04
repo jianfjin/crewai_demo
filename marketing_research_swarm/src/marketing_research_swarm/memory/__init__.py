@@ -1,3 +1,3 @@
-from .mem0_integration import MarketingMemoryManager
+from .mem0_integration import Mem0Integration, MarketingMemoryManager
 
-__all__ = ['MarketingMemoryManager']
+__all__ = ['Mem0Integration', 'MarketingMemoryManager']
