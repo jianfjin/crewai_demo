@@ -1,5 +1,7 @@
 # Marketing Research Flows
 from marketing_research_swarm.flows.optimized_roi_flow import OptimizedROIFlow
 from marketing_research_swarm.flows.optimized_flow_runner import OptimizedFlowRunner
+from marketing_research_swarm.flows.optimized_sales_forecast_flow import OptimizedSalesForecastFlow
+from marketing_research_swarm.flows.optimized_brand_performance_flow import OptimizedBrandPerformanceFlow
 
-__all__ = ['OptimizedROIFlow', 'OptimizedFlowRunner']
+__all__ = ['OptimizedROIFlow', 'OptimizedFlowRunner', 'OptimizedSalesForecastFlow', 'OptimizedBrandPerformanceFlow']
