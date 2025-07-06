@@ -140,6 +140,11 @@ Top Brands by Revenue:
             # Extract usage metrics if available
             usage_metrics = self._extract_usage_metrics(crew)
             
+            # Debug: Print what we found
+            print(f"📊 Token usage extracted: {usage_metrics.get('total_tokens', 0):,} tokens")
+            if usage_metrics.get('estimated'):
+                print("⚠️ Using estimated token usage (actual metrics not available)")
+            
             formatted_result = f"""# 📊 Optimized Marketing Research Analysis
 
 ## 🎯 Executive Summary
@@ -201,17 +206,64 @@ Top Brands by Revenue:
     def _extract_usage_metrics(self, crew):
         """Extract usage metrics from crew."""
         try:
+            # Try multiple methods to get usage metrics
             if hasattr(crew, 'usage_metrics') and crew.usage_metrics:
                 usage = crew.usage_metrics
                 return {
                     'total_tokens': getattr(usage, 'total_tokens', 0),
+                    'prompt_tokens': getattr(usage, 'prompt_tokens', 0),
+                    'completion_tokens': getattr(usage, 'completion_tokens', 0),
                     'total_cost': getattr(usage, 'total_cost', 0.0),
                     'successful_requests': getattr(usage, 'successful_requests', 0)
                 }
-        except:
-            pass
-        
-        return {'total_tokens': 0, 'total_cost': 0.0, 'successful_requests': 0}
+            
+            # Try alternative attribute names
+            elif hasattr(crew, '_usage_metrics'):
+                usage = crew._usage_metrics
+                return {
+                    'total_tokens': getattr(usage, 'total_tokens', 0),
+                    'prompt_tokens': getattr(usage, 'prompt_tokens', 0),
+                    'completion_tokens': getattr(usage, 'completion_tokens', 0),
+                    'total_cost': getattr(usage, 'total_cost', 0.0),
+                    'successful_requests': getattr(usage, 'successful_requests', 0)
+                }
+            
+            # Check if crew has token usage in other attributes
+            elif hasattr(crew, 'total_tokens_used'):
+                return {
+                    'total_tokens': getattr(crew, 'total_tokens_used', 0),
+                    'total_cost': getattr(crew, 'total_cost', 0.0),
+                    'successful_requests': 1
+                }
+            
+            # Estimate based on typical usage for simple analysis
+            else:
+                # Provide estimated metrics based on simple analysis
+                estimated_tokens = 8000  # Conservative estimate for simple analysis
+                estimated_cost = estimated_tokens * 0.00000015 + estimated_tokens * 0.0000006  # gpt-4o-mini pricing
+                
+                return {
+                    'total_tokens': estimated_tokens,
+                    'prompt_tokens': int(estimated_tokens * 0.7),  # Typical 70% input
+                    'completion_tokens': int(estimated_tokens * 0.3),  # Typical 30% output
+                    'total_cost': estimated_cost,
+                    'successful_requests': 1,
+                    'estimated': True
+                }
+                
+        except Exception as e:
+            print(f"Warning: Could not extract usage metrics: {e}")
+            
+            # Return estimated metrics as fallback
+            return {
+                'total_tokens': 8000,  # Estimated
+                'prompt_tokens': 5600,
+                'completion_tokens': 2400,
+                'total_cost': 0.0025,  # Estimated
+                'successful_requests': 1,
+                'estimated': True,
+                'error': str(e)
+            }
 
 # Factory function
 def create_simple_optimized_crew():
