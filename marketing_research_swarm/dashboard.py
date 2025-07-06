@@ -27,7 +27,7 @@ try:
     from marketing_research_swarm.memory.mem0_integration import Mem0Integration
     from marketing_research_swarm.persistence.analysis_cache import get_analysis_cache
     from marketing_research_swarm.tools.optimized_tools import (
-        optimized_profitability_analyzer, 
+        optimized_profitability_analysis, 
         optimized_roi_calculator, 
         optimized_budget_planner
     )
