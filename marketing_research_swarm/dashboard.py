@@ -179,38 +179,51 @@ def parse_token_metrics(tracker: TokenTracker, crew_metrics: Dict[str, Any] = No
     """Parse token tracking metrics for visualization"""
     token_data = {}
     
-    # First try to get metrics from crew usage_metrics
-    if crew_metrics:
+    # First try to get metrics from crew usage_metrics (optimized crew)
+    if crew_metrics and crew_metrics.get('total_tokens', 0) > 0:
         token_data.update({
             'total_tokens': crew_metrics.get('total_tokens', 0),
             'total_cost': crew_metrics.get('total_cost', 0.0),
-            'requests_made': crew_metrics.get('total_requests', 0),
-            'average_tokens_per_request': crew_metrics.get('average_tokens_per_request', 0),
-            'cost_per_token': crew_metrics.get('cost_per_token', 0),
-            'source': 'crew_metrics'
+            'requests_made': crew_metrics.get('successful_requests', crew_metrics.get('total_requests', 1)),
+            'average_tokens_per_request': crew_metrics.get('total_tokens', 0) / max(crew_metrics.get('successful_requests', 1), 1),
+            'cost_per_token': crew_metrics.get('total_cost', 0) / max(crew_metrics.get('total_tokens', 1), 1),
+            'input_tokens': crew_metrics.get('input_tokens', crew_metrics.get('prompt_tokens', 0)),
+            'output_tokens': crew_metrics.get('output_tokens', crew_metrics.get('completion_tokens', 0)),
+            'estimated': crew_metrics.get('estimated', False),
+            'source': 'optimized_crew_metrics'
         })
+        
+        # Calculate token breakdown for visualization
+        if token_data['input_tokens'] > 0 or token_data['output_tokens'] > 0:
+            token_data['token_breakdown'] = {
+                'Input Tokens': token_data['input_tokens'],
+                'Output Tokens': token_data['output_tokens']
+            }
+            
+            token_data['cost_breakdown'] = {
+                'Input Cost': token_data['input_tokens'] * 0.00000015,  # gpt-4o-mini input pricing
+                'Output Cost': token_data['output_tokens'] * 0.0000006   # gpt-4o-mini output pricing
+            }
     
-    # Fallback to tracker metrics if available
-    if tracker and not token_data:
+    # Fallback to tracker metrics if available and no crew metrics
+    elif tracker and not token_data:
         try:
             metrics = tracker.get_metrics()
-            token_data.update({
-                'total_tokens': metrics.get('total_tokens_used', 0),
-                'total_cost': metrics.get('total_cost_usd', 0.0),
-                'requests_made': metrics.get('total_requests', 0),
-                'average_tokens_per_request': metrics.get('average_tokens_per_request', 0),
-                'cost_breakdown': metrics.get('cost_breakdown', {}),
-                'token_breakdown': metrics.get('token_breakdown', {}),
-                'efficiency_score': metrics.get('efficiency_metrics', {}).get('tokens_per_insight', 0),
-                'source': 'token_tracker'
-            })
+            if metrics and metrics.get('total_tokens_used', 0) > 0:
+                token_data.update({
+                    'total_tokens': metrics.get('total_tokens_used', 0),
+                    'total_cost': metrics.get('total_cost_usd', 0.0),
+                    'requests_made': metrics.get('total_requests', 0),
+                    'average_tokens_per_request': metrics.get('average_tokens_per_request', 0),
+                    'cost_breakdown': metrics.get('cost_breakdown', {}),
+                    'token_breakdown': metrics.get('token_breakdown', {}),
+                    'efficiency_score': metrics.get('efficiency_metrics', {}).get('tokens_per_insight', 0),
+                    'source': 'token_tracker'
+                })
         except Exception as e:
             print(f"Error getting tracker metrics: {e}")
     
-    # If no metrics available, return empty dict
-    if not token_data:
-        return {}
-    
+    # Return the token data (may be empty if no metrics available)
     return token_data
 
 def parse_optimization_metrics(context_manager, cache, memory_manager) -> Dict[str, Any]:
@@ -1167,21 +1180,61 @@ def main():
                     help="Efficiency score or cost per token"
                 )
         else:
-            st.warning("⚠️ No token usage data available. This may indicate:")
-            st.markdown("""
-            - Token tracking is disabled
-            - The crew doesn't support usage metrics
-            - An error occurred during metric collection
-            - The analysis completed without API calls
-            """)
-            
-            # Show debug information
-            with st.expander("🔍 Debug Information"):
-                st.write("Session state keys:", list(st.session_state.keys()))
-                if 'crew_usage_metrics' in st.session_state:
-                    st.write("Crew usage metrics:", st.session_state['crew_usage_metrics'])
-                if 'token_tracker' in st.session_state:
-                    st.write("Token tracker available:", st.session_state['token_tracker'] is not None)
+            # Check if we have optimization metrics instead
+            if 'crew_usage_metrics' in st.session_state and st.session_state['crew_usage_metrics'].get('total_tokens', 0) > 0:
+                st.info("✅ Token usage data available from optimized crew")
+                
+                crew_metrics = st.session_state['crew_usage_metrics']
+                token_cols = st.columns(4)
+                
+                with token_cols[0]:
+                    st.metric(
+                        "Total Tokens",
+                        f"{crew_metrics.get('total_tokens', 0):,}",
+                        help="Total tokens used in optimized analysis"
+                    )
+                
+                with token_cols[1]:
+                    st.metric(
+                        "Total Cost",
+                        f"${crew_metrics.get('total_cost', 0):.4f}",
+                        help="Total cost for the optimized analysis"
+                    )
+                
+                with token_cols[2]:
+                    st.metric(
+                        "API Requests",
+                        f"{crew_metrics.get('successful_requests', 1)}",
+                        help="Number of successful API calls made"
+                    )
+                
+                with token_cols[3]:
+                    efficiency = crew_metrics.get('total_tokens', 0) / max(crew_metrics.get('successful_requests', 1), 1)
+                    st.metric(
+                        "Tokens/Request",
+                        f"{efficiency:.0f}",
+                        help="Average tokens per API request"
+                    )
+                
+                if crew_metrics.get('estimated'):
+                    st.caption("📊 Metrics are estimated based on typical optimized analysis patterns")
+                
+            else:
+                st.warning("⚠️ No token usage data available. This may indicate:")
+                st.markdown("""
+                - Token tracking is disabled
+                - The crew doesn't support usage metrics
+                - An error occurred during metric collection
+                - The analysis completed without API calls
+                """)
+                
+                # Show debug information
+                with st.expander("🔍 Debug Information"):
+                    st.write("Session state keys:", list(st.session_state.keys()))
+                    if 'crew_usage_metrics' in st.session_state:
+                        st.write("Crew usage metrics:", st.session_state['crew_usage_metrics'])
+                    if 'token_tracker' in st.session_state:
+                        st.write("Token tracker available:", st.session_state['token_tracker'] is not None)
         
         # Optimization performance summary
         if parsed_results.get('optimization_metrics'):
