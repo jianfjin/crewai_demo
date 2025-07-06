@@ -95,14 +95,39 @@ class OptimizedMarketingResearchCrew:
                 # Create optimized data summary
                 data_summary = data_processor.summarize_dataset(df, "comprehensive")
                 
+                # Convert data_summary to JSON-serializable format
+                def make_serializable(obj):
+                    """Convert pandas/numpy objects to JSON-serializable types."""
+                    import numpy as np
+                    import pandas as pd
+                    
+                    if isinstance(obj, (np.integer, np.floating)):
+                        return float(obj)
+                    elif isinstance(obj, np.ndarray):
+                        return obj.tolist()
+                    elif isinstance(obj, pd.Series):
+                        return obj.to_dict()
+                    elif isinstance(obj, pd.DataFrame):
+                        return obj.to_dict('records')
+                    elif isinstance(obj, dict):
+                        return {k: make_serializable(v) for k, v in obj.items()}
+                    elif isinstance(obj, list):
+                        return [make_serializable(item) for item in obj]
+                    elif hasattr(obj, 'dtype') and 'object' in str(obj.dtype):
+                        return str(obj)
+                    else:
+                        return obj
+                
+                serializable_summary = make_serializable(data_summary)
+                
                 # Store summary in shared results for agent access
-                shared_results_manager._run("store", "data_summary", data_summary)
+                shared_results_manager._run("store", "data_summary", serializable_summary)
                 shared_results_manager._run("store", "original_data_path", data_file_path)
                 
-                # Replace full data path with summary reference
+                # Replace full data path with summary reference and remove problematic data_summary
                 optimized_inputs = inputs.copy()
-                optimized_inputs['data_summary'] = data_summary
-                optimized_inputs['data_context'] = f"Dataset: {len(df)} rows, {len(df.columns)} columns. Key metrics available in data_summary."
+                # Don't include data_summary directly in inputs to avoid serialization issues
+                optimized_inputs['data_context'] = f"Dataset: {len(df)} rows, {len(df.columns)} columns. Summary stored in shared results as 'data_summary'."
                 
                 return optimized_inputs
                 
