@@ -1,0 +1,29 @@
+research_task:
+  description: "Analyze beverage market data from {data_file_path}. Use beverage_market_analysis for structure, time_series_analysis for trends, cross_sectional_analysis for regional/brand comparison. Focus on {target_audience} opportunities."
+  expected_output: "Market research report: brand performance, regional insights, pricing strategies, profit margins, strategic recommendations"
+  agent: "market_research_analyst"
+
+strategy_task:
+  description: "Create content strategy for beverage brands targeting {target_audience}. Include social media, influencer, seasonal campaigns based on market insights."
+  expected_output: "Content strategy: channel recommendations, seasonal campaigns, brand positioning for beverage market"
+  agent: "content_strategist"
+
+copywriting_task:
+  description: "Write marketing copy for beverage campaigns targeting {target_audience}. Include social posts, product descriptions, taglines reflecting regional preferences."
+  expected_output: "Marketing copy collection: social posts, descriptions, taglines, promotional content for beverages"
+  agent: "creative_copywriter"
+
+data_analysis_task:
+  description: "Analyze beverage sales data from {data_file_path}. Use profitability_analysis (brand/category/region), time_series_analysis (sale_date, total_revenue), forecast_sales for trends."
+  expected_output: "Data analysis report: profitability insights, forecasts, trends, performance comparisons, optimization recommendations"
+  agent: "data_analyst"
+
+optimization_task:
+  description: "Optimize beverage campaigns for {target_audience} with {budget} budget over {duration}. Use profitability_analysis and plan_budget for allocation. Focus on {campaign_goals}."
+  expected_output: "Optimization strategy: budget allocation, regional focus, pricing optimization, ROI projections, action plans"
+  agent: "campaign_optimizer"
+
+brand_performance_task:
+  description: "Analyze beverage brand performance using sales data. Use beverage_market_analysis for positioning, market share, competitive landscape across categories/regions."
+  expected_output: "Brand performance report: market share analysis, competitive positioning, brand health metrics, growth recommendations"
+  agent: "brand_performance_specialist"
