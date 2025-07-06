@@ -966,7 +966,8 @@ def main():
                     }
                     context_strategy = context_strategy_map.get(context_strategy_str, ContextStrategy.PROGRESSIVE_PRUNING)
                     
-                    # Initialize optimization components
+                    # Initialize optimization components (for future use)
+                    # Note: Current crew implementation doesn't use these directly
                     context_manager = AdvancedContextManager(token_budget=token_budget) if enable_caching else None
                     memory_manager = Mem0Integration() if enable_mem0 else None
                     cache = get_analysis_cache() if enable_caching else None
@@ -981,10 +982,7 @@ def main():
                     # Initialize and run the crew with tracking
                     crew = MarketingResearchCrewWithTracking(
                         agents_config_path, 
-                        task_config_path,
-                        context_manager=context_manager,
-                        memory_manager=memory_manager,
-                        cache=cache
+                        task_config_path
                     )
                     
                     # Get token tracker
