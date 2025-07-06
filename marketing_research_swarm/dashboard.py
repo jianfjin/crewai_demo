@@ -22,7 +22,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 try:
     from marketing_research_swarm.crew_with_tracking import MarketingResearchCrewWithTracking
-    from marketing_research_swarm.utils.token_tracker import TokenTracker, get_token_tracker
+    from marketing_research_swarm.utils.token_tracker import TokenTracker, get_token_tracker, reset_token_tracker
     from marketing_research_swarm.context.context_manager import AdvancedContextManager, ContextStrategy
     from marketing_research_swarm.memory.mem0_integration import Mem0Integration
     from marketing_research_swarm.persistence.analysis_cache import get_analysis_cache
@@ -973,9 +973,8 @@ def main():
                     
                     # Initialize token tracker
                     if enable_token_tracking:
+                        reset_token_tracker()  # Reset the global tracker
                         tracker = get_token_tracker()
-                        if tracker:
-                            tracker.reset()
                     else:
                         tracker = None
                     
@@ -989,9 +988,8 @@ def main():
                     )
                     
                     # Get token tracker
+                    reset_token_tracker()  # Reset for new analysis
                     tracker = get_token_tracker()
-                    if tracker:
-                        tracker.reset()  # Reset for new analysis
                     
                     result = crew.kickoff(inputs)
                     
