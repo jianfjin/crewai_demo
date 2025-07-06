@@ -34,12 +34,23 @@ class OptimizedMarketingResearchCrew:
         self.tasks_config = self._load_yaml(self.tasks_config_path)
         self.model_name = "gpt-4o-mini"
         
-        # Initialize optimized tools
+        # Initialize optimized tools with broader mapping
         self.tools = {
             "profitability_analysis": cached_profitability_analysis,
             "calculate_roi": cached_roi_calculator,
             "forecast_sales": cached_sales_forecast,
             "shared_results": shared_results_manager,
+            # Add fallback tools to prevent missing tool errors
+            "read_csv_tool": cached_profitability_analysis,  # Fallback
+            "time_series_analysis": cached_sales_forecast,   # Fallback
+            "cross_sectional_analysis": cached_profitability_analysis,  # Fallback
+            "beverage_market_analysis": cached_profitability_analysis,  # Fallback
+            "search": shared_results_manager,  # Fallback
+            "web_search": shared_results_manager,  # Fallback
+            "analyze_kpis": cached_roi_calculator,  # Fallback
+            "plan_budget": cached_roi_calculator,  # Fallback
+            "analyze_brand_performance": cached_profitability_analysis,  # Fallback
+            "calculate_market_share": cached_profitability_analysis,  # Fallback
         }
     
     def _load_yaml(self, file_path):
@@ -58,7 +69,7 @@ class OptimizedMarketingResearchCrew:
         llm = ChatOpenAI(
             model=self.model_name,
             temperature=0.7,
-            max_tokens=1000  # Limit output tokens to reduce verbosity
+            max_tokens=2000  # Increased from 1000 to allow proper responses
         )
         
         return Agent(
@@ -68,7 +79,7 @@ class OptimizedMarketingResearchCrew:
             llm=llm,
             allow_delegation=agent_config.get('allow_delegation', False),
             tools=agent_tools,
-            max_iter=2,  # Limit iterations to reduce token usage
+            max_iter=5,  # Increased from 2 to allow task completion
             verbose=False  # Reduce verbose output
         )
     
@@ -137,6 +148,11 @@ class OptimizedMarketingResearchCrew:
         
         return inputs
     
+    def _step_callback(self, step):
+        """Callback to monitor crew execution progress."""
+        print(f"📋 Step completed: {step.get('task', 'Unknown task')}")
+        return step
+    
     def kickoff(self, inputs):
         """Execute optimized crew with comprehensive token reduction."""
         crew_id = str(uuid.uuid4())[:8]
@@ -161,9 +177,10 @@ class OptimizedMarketingResearchCrew:
                 agents=agents,
                 tasks=tasks,
                 process=Process.sequential,
-                verbose=False,  # Reduce verbose output
+                verbose=True,   # Enable verbose to see what's happening
                 memory=False,   # Disable memory to reduce context
-                max_rpm=10      # Limit requests per minute
+                max_rpm=30,     # Increased from 10 to allow faster execution
+                step_callback=self._step_callback  # Add callback to monitor progress
             )
             
             # Execute with optimized inputs

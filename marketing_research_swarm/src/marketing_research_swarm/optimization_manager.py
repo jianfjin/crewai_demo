@@ -20,6 +20,9 @@ class OptimizationManager:
         if mode == "optimized":
             from .crew_optimized import OptimizedMarketingResearchCrew
             return OptimizedMarketingResearchCrew(**kwargs)
+        elif mode == "simple_optimized":
+            from .crew_simple_optimized import SimpleOptimizedCrew
+            return SimpleOptimizedCrew(**kwargs)
         else:
             from .crew_with_tracking import MarketingResearchCrewWithTracking
             return MarketingResearchCrewWithTracking(**kwargs)
@@ -38,28 +41,43 @@ class OptimizationManager:
         
         # Configure optimization based on level
         if optimization_level == "full":
-            crew = self.get_crew_instance("optimized")
-            optimization_config = {
-                "data_reduction": True,
-                "agent_compression": True,
-                "tool_caching": True,
-                "output_optimization": True
-            }
+            # Try optimized crew first, fallback to simple if issues
+            try:
+                crew = self.get_crew_instance("simple_optimized")  # Use simple version to avoid iteration issues
+                optimization_config = {
+                    "data_reduction": True,
+                    "agent_compression": True,
+                    "tool_caching": False,  # Disabled in simple version
+                    "output_optimization": True,
+                    "approach": "simple_optimized"
+                }
+            except Exception as e:
+                print(f"Warning: Using fallback crew due to: {e}")
+                crew = self.get_crew_instance("standard", 
+                    agents_config_path='src/marketing_research_swarm/config/agents.yaml',
+                    tasks_config_path='src/marketing_research_swarm/config/tasks.yaml'
+                )
+                optimization_config = {"fallback": True}
         elif optimization_level == "partial":
-            crew = self.get_crew_instance("optimized")
+            crew = self.get_crew_instance("simple_optimized")
             optimization_config = {
                 "data_reduction": True,
                 "agent_compression": True,
                 "tool_caching": False,
-                "output_optimization": False
+                "output_optimization": False,
+                "approach": "simple_optimized"
             }
         else:  # "none"
-            crew = self.get_crew_instance("standard")
+            crew = self.get_crew_instance("standard",
+                agents_config_path='src/marketing_research_swarm/config/agents.yaml',
+                tasks_config_path='src/marketing_research_swarm/config/tasks.yaml'
+            )
             optimization_config = {
                 "data_reduction": False,
                 "agent_compression": False,
                 "tool_caching": False,
-                "output_optimization": False
+                "output_optimization": False,
+                "approach": "standard"
             }
         
         # Execute analysis
