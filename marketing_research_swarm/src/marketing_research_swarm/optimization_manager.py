@@ -17,7 +17,13 @@ class OptimizationManager:
     def get_crew_instance(self, mode: str = "optimized", **kwargs):
         """Get crew instance based on optimization mode."""
         
-        if mode == "optimized":
+        if mode == "blackboard":
+            from .blackboard.blackboard_crew import create_blackboard_crew
+            # Create blackboard crew with default config paths
+            agents_config = kwargs.get('agents_config_path', 'src/marketing_research_swarm/config/agents.yaml')
+            tasks_config = kwargs.get('tasks_config_path', 'src/marketing_research_swarm/config/tasks.yaml')
+            return create_blackboard_crew(agents_config, tasks_config)
+        elif mode == "optimized":
             from .crew_optimized import OptimizedMarketingResearchCrew
             return OptimizedMarketingResearchCrew(**kwargs)
         elif mode == "simple_optimized":
@@ -34,7 +40,7 @@ class OptimizationManager:
         
         Args:
             inputs: Analysis inputs
-            optimization_level: "none", "partial", "full"
+            optimization_level: "none", "partial", "full", "blackboard"
         """
         
         start_time = datetime.now()
@@ -67,6 +73,23 @@ class OptimizationManager:
                 "output_optimization": False,
                 "approach": "simple_optimized"
             }
+        elif optimization_level == "blackboard":
+            # Use integrated blackboard system for maximum efficiency
+            try:
+                crew = self.get_crew_instance("blackboard")
+                optimization_config = {
+                    "unified_coordination": True,
+                    "shared_state_management": True,
+                    "integrated_caching": True,
+                    "memory_optimization": True,
+                    "context_optimization": True,
+                    "token_efficiency": "maximum",
+                    "approach": "integrated_blackboard"
+                }
+            except Exception as e:
+                print(f"Warning: Blackboard system unavailable, falling back to optimized crew: {e}")
+                crew = self.get_crew_instance("simple_optimized")
+                optimization_config = {"fallback_from_blackboard": True, "approach": "simple_optimized"}
         else:  # "none"
             crew = self.get_crew_instance("standard",
                 agents_config_path='src/marketing_research_swarm/config/agents.yaml',
@@ -119,6 +142,30 @@ class OptimizationManager:
     
     def _extract_metrics_from_result(self, result, crew) -> Dict[str, Any]:
         """Extract usage metrics from result or crew with enhanced detection."""
+        
+        # Handle blackboard crew results
+        if isinstance(result, dict) and 'workflow_summary' in result:
+            try:
+                workflow_summary = result['workflow_summary']
+                managers_status = workflow_summary.get('managers_status', {})
+                
+                # Extract token metrics from blackboard system
+                token_tracker_stats = managers_status.get('token_tracker', {}).get('stats', {})
+                if token_tracker_stats:
+                    metrics = {
+                        'total_tokens': token_tracker_stats.get('total_tokens', 0),
+                        'input_tokens': token_tracker_stats.get('input_tokens', 0),
+                        'output_tokens': token_tracker_stats.get('output_tokens', 0),
+                        'total_cost': token_tracker_stats.get('total_cost', 0.0),
+                        'blackboard_efficiency': True,
+                        'managers_active': len([m for m, s in managers_status.items() 
+                                              if isinstance(s, dict) and s.get('active', False)])
+                    }
+                    if metrics['total_tokens'] > 0:
+                        print(f"Got metrics from blackboard system: {metrics}")
+                        return metrics
+            except Exception as e:
+                print(f"Warning: Could not extract blackboard metrics: {e}")
         
         # Try to extract from crew's own method first (for simple optimized crew)
         if hasattr(crew, '_extract_usage_metrics'):
