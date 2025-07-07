@@ -373,6 +373,3 @@ class Mem0Integration:
 
 # Backward compatibility alias
 MarketingMemoryManager = Mem0Integration
-
-# Backward compatibility alias
-MarketingMemoryManager = Mem0Integration
