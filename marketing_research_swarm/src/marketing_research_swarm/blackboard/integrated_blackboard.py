@@ -540,8 +540,11 @@ class IntegratedBlackboardSystem:
                         self.token_tracker.crew_usage.complete()
                         final_stats = {
                             'total_tokens': self.token_tracker.crew_usage.total_token_usage.total_tokens,
+                            'prompt_tokens': self.token_tracker.crew_usage.total_token_usage.prompt_tokens,
+                            'completion_tokens': self.token_tracker.crew_usage.total_token_usage.completion_tokens,
                             'duration': self.token_tracker.crew_usage.total_duration_seconds
                         }
+                        print(f"Blackboard cleanup - Final token stats: {final_stats}")
                     else:
                         final_stats = {}
                     cleanup_stats['final_token_stats'] = final_stats

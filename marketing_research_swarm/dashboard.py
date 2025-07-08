@@ -155,10 +155,11 @@ def create_custom_task_config(selected_agents: List[str], task_params: Dict[str,
         }
     }
     
-    # Create tasks for selected agents
+    # Create tasks for selected agents in the order they were selected
     for i, agent in enumerate(selected_agents):
         if agent in agent_task_mapping:
-            task_name = f"{agent}_task_{task_id}"
+            # Use zero-padded index to maintain order
+            task_name = f"{i:02d}_{agent}_task_{task_id}"
             tasks_config[task_name] = {
                 'description': agent_task_mapping[agent]['description'],
                 'expected_output': agent_task_mapping[agent]['expected_output'],

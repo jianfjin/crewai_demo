@@ -216,6 +216,25 @@ class OptimizationManager:
                 except Exception as e:
                     print(f"Warning: Could not parse metrics from result: {e}")
         
+        # Try to get actual token usage from global tracker
+        try:
+            from .utils.token_tracker import get_token_tracker
+            tracker = get_token_tracker()
+            if tracker and hasattr(tracker, 'crew_usage') and tracker.crew_usage:
+                actual_usage = tracker.crew_usage.total_token_usage
+                print(f"Got actual token usage: {actual_usage.total_tokens}")
+                return {
+                    'total_tokens': actual_usage.total_tokens,
+                    'input_tokens': actual_usage.prompt_tokens,
+                    'output_tokens': actual_usage.completion_tokens,
+                    'total_cost': actual_usage.total_tokens * 0.0000025,  # Rough estimate
+                    'successful_requests': 1,
+                    'estimated': False,
+                    'source': 'actual_tracking'
+                }
+        except Exception as e:
+            print(f"Could not get actual token usage: {e}")
+        
         # Final fallback - provide estimated metrics based on optimization level
         print("Using fallback estimated metrics")
         return {
