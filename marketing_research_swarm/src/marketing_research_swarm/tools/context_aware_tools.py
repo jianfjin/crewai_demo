@@ -5,23 +5,41 @@ Intercepts tool outputs and stores them by reference instead of dumping to conte
 
 from typing import Any, Dict, Optional
 import json
+from crewai.tools import BaseTool
+from pydantic import Field
 # Import optimization_manager dynamically to avoid circular imports
 from ..blackboard.integrated_blackboard import get_integrated_blackboard
 
-class ContextAwareToolWrapper:
+class ContextAwareToolWrapper(BaseTool):
     """Wrapper that stores tool outputs by reference instead of returning raw data."""
     
-    def __init__(self, original_tool, tool_name: str):
-        self.original_tool = original_tool
-        self.tool_name = tool_name
-        self.blackboard = get_integrated_blackboard()
-        self._optimization_manager = None
+    name: str = Field(default="context_aware_tool")
+    description: str = Field(default="Context-aware tool wrapper")
+    
+    def __init__(self, original_tool, tool_name: str, **kwargs):
+        # Initialize BaseTool with proper attributes
+        super().__init__(
+            name=tool_name,
+            description=f"Context-aware version of {tool_name} that stores large outputs by reference",
+            **kwargs
+        )
+        # Set attributes after initialization to avoid field validation
+        object.__setattr__(self, 'original_tool', original_tool)
+        object.__setattr__(self, 'tool_name', tool_name)
+        object.__setattr__(self, 'blackboard', get_integrated_blackboard())
+        object.__setattr__(self, '_optimization_manager', None)
         
-    def __call__(self, *args, **kwargs):
+    def _run(self, *args, **kwargs):
         """Execute tool and store output by reference."""
         try:
-            # Execute the original tool
-            raw_output = self.original_tool(*args, **kwargs)
+            # Execute the original tool - handle both callable and BaseTool instances
+            if hasattr(self.original_tool, '_run'):
+                raw_output = self.original_tool._run(*args, **kwargs)
+            elif hasattr(self.original_tool, '__call__'):
+                raw_output = self.original_tool(*args, **kwargs)
+            else:
+                # Fallback for other tool types
+                raw_output = self.original_tool.run(*args, **kwargs)
             
             # Check if output is large enough to warrant reference storage
             output_size = len(str(raw_output))
@@ -124,14 +142,20 @@ def create_context_aware_tools():
         )
     }
 
-class ReferenceRetrieverTool:
+class ReferenceRetrieverTool(BaseTool):
     """Tool that allows agents to retrieve data by reference key."""
     
-    def __init__(self):
-        self.name = "retrieve_by_reference"
-        self.description = "Retrieve stored analysis results by reference key"
+    name: str = Field(default="retrieve_by_reference")
+    description: str = Field(default="Retrieve stored analysis results by reference key")
     
-    def __call__(self, reference_key: str) -> Any:
+    def __init__(self, **kwargs):
+        super().__init__(
+            name="retrieve_by_reference",
+            description="Retrieve stored analysis results by reference key",
+            **kwargs
+        )
+    
+    def _run(self, reference_key: str) -> Any:
         """Retrieve data by reference key."""
         try:
             from ..optimization_manager import optimization_manager
