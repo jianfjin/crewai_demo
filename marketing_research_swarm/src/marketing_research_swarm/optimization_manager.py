@@ -216,24 +216,51 @@ class OptimizationManager:
                 except Exception as e:
                     print(f"Warning: Could not parse metrics from result: {e}")
         
-        # Try to get actual token usage from global tracker
+        # Try to get actual token usage from enhanced blackboard tracker first
+        try:
+            from .blackboard.enhanced_token_tracker import get_blackboard_tracker
+            blackboard_tracker = get_blackboard_tracker()
+            if blackboard_tracker and hasattr(blackboard_tracker, 'workflow_tokens'):
+                # Find the most recent workflow
+                latest_workflow = None
+                latest_time = None
+                for workflow_id, workflow_data in blackboard_tracker.workflow_tokens.items():
+                    if latest_time is None or workflow_data['start_time'] > latest_time:
+                        latest_time = workflow_data['start_time']
+                        latest_workflow = workflow_data
+                
+                if latest_workflow and latest_workflow.get('total_tokens', 0) > 0:
+                    print(f"Got enhanced token usage: {latest_workflow['total_tokens']}")
+                    return {
+                        'total_tokens': latest_workflow['total_tokens'],
+                        'input_tokens': latest_workflow.get('input_tokens', 0),
+                        'output_tokens': latest_workflow.get('output_tokens', 0),
+                        'total_cost': latest_workflow['total_tokens'] * 0.0000025,
+                        'successful_requests': 1,
+                        'estimated': False,
+                        'source': 'enhanced_blackboard_tracking'
+                    }
+        except Exception as e:
+            print(f"Could not get enhanced token usage: {e}")
+        
+        # Fallback to legacy token tracker
         try:
             from .utils.token_tracker import get_token_tracker
             tracker = get_token_tracker()
             if tracker and hasattr(tracker, 'crew_usage') and tracker.crew_usage:
                 actual_usage = tracker.crew_usage.total_token_usage
-                print(f"Got actual token usage: {actual_usage.total_tokens}")
+                print(f"Got legacy token usage: {actual_usage.total_tokens}")
                 return {
                     'total_tokens': actual_usage.total_tokens,
                     'input_tokens': actual_usage.prompt_tokens,
                     'output_tokens': actual_usage.completion_tokens,
-                    'total_cost': actual_usage.total_tokens * 0.0000025,  # Rough estimate
+                    'total_cost': actual_usage.total_tokens * 0.0000025,
                     'successful_requests': 1,
                     'estimated': False,
-                    'source': 'actual_tracking'
+                    'source': 'legacy_tracking'
                 }
         except Exception as e:
-            print(f"Could not get actual token usage: {e}")
+            print(f"Could not get legacy token usage: {e}")
         
         # Final fallback - provide estimated metrics based on optimization level
         print("Using fallback estimated metrics")

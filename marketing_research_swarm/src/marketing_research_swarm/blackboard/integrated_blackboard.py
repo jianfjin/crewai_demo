@@ -117,6 +117,20 @@ class IntegratedBlackboardSystem:
             except Exception as e:
                 self.logger.warning(f"Failed to initialize TokenTracker: {e}")
         
+        # Initialize shared state manager
+        self.shared_state_manager = SharedStateManager()
+        self.logger.info("SharedStateManager initialized")
+        
+        # Initialize reference manager for agent interdependency
+        from .result_reference_system import get_reference_manager
+        self.reference_manager = get_reference_manager()
+        self.logger.info("ResultReferenceManager initialized")
+        
+        # Initialize enhanced token tracker
+        from .enhanced_token_tracker import get_blackboard_tracker
+        self.blackboard_tracker = get_blackboard_tracker()
+        self.logger.info("BlackboardTokenTracker initialized")
+        
         # Integrated workflow contexts
         self.workflow_contexts: Dict[str, IntegratedWorkflowContext] = {}
         
@@ -199,14 +213,21 @@ class IntegratedBlackboardSystem:
                 except Exception as e:
                     self.logger.warning(f"Shared state manager error: {e}")
             
-            # Initialize token tracking
+            # Initialize enhanced token tracking
             token_usage = {}
-            if self.token_tracker:
+            if self.blackboard_tracker:
                 try:
-                    self.token_tracker.start_crew_tracking(workflow_id)
+                    self.blackboard_tracker.start_workflow_tracking(workflow_id)
                     token_usage = {'tracking_started': True}
                 except Exception as e:
                     self.logger.warning(f"Token tracker error: {e}")
+            
+            # Also start legacy token tracking for compatibility
+            if self.token_tracker:
+                try:
+                    self.token_tracker.start_crew_tracking(workflow_id)
+                except Exception as e:
+                    self.logger.warning(f"Legacy token tracker error: {e}")
             
             # Create integrated workflow context
             workflow_context = IntegratedWorkflowContext(
@@ -315,14 +336,27 @@ class IntegratedBlackboardSystem:
             
             workflow_context = self.workflow_contexts[workflow_id]
             
-            # Update context manager
+            # Store result with reference system for agent interdependency
+            task_type = self._determine_task_type(agent_role)
+            reference_key = self.reference_manager.store_agent_result(
+                agent_role=agent_role,
+                task_type=task_type,
+                result_data=results
+            )
+            
+            # Create isolated context instead of polluting global context
+            isolated_context = self.reference_manager.create_isolated_context(
+                agent_role=agent_role,
+                task_type=task_type,
+                base_inputs=workflow_context.initial_data
+            )
+            
+            # Update context manager with isolated context only
             if self.context_manager:
                 try:
-                    # Context manager doesn't have update_context method
-                    # Add new context instead
                     self.context_manager.add_context(
-                        key=f"agent_result_{workflow_id}_{agent_role}",
-                        value=results
+                        key=f"isolated_context_{workflow_id}_{agent_role}",
+                        value=isolated_context
                     )
                 except Exception as e:
                     self.logger.warning(f"Context manager update error: {e}")
@@ -380,6 +414,20 @@ class IntegratedBlackboardSystem:
             })
             
             return True
+    
+    def _determine_task_type(self, agent_role: str) -> str:
+        """Determine task type based on agent role."""
+        task_mapping = {
+            'data_analyst': 'data_analysis',
+            'campaign_optimizer': 'campaign_optimization',
+            'content_strategist': 'content_strategy',
+            'market_research_analyst': 'market_research',
+            'brand_performance_specialist': 'brand_performance',
+            'forecasting_specialist': 'sales_forecast',
+            'competitive_analyst': 'competitive_analysis',
+            'creative_copywriter': 'content_creation'
+        }
+        return task_mapping.get(agent_role, 'general_analysis')
     
     def get_workflow_summary(self, workflow_id: str) -> Dict[str, Any]:
         """
@@ -533,24 +581,32 @@ class IntegratedBlackboardSystem:
                 except Exception as e:
                     cleanup_stats['errors'].append(f'shared_state_error: {e}')
             
-            # Finalize token tracking
+            # Finalize enhanced token tracking
+            if self.blackboard_tracker:
+                try:
+                    final_stats = self.blackboard_tracker.complete_workflow_tracking(workflow_id)
+                    cleanup_stats['final_token_stats'] = final_stats
+                    cleanup_stats['cleanup_actions'].append('enhanced_token_tracking_finalized')
+                    print(f"Enhanced token tracking completed: {final_stats}")
+                except Exception as e:
+                    cleanup_stats['errors'].append(f'enhanced_token_tracker_error: {e}')
+            
+            # Also finalize legacy token tracking
             if self.token_tracker:
                 try:
                     if hasattr(self.token_tracker, 'crew_usage') and self.token_tracker.crew_usage:
                         self.token_tracker.crew_usage.complete()
-                        final_stats = {
+                        legacy_stats = {
                             'total_tokens': self.token_tracker.crew_usage.total_token_usage.total_tokens,
                             'prompt_tokens': self.token_tracker.crew_usage.total_token_usage.prompt_tokens,
                             'completion_tokens': self.token_tracker.crew_usage.total_token_usage.completion_tokens,
                             'duration': self.token_tracker.crew_usage.total_duration_seconds
                         }
-                        print(f"Blackboard cleanup - Final token stats: {final_stats}")
-                    else:
-                        final_stats = {}
-                    cleanup_stats['final_token_stats'] = final_stats
-                    cleanup_stats['cleanup_actions'].append('token_tracking_finalized')
+                        cleanup_stats['legacy_token_stats'] = legacy_stats
+                        print(f"Legacy token tracking completed: {legacy_stats}")
+                    cleanup_stats['cleanup_actions'].append('legacy_token_tracking_finalized')
                 except Exception as e:
-                    cleanup_stats['errors'].append(f'token_tracker_error: {e}')
+                    cleanup_stats['errors'].append(f'legacy_token_tracker_error: {e}')
             
             # Remove workflow context
             del self.workflow_contexts[workflow_id]
