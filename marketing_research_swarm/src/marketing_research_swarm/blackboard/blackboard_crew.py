@@ -11,6 +11,7 @@ import requests
 from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process
+from pydantic import Field, ConfigDict
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 
@@ -223,6 +224,12 @@ class BlackboardCoordinatedCrew(Crew):
     Enhanced Crew that coordinates execution through the blackboard system.
     """
     
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
+    # Define additional fields for Pydantic
+    workflow_id: str = Field(default="", description="Workflow identifier")
+    blackboard_system: Any = Field(default=None, description="Blackboard system instance")
+    
     def __init__(self, 
                  agents: List[StateAwareAgent],
                  tasks: List[Task],
@@ -239,9 +246,13 @@ class BlackboardCoordinatedCrew(Crew):
             blackboard_system: Integrated blackboard system
             **kwargs: Additional crew arguments
         """
-        super().__init__(agents=agents, tasks=tasks, **kwargs)
-        self.workflow_id = workflow_id
-        self.blackboard_system = blackboard_system
+        super().__init__(
+            agents=agents, 
+            tasks=tasks, 
+            workflow_id=workflow_id,
+            blackboard_system=blackboard_system,
+            **kwargs
+        )
         
         # Set up agents with workflow context
         for agent in agents:
