@@ -47,12 +47,13 @@ class BlackboardMarketingResearchCrew:
     for maximum token efficiency through shared state management.
     """
     
-    def __init__(self, agents_config_path, tasks_config_path):
+    def __init__(self, agents_config_path, tasks_config_path, selected_agents=None):
         self.agents_config = load_yaml(agents_config_path)
         self.tasks_config = load_yaml(tasks_config_path)
-        
-        # Get the integrated blackboard system
+        self.selected_agents = selected_agents  # List of selected agent names
         self.blackboard = get_integrated_blackboard()
+        
+        # Remove duplicate blackboard initialization
         
         # Initialize search tools (with fallback if API keys not available)
         try:
@@ -167,13 +168,15 @@ class BlackboardMarketingResearchCrew:
         )
         
         try:
-            # Create state-aware agents
+            # Create state-aware agents from all agents in config
+            # (The tasks config file already contains only selected agents)
             agents = [
                 self._create_blackboard_agent(agent_config, workflow_id)
                 for agent_config in self.agents_config.values()
             ]
             
-            # Create tasks
+            # Create tasks from the custom tasks config
+            # (This config file contains only tasks for selected agents)
             tasks = [
                 self._create_blackboard_task(task_config, agents)
                 for task_config in self.tasks_config.values()
@@ -310,7 +313,7 @@ class BlackboardCoordinatedCrew(Crew):
         )
 
 
-def create_blackboard_crew(agents_config_path: str, tasks_config_path: str) -> BlackboardMarketingResearchCrew:
+def create_blackboard_crew(agents_config_path: str, tasks_config_path: str, selected_agents: List[str] = None) -> BlackboardMarketingResearchCrew:
     """
     Factory function to create a blackboard-integrated marketing research crew.
     
@@ -321,4 +324,4 @@ def create_blackboard_crew(agents_config_path: str, tasks_config_path: str) -> B
     Returns:
         BlackboardMarketingResearchCrew instance
     """
-    return BlackboardMarketingResearchCrew(agents_config_path, tasks_config_path)
+    return BlackboardMarketingResearchCrew(agents_config_path, tasks_config_path, selected_agents)

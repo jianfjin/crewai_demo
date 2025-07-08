@@ -19,7 +19,7 @@ class OptimizationManager:
         
         if mode == "blackboard":
             from .blackboard.blackboard_crew import create_blackboard_crew
-            # Create blackboard crew with default config paths
+            # Create blackboard crew with config paths
             agents_config = kwargs.get('agents_config_path', 'src/marketing_research_swarm/config/agents.yaml')
             tasks_config = kwargs.get('tasks_config_path', 'src/marketing_research_swarm/config/tasks.yaml')
             return create_blackboard_crew(agents_config, tasks_config)
@@ -34,7 +34,8 @@ class OptimizationManager:
             return MarketingResearchCrewWithTracking(**kwargs)
     
     def run_analysis_with_optimization(self, inputs: Dict[str, Any], 
-                                     optimization_level: str = "full") -> Dict[str, Any]:
+                                     optimization_level: str = "full",
+                                     custom_tasks_config_path: str = None) -> Dict[str, Any]:
         """
         Run analysis with specified optimization level.
         
@@ -76,7 +77,11 @@ class OptimizationManager:
         elif optimization_level == "blackboard":
             # Use integrated blackboard system for maximum efficiency
             try:
-                crew = self.get_crew_instance("blackboard")
+                # Use custom tasks config if provided
+                blackboard_kwargs = {}
+                if custom_tasks_config_path:
+                    blackboard_kwargs['tasks_config_path'] = custom_tasks_config_path
+                crew = self.get_crew_instance("blackboard", **blackboard_kwargs)
                 optimization_config = {
                     "unified_coordination": True,
                     "shared_state_management": True,

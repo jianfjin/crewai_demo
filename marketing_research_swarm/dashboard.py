@@ -1013,7 +1013,7 @@ def main():
                     
                     # Get optimization settings
                     opt_settings = st.session_state['task_params'].get('optimization_settings', {})
-                    optimization_level = opt_settings.get('optimization_level', 'full')
+                    optimization_level = opt_settings.get('optimization_level', 'blackboard')  # Default to blackboard for agent selection
                     show_comparison = opt_settings.get('show_comparison', False)
                     enable_token_tracking = opt_settings.get('enable_token_tracking', True)
                     
@@ -1029,7 +1029,8 @@ def main():
                     
                     analysis_result = optimization_manager.run_analysis_with_optimization(
                         inputs=inputs,
-                        optimization_level=optimization_level
+                        optimization_level=optimization_level,
+                        custom_tasks_config_path=task_config_path
                     )
                     
                     if "error" in analysis_result:
