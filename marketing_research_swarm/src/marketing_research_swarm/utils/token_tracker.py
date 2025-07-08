@@ -299,6 +299,78 @@ class TokenTracker:
             # Fallback to cl100k_base for unknown models
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
     
+    def start_crew_tracking(self, crew_id: str) -> CrewTokenUsage:
+        """Start tracking token usage for a crew execution."""
+        self.crew_usage = CrewTokenUsage(
+            crew_id=crew_id,
+            start_time=datetime.now(),
+            model_name=self.model_name
+        )
+        return self.crew_usage
+    
+    def start_task_tracking(self, task_name: str, agent_name: str) -> TaskTokenUsage:
+        """Start tracking token usage for a task."""
+        self.current_task = TaskTokenUsage(
+            task_name=task_name,
+            agent_name=agent_name,
+            start_time=datetime.now()
+        )
+        return self.current_task
+    
+    def record_llm_usage(self, prompt: str, response: str, actual_usage: Optional[Dict] = None) -> TokenUsage:
+        """Record token usage for an LLM call."""
+        if actual_usage:
+            # Use actual usage from API response if available
+            token_usage = TokenUsage(
+                prompt_tokens=actual_usage.get('prompt_tokens', 0),
+                completion_tokens=actual_usage.get('completion_tokens', 0),
+                total_tokens=actual_usage.get('total_tokens', 0)
+            )
+        else:
+            # Estimate token usage using tiktoken
+            prompt_tokens = len(self.tokenizer.encode(prompt))
+            completion_tokens = len(self.tokenizer.encode(response))
+            token_usage = TokenUsage(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens
+            )
+        
+        # Update current task if tracking
+        if self.current_task:
+            self.current_task.token_usage += token_usage
+            self.current_task.llm_calls += 1
+        
+        # Update crew usage if tracking
+        if self.crew_usage:
+            self.crew_usage.total_token_usage += token_usage
+        
+        return token_usage
+    
+    def complete_current_task(self, status: str = "completed", error_message: Optional[str] = None):
+        """Complete the current task tracking."""
+        if self.current_task:
+            self.current_task.complete(self.current_task.token_usage, status, error_message)
+            
+            # Add to crew usage if tracking
+            if self.crew_usage:
+                self.crew_usage.task_usages.append(self.current_task)
+            
+            self.current_task = None
+    
+    def complete_crew_tracking(self) -> Optional[CrewTokenUsage]:
+        """Complete crew tracking and return final usage."""
+        if self.crew_usage:
+            self.crew_usage.end_time = datetime.now()
+            self.crew_usage.duration_seconds = (
+                self.crew_usage.end_time - self.crew_usage.start_time
+            ).total_seconds()
+            
+            crew_usage = self.crew_usage
+            self.crew_usage = None
+            return crew_usage
+        return None
+    
     def get_metrics(self) -> Dict[str, Any]:
         """Get comprehensive metrics for the tracker."""
         if not self.crew_usage:

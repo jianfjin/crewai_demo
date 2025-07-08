@@ -218,17 +218,26 @@ class IntegratedBlackboardSystem:
             token_usage = {}
             if self.blackboard_tracker:
                 try:
-                    self.blackboard_tracker.start_workflow_tracking(workflow_id)
-                    token_usage = {'tracking_started': True}
+                    success = self.blackboard_tracker.start_workflow_tracking(workflow_id)
+                    if success:
+                        token_usage = {'tracking_started': True, 'workflow_id': workflow_id}
+                        print(f"[TOKEN] Started enhanced tracking for workflow: {workflow_id}")
+                    else:
+                        token_usage = {'tracking_started': False, 'error': 'Failed to start enhanced tracking'}
                 except Exception as e:
-                    self.logger.warning(f"Token tracker error: {e}")
+                    self.logger.warning(f"Enhanced token tracker error: {e}")
+                    token_usage = {'tracking_started': False, 'error': str(e)}
             
             # Also start legacy token tracking for compatibility
             if self.token_tracker:
                 try:
-                    self.token_tracker.start_crew_tracking(workflow_id)
+                    crew_usage = self.token_tracker.start_crew_tracking(workflow_id)
+                    if crew_usage:
+                        print(f"[TOKEN] Started legacy tracking for workflow: {workflow_id}")
+                        token_usage['legacy_tracking'] = True
                 except Exception as e:
                     self.logger.warning(f"Legacy token tracker error: {e}")
+                    token_usage['legacy_tracking'] = False
             
             # Create integrated workflow context
             workflow_context = IntegratedWorkflowContext(
