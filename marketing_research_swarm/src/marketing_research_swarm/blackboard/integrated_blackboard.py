@@ -146,10 +146,12 @@ class IntegratedBlackboardSystem:
             if self.context_manager:
                 try:
                     # Create optimized context for the workflow
-                    context_data = self.context_manager.create_context(
-                        context_type=workflow_type,
-                        initial_data=initial_data
+                    self.context_manager.add_context(
+                        key=f"workflow_{workflow_id}",
+                        value=initial_data or {},
+                        priority=getattr(self.context_manager, 'ContextPriority', type('', (), {'IMPORTANT': 'important'})).IMPORTANT
                     )
+                    context_data = {"workflow_context": f"workflow_{workflow_id}"}
                 except Exception as e:
                     self.logger.warning(f"Context manager error: {e}")
             
@@ -159,11 +161,15 @@ class IntegratedBlackboardSystem:
                 try:
                     # Store workflow context in memory
                     memory_key = f"workflow_{workflow_id}"
-                    self.memory_manager.store_context(memory_key, {
-                        'workflow_type': workflow_type,
-                        'initial_data': initial_data,
-                        'created_at': datetime.now().isoformat()
-                    })
+                    self.memory_manager.add_memory(
+                        content=f"Workflow {workflow_type} started with data: {initial_data}",
+                        user_id=memory_key,
+                        metadata={
+                            'workflow_type': workflow_type,
+                            'workflow_id': workflow_id,
+                            'created_at': datetime.now().isoformat()
+                        }
+                    )
                     memory_data = {'memory_key': memory_key}
                 except Exception as e:
                     self.logger.warning(f"Memory manager error: {e}")
@@ -174,7 +180,7 @@ class IntegratedBlackboardSystem:
                 try:
                     # Look for relevant cached analysis
                     cache_key = self._generate_cache_key(workflow_type, initial_data)
-                    cached_result = self.cache_manager.get_cached_analysis(cache_key)
+                    cached_result = self.cache_manager.get_cached_result(cache_key)
                     if cached_result:
                         cached_results = {'cache_key': cache_key, 'data': cached_result}
                 except Exception as e:
@@ -187,7 +193,7 @@ class IntegratedBlackboardSystem:
                     # Create workflow in shared state manager
                     shared_workflow_id = self.shared_state_manager.create_workflow(
                         workflow_type=workflow_type,
-                        initial_data=initial_data
+                        filters=initial_data or {}
                     )
                     shared_state = {'shared_workflow_id': shared_workflow_id}
                 except Exception as e:
@@ -197,7 +203,7 @@ class IntegratedBlackboardSystem:
             token_usage = {}
             if self.token_tracker:
                 try:
-                    self.token_tracker.start_tracking(workflow_id)
+                    self.token_tracker.start_crew_tracking(workflow_id)
                     token_usage = {'tracking_started': True}
                 except Exception as e:
                     self.logger.warning(f"Token tracker error: {e}")
@@ -324,11 +330,15 @@ class IntegratedBlackboardSystem:
             if self.memory_manager:
                 try:
                     memory_key = f"agent_result_{workflow_id}_{agent_role}"
-                    self.memory_manager.store_context(memory_key, {
-                        'agent_role': agent_role,
-                        'results': results,
-                        'timestamp': datetime.now().isoformat()
-                    })
+                    self.memory_manager.add_memory(
+                        content=f"Agent {agent_role} completed with results: {results}",
+                        user_id=memory_key,
+                        metadata={
+                            'agent_role': agent_role,
+                            'workflow_id': workflow_id,
+                            'timestamp': datetime.now().isoformat()
+                        }
+                    )
                 except Exception as e:
                     self.logger.warning(f"Memory manager store error: {e}")
             
@@ -494,7 +504,7 @@ class IntegratedBlackboardSystem:
             # Cleanup context manager
             if self.context_manager:
                 try:
-                    self.context_manager.cleanup_context(workflow_id)
+                    self.context_manager.remove_aged_context()
                     cleanup_stats['cleanup_actions'].append('context_manager_cleaned')
                 except Exception as e:
                     cleanup_stats['errors'].append(f'context_manager_error: {e}')
@@ -523,7 +533,7 @@ class IntegratedBlackboardSystem:
             # Finalize token tracking
             if self.token_tracker:
                 try:
-                    final_stats = self.token_tracker.stop_tracking(workflow_id)
+                    final_stats = self.token_tracker.get_crew_summary() if self.token_tracker.crew_usage else {}
                     cleanup_stats['final_token_stats'] = final_stats
                     cleanup_stats['cleanup_actions'].append('token_tracking_finalized')
                 except Exception as e:

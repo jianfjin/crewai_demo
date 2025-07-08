@@ -38,6 +38,8 @@ class ContextElement:
             self.dependencies = []
 
 class AdvancedContextManager:
+    # Make ContextPriority accessible as class attribute
+    ContextPriority = ContextPriority
     """
     Advanced context management with multiple optimization strategies
     """

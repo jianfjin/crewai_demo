@@ -18,8 +18,8 @@ class StateAwareAgent(Agent):
                  role: str,
                  goal: str,
                  backstory: str,
-                 workflow_id: str,
                  blackboard_system: IntegratedBlackboardSystem,
+                 workflow_id: str = None,
                  tools=None,
                  llm=None,
                  allow_delegation: bool = False,
@@ -35,14 +35,14 @@ class StateAwareAgent(Agent):
             **kwargs
         )
         
-        self.workflow_id = workflow_id
+        self.workflow_id = workflow_id or f"workflow_{int(time.time())}"
         self.blackboard_system = blackboard_system
         self.execution_context = {}
         self.token_usage = {}
         
-    def set_workflow_context(self, workflow_id: str, blackboard_system: IntegratedBlackboardSystem):
+    def set_workflow_context(self, blackboard_system: IntegratedBlackboardSystem, workflow_id: str = None):
         """Set or update workflow context."""
-        self.workflow_id = workflow_id
+        self.workflow_id = workflow_id or f"workflow_{int(time.time())}"
         self.blackboard_system = blackboard_system
     
     def execute(self, task) -> str:
