@@ -901,12 +901,24 @@ def main():
             
             optimization_level = st.selectbox(
                 "Optimization Level",
-                ["blackboard", "full", "partial", "none"],
+                ["comprehensive", "blackboard", "full", "partial", "none"],
                 index=0,
                 help="Choose optimization level for token reduction"
             )
             
-            if optimization_level == "blackboard":
+            if optimization_level == "comprehensive":
+                st.success("🌟 **Comprehensive Flow**: Complete workflow with all 9 agents")
+                st.markdown("""
+                **Complete Marketing Research Workflow:**
+                - 🏗️ **Phase 1**: Foundation (market_research_analyst)
+                - 🔬 **Phase 2**: Analysis (data_analyst, competitive_analyst, brand_performance_specialist)
+                - 🎯 **Phase 3**: Strategy (brand_strategist, campaign_optimizer, forecasting_specialist)
+                - ✍️ **Phase 4**: Content (content_strategist, creative_copywriter)
+                - ✅ Proper dependency management and execution order
+                - ✅ Reference-based context isolation (80% token reduction)
+                - ✅ Complete end-to-end marketing analysis
+                """)
+            elif optimization_level == "blackboard":
                 st.success("🚀 **Blackboard System**: 85-95% token reduction expected")
                 st.markdown("""
                 **Advanced Optimizations Applied:**
@@ -1060,16 +1072,20 @@ def main():
                         return
                     
                     result = analysis_result["result"]
-                    performance = analysis_result["performance"]
-                    optimization_applied = analysis_result["optimization_applied"]
+                    metrics = analysis_result.get("metrics", {})
+                    optimization_record = analysis_result.get("optimization_record", {})
                     
-                    # Store performance metrics
-                    st.session_state['crew_usage_metrics'] = performance.get('usage_metrics', {})
-                    st.session_state['optimization_applied'] = optimization_applied
-                    st.session_state['performance_data'] = performance
+                    # Store performance metrics (using correct keys)
+                    st.session_state['crew_usage_metrics'] = metrics
+                    st.session_state['optimization_applied'] = optimization_record.get('optimization_level', 'unknown')
+                    st.session_state['performance_data'] = {
+                        'metrics': metrics,
+                        'optimization_record': optimization_record,
+                        'usage_metrics': metrics
+                    }
                     
                     # Display optimization results
-                    usage_metrics = performance.get('usage_metrics', {})
+                    usage_metrics = metrics
                     if usage_metrics:
                         st.success(f"✅ Analysis completed with {optimization_level} optimization!")
                         
@@ -1383,7 +1399,7 @@ def main():
                     'context_strategy': opt_settings.get('context_strategy', 'progressive_pruning')
                 },
                 'optimization_summary': {
-                    'estimated_token_reduction': '85-95%' if opt_settings.get('optimization_level') == 'blackboard' else '75-85%' if opt_settings.get('optimization_level') == 'full' else '40-50%' if opt_settings.get('optimization_level') == 'partial' else '0%',
+                    'estimated_token_reduction': '80%' if opt_settings.get('optimization_level') == 'comprehensive' else '85-95%' if opt_settings.get('optimization_level') == 'blackboard' else '75-85%' if opt_settings.get('optimization_level') == 'full' else '40-50%' if opt_settings.get('optimization_level') == 'partial' else '0%',
                     'approach_used': st.session_state.get('optimization_applied', {}).get('approach', 'unknown'),
                     'data_reduction_applied': st.session_state.get('optimization_applied', {}).get('data_reduction', False),
                     'agent_compression_applied': st.session_state.get('optimization_applied', {}).get('agent_compression', False),
@@ -1442,7 +1458,7 @@ OPTIMIZATION PERFORMANCE:
 
 ESTIMATED TOKEN SAVINGS:
 - Optimization Level: {opt_settings.get('optimization_level', 'none').title()}
-- Expected Reduction: {'85-95%' if opt_settings.get('optimization_level') == 'blackboard' else '75-85%' if opt_settings.get('optimization_level') == 'full' else '40-50%' if opt_settings.get('optimization_level') == 'partial' else '0%'}
+- Expected Reduction: {'80%' if opt_settings.get('optimization_level') == 'comprehensive' else '85-95%' if opt_settings.get('optimization_level') == 'blackboard' else '75-85%' if opt_settings.get('optimization_level') == 'full' else '40-50%' if opt_settings.get('optimization_level') == 'partial' else '0%'}
 - Baseline Comparison: {token_usage_data.get('total_tokens', 0):,} tokens vs ~59,687 baseline tokens
 
 CACHE PERFORMANCE:

@@ -31,6 +31,7 @@ from ..tools.advanced_tools import (
     beverage_market_analysis,
     profitability_analysis,
 )
+from ..tools.context_aware_tools import create_context_aware_tools, reference_retriever
 from crewai_tools import SerperDevTool, WebsiteSearchTool
 from .integrated_blackboard import get_integrated_blackboard
 from .state_aware_agents import StateAwareAgent
@@ -66,19 +67,24 @@ class BlackboardMarketingResearchCrew:
         except:
             web_search_tool = None
         
+        # Create context-aware tools for better context isolation
+        context_aware_tools = create_context_aware_tools()
+        
         self.tools = {
             "read_file_tool": read_file_tool,
             "read_csv_tool": read_csv_tool,
-            "calculate_roi": calculate_roi,
-            "analyze_kpis": analyze_kpis,
-            "forecast_sales": forecast_sales,
-            "plan_budget": plan_budget,
-            "analyze_brand_performance": analyze_brand_performance,
-            "calculate_market_share": calculate_market_share,
-            "time_series_analysis": time_series_analysis,
-            "cross_sectional_analysis": cross_sectional_analysis,
-            "beverage_market_analysis": beverage_market_analysis,
-            "profitability_analysis": profitability_analysis,
+            "retrieve_by_reference": reference_retriever,
+            # Use context-aware versions of analytical tools
+            "calculate_roi": context_aware_tools['calculate_roi'],
+            "analyze_kpis": context_aware_tools['analyze_kpis'],
+            "forecast_sales": context_aware_tools['forecast_sales'],
+            "plan_budget": context_aware_tools['plan_budget'],
+            "analyze_brand_performance": context_aware_tools['analyze_brand_performance'],
+            "calculate_market_share": context_aware_tools['calculate_market_share'],
+            "time_series_analysis": context_aware_tools['time_series_analysis'],
+            "cross_sectional_analysis": context_aware_tools['cross_sectional_analysis'],
+            "beverage_market_analysis": context_aware_tools['beverage_market_analysis'],
+            "profitability_analysis": context_aware_tools['profitability_analysis'],
         }
         
         # Add optional tools if available

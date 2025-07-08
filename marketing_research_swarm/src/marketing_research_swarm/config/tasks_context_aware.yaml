@@ -1,0 +1,103 @@
+research_task:
+  description: >
+    Conduct comprehensive market research on the beverage industry using the enhanced sales data from {data_file_path}. 
+    Use the beverage market analysis tool to understand market structure, then apply time series analysis to identify temporal patterns 
+    and cross-sectional analysis to compare performance across regions, brands, and categories. 
+    Focus on identifying opportunities for {target_audience} and provide insights on pricing strategies, profit margins, and market share dynamics.
+    
+    IMPORTANT CONTEXT ISOLATION INSTRUCTIONS:
+    - When tools return large outputs with reference keys (format: [RESULT_REF:tool_name_12345678]), 
+      include these reference keys in your final output for other agents to use
+    - Use the retrieve_by_reference tool to access data from previous analyses when needed
+    - Structure your output to include: analysis summary + reference keys for detailed data
+    - Pass reference keys to subsequent agents instead of copying large data sets
+  expected_output: >
+    A comprehensive market research report with detailed analysis of brand performance, category dynamics, regional insights, 
+    pricing strategies, profit margin analysis, and strategic recommendations for the global beverage market.
+    Include any reference keys for detailed data: [RESULT_REF:...] that other agents can use.
+  agent: "market_research_analyst"
+
+strategy_task:
+  description: >
+    Develop a comprehensive content strategy for beverage brands based on the market research insights. 
+    The strategy should target {target_audience} and leverage insights about regional preferences, category trends, and competitive positioning. 
+    Include recommendations for social media campaigns, influencer collaborations, seasonal promotions, and brand positioning strategies 
+    that align with beverage consumption patterns and lifestyle trends.
+    
+    IMPORTANT CONTEXT ISOLATION INSTRUCTIONS:
+    - Look for reference keys from previous market research (format: [RESULT_REF:...])
+    - Use retrieve_by_reference tool to access detailed market data when needed
+    - Build your strategy based on the market insights, not raw data dumps
+    - Include reference keys in your output for campaign optimization agent
+  expected_output: >
+    A comprehensive content strategy document with channel-specific recommendations, seasonal campaign ideas, 
+    and brand positioning strategies for the beverage market. Include reference keys for supporting data.
+  agent: "content_strategist"
+
+copywriting_task:
+  description: >
+    Create compelling marketing copy for beverage campaigns targeting {target_audience}. 
+    Develop copy that resonates with beverage consumers, highlights product benefits, and addresses category-specific needs 
+    (refreshment, energy, health, taste). Include social media posts, product descriptions, and campaign taglines 
+    that reflect regional preferences and seasonal consumption patterns identified in the market research.
+    
+    IMPORTANT CONTEXT ISOLATION INSTRUCTIONS:
+    - Use reference keys from strategy and research tasks to access relevant insights
+    - Focus on creating copy based on strategic recommendations, not raw data
+    - Use retrieve_by_reference tool only when specific data points are needed
+  expected_output: >
+    A collection of marketing copy including social media posts, product descriptions, campaign taglines, 
+    and promotional content tailored for the beverage market.
+  agent: "creative_copywriter"
+
+data_analysis_task:
+  description: >
+    Perform comprehensive data analysis on the beverage sales data from {data_file_path} using the specialized analytical tools. 
+    Use the profitability analysis tool with analysis_dimension='brand' to examine profit margins across brands, 
+    then use analysis_dimension='category' for categories, and analysis_dimension='region' for regions. 
+    Use the time series analysis tool with date_column='sale_date' and value_column='total_revenue' to identify seasonal patterns and growth trends.
+    
+    IMPORTANT CONTEXT ISOLATION INSTRUCTIONS:
+    - Store large analytical outputs using reference keys
+    - Provide summary insights with reference keys for detailed data
+    - Structure output for easy consumption by campaign optimizer
+    - Use retrieve_by_reference to access market research insights when needed
+  expected_output: >
+    A detailed data analysis report with profitability insights, sales forecasts, trend analysis, performance comparisons, 
+    and recommendations for pricing and cost optimization in the beverage market. Include reference keys for detailed analytical data.
+  agent: "data_analyst"
+
+optimization_task:
+  description: >
+    Based on the market research and data analysis results, develop comprehensive optimization strategies for beverage marketing campaigns 
+    targeting {target_audience}. Use profitability analysis and budget planning tools to create optimal budget allocation across channels, 
+    regions, and categories. Consider the {budget} total budget and {duration} campaign duration. 
+    Focus on {campaign_goals} and provide specific recommendations for improving performance in underperforming regions.
+    
+    IMPORTANT CONTEXT ISOLATION INSTRUCTIONS:
+    - Use reference keys from previous tasks to access detailed analysis
+    - Use retrieve_by_reference tool to get specific data points for optimization
+    - Focus on strategic recommendations rather than reproducing raw data
+    - Provide actionable insights based on all previous analyses
+  expected_output: >
+    A comprehensive optimization strategy with budget allocation recommendations, regional focus strategies, 
+    pricing optimization suggestions, ROI projections, and specific action plans for campaign improvement in the beverage market.
+  agent: "campaign_optimizer"
+
+brand_performance_task:
+  description: >
+    Analyze brand performance in the beverage market using the comprehensive sales data. 
+    Use the beverage market analysis tool to assess brand positioning, market share, and competitive landscape. 
+    Evaluate brand performance across different categories, regions, and price points. 
+    Track key metrics such as revenue share, profit margins, pricing strategies, and market penetration.
+    
+    IMPORTANT CONTEXT ISOLATION INSTRUCTIONS:
+    - Store detailed brand analysis using reference keys
+    - Use retrieve_by_reference to access market research and data analysis insights
+    - Provide strategic brand recommendations with supporting reference keys
+    - Focus on actionable brand insights rather than data reproduction
+  expected_output: >
+    A comprehensive brand performance report with market share analysis, competitive positioning insights, 
+    brand health metrics, and strategic recommendations for brand growth in the beverage market. 
+    Include reference keys for detailed brand data.
+  agent: "brand_performance_specialist"

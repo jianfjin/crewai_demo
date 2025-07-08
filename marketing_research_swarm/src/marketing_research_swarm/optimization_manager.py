@@ -31,6 +31,9 @@ class OptimizationManager:
             agents_config = kwargs.get('agents_config_path', 'src/marketing_research_swarm/config/agents.yaml')
             tasks_config = kwargs.get('tasks_config_path', 'src/marketing_research_swarm/config/tasks.yaml')
             return create_blackboard_crew(agents_config, tasks_config)
+        elif mode == "comprehensive":
+            from .flows.comprehensive_dynamic_flow import create_comprehensive_flow
+            return create_comprehensive_flow()
         elif mode == "optimized":
             from .crew_optimized import OptimizedMarketingResearchCrew
             return OptimizedMarketingResearchCrew(**kwargs)
@@ -160,22 +163,27 @@ class OptimizationManager:
         workflow_id = str(uuid.uuid4())
         
         # Start workflow tracking
-        if optimization_level == "blackboard":
+        if optimization_level in ["blackboard", "comprehensive"]:
             try:
                 workflow_context = self.blackboard.create_integrated_workflow(workflow_id, inputs)
-                print(f"[WORKFLOW] Started blackboard workflow: {workflow_id}")
+                print(f"[WORKFLOW] Started {optimization_level} workflow: {workflow_id}")
             except Exception as e:
-                print(f"[ERROR] Failed to start blackboard workflow: {e}")
+                print(f"[ERROR] Failed to start {optimization_level} workflow: {e}")
         
         # Configure optimization based on level
         if optimization_level == "full":
             crew_mode = "optimized"
             agents_config_path = "src/marketing_research_swarm/config/agents_optimized.yaml"
             tasks_config_path = custom_tasks_config_path or "src/marketing_research_swarm/config/tasks_optimized.yaml"
+        elif optimization_level == "comprehensive":
+            crew_mode = "comprehensive"
+            # Comprehensive flow doesn't use config files - it has built-in agent configs
+            agents_config_path = None
+            tasks_config_path = None
         elif optimization_level == "blackboard":
             crew_mode = "blackboard"
             agents_config_path = "src/marketing_research_swarm/config/agents.yaml"
-            tasks_config_path = custom_tasks_config_path or "src/marketing_research_swarm/config/tasks.yaml"
+            tasks_config_path = custom_tasks_config_path or "src/marketing_research_swarm/config/tasks_context_aware.yaml"
         elif optimization_level == "partial":
             crew_mode = "simple_optimized"
             agents_config_path = "src/marketing_research_swarm/config/agents.yaml"
@@ -187,15 +195,39 @@ class OptimizationManager:
         
         try:
             # Get crew instance
-            crew = self.get_crew_instance(
-                mode=crew_mode,
-                agents_config_path=agents_config_path,
-                tasks_config_path=tasks_config_path
-            )
-            
-            # Run analysis
-            print(f"[ANALYSIS] Running {optimization_level} optimization with {crew_mode} crew")
-            result = crew.kickoff(inputs=inputs)
+            if crew_mode == "comprehensive":
+                crew = self.get_crew_instance(mode=crew_mode)
+                
+                # For comprehensive flow, we need to prepare agent selection and task params
+                # Default to all 9 agents for comprehensive analysis
+                selected_agents = [
+                    'market_research_analyst', 'data_analyst', 'competitive_analyst',
+                    'brand_performance_specialist', 'brand_strategist', 'campaign_optimizer',
+                    'forecasting_specialist', 'content_strategist', 'creative_copywriter'
+                ]
+                
+                # Convert inputs to task_params format expected by comprehensive flow
+                task_params = {
+                    'data_file_path': inputs.get('data_file_path', 'data/beverage_sales.csv'),
+                    'target_audience': inputs.get('target_audience', 'health-conscious millennials'),
+                    'budget': inputs.get('budget', '$100,000'),
+                    'duration': inputs.get('duration', '3 months'),
+                    'campaign_goals': inputs.get('campaign_goals', 'increase brand awareness and market share')
+                }
+                
+                print(f"[ANALYSIS] Running {optimization_level} optimization with {crew_mode} flow")
+                print(f"[AGENTS] Selected agents: {selected_agents}")
+                result = crew.kickoff(selected_agents=selected_agents, task_params=task_params)
+            else:
+                crew = self.get_crew_instance(
+                    mode=crew_mode,
+                    agents_config_path=agents_config_path,
+                    tasks_config_path=tasks_config_path
+                )
+                
+                # Run analysis
+                print(f"[ANALYSIS] Running {optimization_level} optimization with {crew_mode} crew")
+                result = crew.kickoff(inputs=inputs)
             
             # Extract metrics
             metrics = self.extract_metrics_from_output(str(result))
@@ -218,13 +250,13 @@ class OptimizationManager:
             
             self.optimization_history.append(optimization_record)
             
-            # Finalize workflow if using blackboard
-            if optimization_level == "blackboard":
+            # Finalize workflow if using blackboard or comprehensive
+            if optimization_level in ["blackboard", "comprehensive"]:
                 try:
                     cleanup_result = self.blackboard.cleanup_workflow(workflow_id)
-                    print(f"[WORKFLOW] Finalized blackboard workflow: {workflow_id}")
+                    print(f"[WORKFLOW] Finalized {optimization_level} workflow: {workflow_id}")
                 except Exception as e:
-                    print(f"[ERROR] Failed to finalize blackboard workflow: {e}")
+                    print(f"[ERROR] Failed to finalize {optimization_level} workflow: {e}")
             
             return {
                 'result': result,
