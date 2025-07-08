@@ -152,6 +152,27 @@ def create_custom_task_config(selected_agents: List[str], task_params: Dict[str,
             market position: {task_params.get('brand_metrics', {}).get('market_position', 'N/A')}.
             Focus on {', '.join(task_params.get('product_categories', []))} categories and competitive positioning.""",
             'expected_output': f"A comprehensive brand performance report with market positioning analysis, competitive insights, and strategic recommendations for {', '.join(task_params.get('brands', []))} brands."
+        },
+        'competitive_analyst': {
+            'description': f"""Analyze competitive landscape and market positioning for {', '.join(task_params.get('brands', []))} in the {task_params.get('analysis_focus', 'beverage industry')}.
+            Examine competitive dynamics across {', '.join(task_params.get('market_segments', []))} markets and {', '.join(task_params.get('product_categories', []))} categories.
+            Assess market share, competitive threats, pricing strategies, and positioning opportunities.
+            Focus on competitive intelligence for {task_params.get('target_audience', 'target market')} with budget considerations of ${task_params.get('budget', 0):,}.""",
+            'expected_output': f"A detailed competitive analysis report with market positioning insights, competitive landscape mapping, threat assessment, and strategic recommendations for competitive advantage."
+        },
+        'brand_strategist': {
+            'description': f"""Develop strategic brand recommendations based on competitive analysis and market insights for {', '.join(task_params.get('brands', []))}.
+            Create brand optimization strategies for {', '.join(task_params.get('market_segments', []))} markets with focus on {', '.join(task_params.get('campaign_goals', []))}.
+            Evaluate brand health, identify growth opportunities, and develop actionable strategies for brand performance improvement.
+            Consider budget allocation of ${task_params.get('budget', 0):,} over {task_params.get('duration', '6 months')} for brand initiatives.""",
+            'expected_output': f"A comprehensive brand strategy document with optimization recommendations, growth opportunities, brand health assessment, and actionable strategic plans for brand improvement."
+        },
+        'forecasting_specialist': {
+            'description': f"""Generate accurate sales forecasts and predictive models for {', '.join(task_params.get('brands', []))} across {', '.join(task_params.get('market_segments', []))} markets.
+            Create forecasts for {task_params.get('forecast_periods', 30)} periods with expected revenue targets of ${task_params.get('expected_revenue', 25000):,}.
+            Apply advanced forecasting techniques considering seasonal patterns, market trends, and competitive factors.
+            Focus on {', '.join(task_params.get('product_categories', []))} categories and key metrics: {', '.join(task_params.get('key_metrics', []))}.""",
+            'expected_output': f"A detailed sales forecast report with predictive models, confidence intervals, scenario planning, and strategic recommendations for {task_params.get('forecast_periods', 30)} periods ahead."
         }
     }
     
