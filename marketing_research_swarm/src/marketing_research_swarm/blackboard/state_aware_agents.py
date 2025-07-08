@@ -5,6 +5,7 @@
 import time
 from typing import Dict, Any, Optional
 from crewai import Agent
+from pydantic import Field, ConfigDict
 from .integrated_blackboard import IntegratedBlackboardSystem
 
 
@@ -13,6 +14,14 @@ class StateAwareAgent(Agent):
     Enhanced CrewAI Agent that integrates with the blackboard system
     for token-efficient execution through shared state management.
     """
+    
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
+    # Define additional fields for Pydantic
+    workflow_id: str = Field(default="", description="Workflow identifier")
+    blackboard_system: Optional[IntegratedBlackboardSystem] = Field(default=None, description="Blackboard system instance")
+    execution_context: Dict[str, Any] = Field(default_factory=dict, description="Execution context")
+    token_usage: Dict[str, Any] = Field(default_factory=dict, description="Token usage tracking")
     
     def __init__(self, 
                  role: str,
@@ -32,13 +41,12 @@ class StateAwareAgent(Agent):
             tools=tools or [],
             llm=llm,
             allow_delegation=allow_delegation,
+            workflow_id=workflow_id or f"workflow_{int(time.time())}",
+            blackboard_system=blackboard_system,
+            execution_context={},
+            token_usage={},
             **kwargs
         )
-        
-        self.workflow_id = workflow_id or f"workflow_{int(time.time())}"
-        self.blackboard_system = blackboard_system
-        self.execution_context = {}
-        self.token_usage = {}
         
     def set_workflow_context(self, blackboard_system: IntegratedBlackboardSystem, workflow_id: str = None):
         """Set or update workflow context."""

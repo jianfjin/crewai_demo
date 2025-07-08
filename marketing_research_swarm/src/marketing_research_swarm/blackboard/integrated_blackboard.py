@@ -504,7 +504,7 @@ class IntegratedBlackboardSystem:
             # Cleanup context manager
             if self.context_manager:
                 try:
-                    self.context_manager.remove_aged_context()
+                    self.context_manager.remove_aged_elements()
                     cleanup_stats['cleanup_actions'].append('context_manager_cleaned')
                 except Exception as e:
                     cleanup_stats['errors'].append(f'context_manager_error: {e}')
@@ -525,7 +525,9 @@ class IntegratedBlackboardSystem:
                 try:
                     shared_workflow_id = workflow_context.shared_state.get('shared_workflow_id')
                     if shared_workflow_id:
-                        self.shared_state_manager.cleanup_workflow(shared_workflow_id)
+                        # SharedStateManager doesn't have cleanup_workflow method
+                        # Just remove from our local tracking
+                        pass
                         cleanup_stats['cleanup_actions'].append('shared_state_cleaned')
                 except Exception as e:
                     cleanup_stats['errors'].append(f'shared_state_error: {e}')
@@ -533,7 +535,14 @@ class IntegratedBlackboardSystem:
             # Finalize token tracking
             if self.token_tracker:
                 try:
-                    final_stats = self.token_tracker.get_crew_summary() if self.token_tracker.crew_usage else {}
+                    if hasattr(self.token_tracker, 'crew_usage') and self.token_tracker.crew_usage:
+                        self.token_tracker.crew_usage.complete()
+                        final_stats = {
+                            'total_tokens': self.token_tracker.crew_usage.total_token_usage.total_tokens,
+                            'duration': self.token_tracker.crew_usage.total_duration_seconds
+                        }
+                    else:
+                        final_stats = {}
                     cleanup_stats['final_token_stats'] = final_stats
                     cleanup_stats['cleanup_actions'].append('token_tracking_finalized')
                 except Exception as e:

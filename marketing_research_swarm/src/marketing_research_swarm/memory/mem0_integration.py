@@ -38,7 +38,7 @@ class Mem0Integration:
             config: Optional configuration for Mem0 client
         """
         try:
-            # Default configuration for local Mem0
+            # Default configuration for local Mem0 - use embedding model without dimensions
             default_config = {
                 "vector_store": {
                     "provider": "chroma",
@@ -50,7 +50,7 @@ class Mem0Integration:
                 "embedder": {
                     "provider": "openai",
                     "config": {
-                        "model": "text-embedding-ada-002"
+                        "model": "text-embedding-3-small"
                     }
                 }
             }
