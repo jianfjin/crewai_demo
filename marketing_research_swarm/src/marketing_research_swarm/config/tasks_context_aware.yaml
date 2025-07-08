@@ -1,8 +1,12 @@
 research_task:
   description: >
     Conduct comprehensive market research on the beverage industry using the enhanced sales data from {data_file_path}. 
-    Use the beverage market analysis tool to understand market structure, then apply time series analysis to identify temporal patterns 
-    and cross-sectional analysis to compare performance across regions, brands, and categories. 
+    
+    TOOL USAGE INSTRUCTIONS:
+    - Use beverage_market_analysis tool with: {{"data_path": "{data_file_path}"}}
+    - Use time_series_analysis tool with: {{"data_path": "{data_file_path}", "date_column": "sale_date", "value_column": "total_revenue"}}
+    - Use cross_sectional_analysis tool with: {{"data_path": "{data_file_path}", "segment_column": "region", "value_column": "total_revenue"}}
+    
     Focus on identifying opportunities for {target_audience} and provide insights on pricing strategies, profit margins, and market share dynamics.
     
     IMPORTANT CONTEXT ISOLATION INSTRUCTIONS:
@@ -53,9 +57,16 @@ copywriting_task:
 data_analysis_task:
   description: >
     Perform comprehensive data analysis on the beverage sales data from {data_file_path} using the specialized analytical tools. 
-    Use the profitability analysis tool with analysis_dimension='brand' to examine profit margins across brands, 
-    then use analysis_dimension='category' for categories, and analysis_dimension='region' for regions. 
-    Use the time series analysis tool with date_column='sale_date' and value_column='total_revenue' to identify seasonal patterns and growth trends.
+    
+    TOOL USAGE INSTRUCTIONS:
+    - Use profitability_analysis tool with: {{"data_path": "{data_file_path}", "analysis_dimension": "brand"}}
+    - Use profitability_analysis tool with: {{"data_path": "{data_file_path}", "analysis_dimension": "category"}}
+    - Use profitability_analysis tool with: {{"data_path": "{data_file_path}", "analysis_dimension": "region"}}
+    - Use time_series_analysis tool with: {{"data_path": "{data_file_path}", "date_column": "sale_date", "value_column": "total_revenue"}}
+    - Use analyze_kpis tool with: {{"data_path": "{data_file_path}"}}
+    - Use forecast_sales tool with: {{"data_path": "{data_file_path}", "periods": 30, "forecast_column": "sales"}}
+    
+    Examine profit margins across brands, categories, and regions. Identify seasonal patterns and growth trends.
     
     IMPORTANT CONTEXT ISOLATION INSTRUCTIONS:
     - Store large analytical outputs using reference keys
@@ -70,9 +81,12 @@ data_analysis_task:
 optimization_task:
   description: >
     Based on the market research and data analysis results, develop comprehensive optimization strategies for beverage marketing campaigns 
-    targeting {target_audience}. Use profitability analysis and budget planning tools to create optimal budget allocation across channels, 
-    regions, and categories. Consider the {budget} total budget and {duration} campaign duration. 
+    targeting {target_audience}. Consider the {budget} total budget and {duration} campaign duration. 
     Focus on {campaign_goals} and provide specific recommendations for improving performance in underperforming regions.
+    
+    TOOL USAGE INSTRUCTIONS:
+    - Use plan_budget tool with: {{"budget": "{budget}", "duration": "{duration}", "campaign_goals": "{campaign_goals}"}}
+    - Use calculate_roi tool with: {{"investment": "{budget}", "expected_return": "calculated_based_on_analysis"}}
     
     IMPORTANT CONTEXT ISOLATION INSTRUCTIONS:
     - Use reference keys from previous tasks to access detailed analysis
@@ -86,8 +100,13 @@ optimization_task:
 
 brand_performance_task:
   description: >
-    Analyze brand performance in the beverage market using the comprehensive sales data. 
-    Use the beverage market analysis tool to assess brand positioning, market share, and competitive landscape. 
+    Analyze brand performance in the beverage market using the comprehensive sales data from {data_file_path}. 
+    
+    TOOL USAGE INSTRUCTIONS:
+    - Use analyze_brand_performance tool with: {{"data_path": "{data_file_path}"}}
+    - Use beverage_market_analysis tool with: {{"data_path": "{data_file_path}"}}
+    - Use calculate_market_share tool with: {{"company_revenue": "calculated_from_analysis", "total_market_revenue": "calculated_from_analysis"}}
+    
     Evaluate brand performance across different categories, regions, and price points. 
     Track key metrics such as revenue share, profit margins, pricing strategies, and market penetration.
     
