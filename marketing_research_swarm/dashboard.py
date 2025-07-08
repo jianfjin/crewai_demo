@@ -1035,7 +1035,7 @@ def main():
                     
                     # Get optimization settings
                     opt_settings = st.session_state['task_params'].get('optimization_settings', {})
-                    optimization_level = opt_settings.get('optimization_level', 'blackboard')  # Default to blackboard for agent selection
+                    optimization_level = opt_settings.get('optimization_level', 'flow')  # Default to flow for better token tracking
                     show_comparison = opt_settings.get('show_comparison', False)
                     enable_token_tracking = opt_settings.get('enable_token_tracking', True)
                     

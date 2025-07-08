@@ -37,6 +37,8 @@ class Mem0Integration:
         Args:
             config: Optional configuration for Mem0 client
         """
+        # Initialize fallback memory storage
+        self._fallback_memory = {}
         try:
             # Default configuration for local Mem0 - use embedding model without dimensions
             default_config = {

@@ -283,6 +283,21 @@ class TokenAnalyzer:
             recommendations.append(f"{len(long_tasks)} tasks took over 2 minutes - consider breaking down complex tasks")
         
         return recommendations
+
+class TokenTracker:
+    """Tracks token usage across crew execution."""
+    
+    def __init__(self, model_name: str = "gpt-4o-mini"):
+        self.model_name = model_name
+        self.crew_usage: Optional[CrewTokenUsage] = None
+        self.current_task: Optional[TaskTokenUsage] = None
+        
+        # Initialize tokenizer for the model
+        try:
+            self.tokenizer = tiktoken.encoding_for_model(model_name)
+        except KeyError:
+            # Fallback to cl100k_base for unknown models
+            self.tokenizer = tiktoken.get_encoding("cl100k_base")
     
     def get_metrics(self) -> Dict[str, Any]:
         """Get comprehensive metrics for the tracker."""
