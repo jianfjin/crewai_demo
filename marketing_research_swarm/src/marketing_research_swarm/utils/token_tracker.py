@@ -283,6 +283,29 @@ class TokenAnalyzer:
             recommendations.append(f"{len(long_tasks)} tasks took over 2 minutes - consider breaking down complex tasks")
         
         return recommendations
+    
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get comprehensive metrics for the tracker."""
+        if not self.crew_usage:
+            return {
+                'total_tokens': 0,
+                'prompt_tokens': 0,
+                'completion_tokens': 0,
+                'total_cost': 0.0,
+                'successful_requests': 0,
+                'estimated': True,
+                'source': 'no_tracking_data'
+            }
+        
+        return {
+            'total_tokens': self.crew_usage.total_token_usage.total_tokens,
+            'prompt_tokens': self.crew_usage.total_token_usage.prompt_tokens,
+            'completion_tokens': self.crew_usage.total_token_usage.completion_tokens,
+            'total_cost': self.crew_usage.total_token_usage.total_tokens * 0.0000025,  # Rough estimate
+            'successful_requests': len(self.crew_usage.task_usages),
+            'estimated': False,
+            'source': 'crew_tracking'
+        }
 
 # Global token tracker instance
 _global_tracker = None

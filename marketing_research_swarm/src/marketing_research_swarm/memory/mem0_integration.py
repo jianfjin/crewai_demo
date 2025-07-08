@@ -370,6 +370,47 @@ class Mem0Integration:
                 "total_memories": 0,
                 "error": str(e)
             }
+    
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """Get memory usage statistics - safe version."""
+        try:
+            if self.memory is None:
+                return {
+                    'total_memories': len(self._fallback_memory),
+                    'storage_type': 'fallback',
+                    'status': 'fallback_mode'
+                }
+            
+            # Get stats from Mem0 - handle different return types safely
+            try:
+                stats = self.memory.get_all()
+                if isinstance(stats, str):
+                    # If get_all returns a string, use fallback count
+                    memory_count = len(self._fallback_memory)
+                elif isinstance(stats, list):
+                    memory_count = len(stats)
+                elif isinstance(stats, dict):
+                    memory_count = len(stats.get('memories', []))
+                else:
+                    memory_count = len(self._fallback_memory)
+            except Exception:
+                # Fallback to counting our local storage
+                memory_count = len(self._fallback_memory)
+            
+            return {
+                'total_memories': memory_count,
+                'storage_type': 'mem0',
+                'status': 'active'
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting memory stats: {e}")
+            return {
+                'total_memories': 0,
+                'storage_type': 'unknown',
+                'status': 'error',
+                'error': str(e)
+            }
 
 # Backward compatibility alias
 MarketingMemoryManager = Mem0Integration
