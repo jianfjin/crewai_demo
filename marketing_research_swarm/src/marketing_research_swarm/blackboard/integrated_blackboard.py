@@ -52,6 +52,7 @@ class IntegratedWorkflowContext:
     token_usage: Dict[str, int]
     created_at: datetime
     last_updated: datetime
+    initial_data: Dict[str, Any] = None  # Add initial_data field
 
 
 class IntegratedBlackboardSystem:
@@ -238,7 +239,8 @@ class IntegratedBlackboardSystem:
                 shared_state=shared_state,
                 token_usage=token_usage,
                 created_at=datetime.now(),
-                last_updated=datetime.now()
+                last_updated=datetime.now(),
+                initial_data=initial_data  # Store initial data
             )
             
             self.workflow_contexts[workflow_id] = workflow_context
@@ -345,10 +347,15 @@ class IntegratedBlackboardSystem:
             )
             
             # Create isolated context instead of polluting global context
+            # Get initial data from workflow context
+            initial_data = getattr(workflow_context, 'initial_data', {})
+            if not initial_data and hasattr(workflow_context, 'context_data'):
+                initial_data = workflow_context.context_data
+            
             isolated_context = self.reference_manager.create_isolated_context(
                 agent_role=agent_role,
                 task_type=task_type,
-                base_inputs=workflow_context.initial_data
+                base_inputs=initial_data
             )
             
             # Update context manager with isolated context only
