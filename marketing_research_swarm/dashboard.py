@@ -1095,10 +1095,72 @@ def main():
                         with col2:
                             st.metric("Cost", f"${usage_metrics.get('total_cost', 0):.4f}")
                         with col3:
-                            st.metric("Duration", f"{performance.get('duration_seconds', 0):.1f}s")
+                            st.metric("Duration", f"{analysis_result.get('duration_seconds', 0):.1f}s")
                         with col4:
-                            efficiency = usage_metrics.get('total_tokens', 0) / max(performance.get('duration_seconds', 1), 1)
+                            efficiency = usage_metrics.get('total_tokens', 0) / max(analysis_result.get('duration_seconds', 1), 1)
                             st.metric("Efficiency", f"{efficiency:.0f} tok/s")
+                        
+                        # Display detailed token usage breakdown
+                        st.subheader("🔍 Detailed Token Usage Breakdown")
+                        
+                        # Agent-level token usage
+                        if 'agent_usage' in usage_metrics:
+                            st.write("**Token Usage by Agent:**")
+                            agent_usage = usage_metrics['agent_usage']
+                            
+                            for agent_name, agent_data in agent_usage.items():
+                                with st.expander(f"🤖 {agent_name} - {agent_data.get('total_tokens', 0):,} tokens"):
+                                    col_a, col_b, col_c = st.columns(3)
+                                    with col_a:
+                                        st.metric("Input Tokens", f"{agent_data.get('input_tokens', 0):,}")
+                                    with col_b:
+                                        st.metric("Output Tokens", f"{agent_data.get('output_tokens', 0):,}")
+                                    with col_c:
+                                        st.metric("Cost", f"${agent_data.get('cost', 0):.4f}")
+                                    
+                                    # Task-level breakdown for this agent
+                                    if 'tasks' in agent_data:
+                                        st.write("**Tasks executed:**")
+                                        for task_name, task_data in agent_data['tasks'].items():
+                                            st.write(f"- **{task_name}**: {task_data.get('tokens', 0):,} tokens")
+                        
+                        # Tool usage breakdown
+                        if 'tool_usage' in usage_metrics:
+                            st.write("**Token Usage by Tool:**")
+                            tool_usage = usage_metrics['tool_usage']
+                            
+                            tool_df = pd.DataFrame([
+                                {
+                                    'Tool': tool_name,
+                                    'Calls': tool_data.get('calls', 0),
+                                    'Tokens': tool_data.get('tokens', 0),
+                                    'Avg per Call': tool_data.get('tokens', 0) / max(tool_data.get('calls', 1), 1)
+                                }
+                                for tool_name, tool_data in tool_usage.items()
+                            ])
+                            
+                            if not tool_df.empty:
+                                st.dataframe(tool_df, use_container_width=True)
+                        
+                        # Step-by-step execution log
+                        if 'execution_log' in usage_metrics:
+                            st.write("**Step-by-Step Execution Log:**")
+                            execution_log = usage_metrics['execution_log']
+                            
+                            for i, step in enumerate(execution_log, 1):
+                                step_tokens = step.get('tokens', 0)
+                                step_agent = step.get('agent', 'Unknown')
+                                step_action = step.get('action', 'Unknown')
+                                step_duration = step.get('duration', 0)
+                                
+                                st.write(f"**Step {i}**: {step_agent} - {step_action}")
+                                step_col1, step_col2, step_col3 = st.columns(3)
+                                with step_col1:
+                                    st.write(f"Tokens: {step_tokens:,}")
+                                with step_col2:
+                                    st.write(f"Duration: {step_duration:.2f}s")
+                                with step_col3:
+                                    st.write(f"Rate: {step_tokens/max(step_duration, 0.1):.0f} tok/s")
                         
                         # Show optimization status
                         if optimization_level == "blackboard":

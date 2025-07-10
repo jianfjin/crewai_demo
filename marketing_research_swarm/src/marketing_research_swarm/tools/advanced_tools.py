@@ -163,10 +163,10 @@ class AnalyzeBrandPerformanceTool(BaseTool):
     name: str = "analyze_brand_performance"
     description: str = "Analyze individual brand performance metrics and market positioning"
 
-    def _run(self, data_path: str) -> str:
+    def _run(self, data_path: str = None, **kwargs) -> str:
         """Analyze brand performance metrics"""
         try:
-            # Load data using cached approach
+            # Load data using cached approach with fallback
             df = get_cached_data(data_path)
             
             if df.empty:
