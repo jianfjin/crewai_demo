@@ -248,10 +248,10 @@ class ProfitabilityAnalysisTool(BaseTool):
     name: str = "profitability_analysis"
     description: str = "Analyze profitability metrics across different dimensions"
 
-    def _run(self, data_path: str, analysis_dimension: str = "brand") -> str:
+    def _run(self, data_path: str = None, analysis_dimension: str = "brand", **kwargs) -> str:
         """Analyze profitability by specified dimension"""
         try:
-            # Load data using cached approach
+            # Load data using cached approach with fallback
             df = get_cached_data(data_path)
             
             if df.empty:
@@ -572,10 +572,10 @@ class ForecastSalesTool(BaseTool):
     name: str = "forecast_sales"
     description: str = "Forecast future sales based on historical data"
 
-    def _run(self, data_path: str, periods: int = 30, forecast_column: str = "sales") -> str:
+    def _run(self, data_path: str = None, periods: int = 30, forecast_column: str = "sales", **kwargs) -> str:
         """Forecast sales for specified periods"""
         try:
-            # Load data using cached approach
+            # Load data using cached approach with fallback
             df = get_cached_data(data_path)
             
             if df.empty:
@@ -691,10 +691,10 @@ class AnalyzeKPIsTool(BaseTool):
     name: str = "analyze_kpis"
     description: str = "Analyze key performance indicators"
 
-    def _run(self, data_path: str) -> str:
+    def _run(self, data_path: str = None, **kwargs) -> str:
         """Analyze KPIs from data"""
         try:
-            # Load data using cached approach
+            # Load data using cached approach with fallback
             df = get_cached_data(data_path)
             
             if df.empty:

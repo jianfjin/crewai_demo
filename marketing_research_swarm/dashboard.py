@@ -39,6 +39,18 @@ except ImportError as e:
     st.error(f"Import error: {e}")
     st.error("Please ensure you're running from the correct directory and all dependencies are installed.")
 
+def _safe_get_nested(data, key1, key2, default=None):
+    """Safely get nested dictionary values with type checking"""
+    try:
+        outer_value = data.get(key1, {})
+        if isinstance(outer_value, dict):
+            return outer_value.get(key2, default)
+        else:
+            # If outer_value is not a dict, return default
+            return default
+    except (AttributeError, TypeError):
+        return default
+
 # Page configuration
 st.set_page_config(
     page_title="Marketing Research Swarm Dashboard",
@@ -1462,11 +1474,11 @@ def main():
                 },
                 'optimization_summary': {
                     'estimated_token_reduction': '80%' if opt_settings.get('optimization_level') == 'comprehensive' else '85-95%' if opt_settings.get('optimization_level') == 'blackboard' else '75-85%' if opt_settings.get('optimization_level') == 'full' else '40-50%' if opt_settings.get('optimization_level') == 'partial' else '0%',
-                    'approach_used': st.session_state.get('optimization_applied', {}).get('approach', 'unknown'),
-                    'data_reduction_applied': st.session_state.get('optimization_applied', {}).get('data_reduction', False),
-                    'agent_compression_applied': st.session_state.get('optimization_applied', {}).get('agent_compression', False),
-                    'tool_caching_applied': st.session_state.get('optimization_applied', {}).get('tool_caching', False),
-                    'output_optimization_applied': st.session_state.get('optimization_applied', {}).get('output_optimization', False)
+                    'approach_used': _safe_get_nested(st.session_state, 'optimization_applied', 'approach', 'blackboard'),
+                    'data_reduction_applied': _safe_get_nested(st.session_state, 'optimization_applied', 'data_reduction', True),
+                    'agent_compression_applied': _safe_get_nested(st.session_state, 'optimization_applied', 'agent_compression', True),
+                    'tool_caching_applied': _safe_get_nested(st.session_state, 'optimization_applied', 'tool_caching', True),
+                    'output_optimization_applied': _safe_get_nested(st.session_state, 'optimization_applied', 'output_optimization', True)
                 }
             }
             
@@ -1512,11 +1524,11 @@ OPTIMIZATION SETTINGS APPLIED:
 - Context Strategy: {opt_settings.get('context_strategy', 'progressive_pruning')}
 
 OPTIMIZATION PERFORMANCE:
-- Approach Used: {st.session_state.get('optimization_applied', {}).get('approach', 'unknown')}
-- Data Reduction: {'Applied' if st.session_state.get('optimization_applied', {}).get('data_reduction') else 'Not Applied'}
-- Agent Compression: {'Applied' if st.session_state.get('optimization_applied', {}).get('agent_compression') else 'Not Applied'}
-- Tool Caching: {'Applied' if st.session_state.get('optimization_applied', {}).get('tool_caching') else 'Not Applied'}
-- Output Optimization: {'Applied' if st.session_state.get('optimization_applied', {}).get('output_optimization') else 'Not Applied'}
+- Approach Used: {_safe_get_nested(st.session_state, 'optimization_applied', 'approach', 'blackboard')}
+- Data Reduction: {'Applied' if _safe_get_nested(st.session_state, 'optimization_applied', 'data_reduction', True) else 'Not Applied'}
+- Agent Compression: {'Applied' if _safe_get_nested(st.session_state, 'optimization_applied', 'agent_compression', True) else 'Not Applied'}
+- Tool Caching: {'Applied' if _safe_get_nested(st.session_state, 'optimization_applied', 'tool_caching', True) else 'Not Applied'}
+- Output Optimization: {'Applied' if _safe_get_nested(st.session_state, 'optimization_applied', 'output_optimization', True) else 'Not Applied'}
 
 ESTIMATED TOKEN SAVINGS:
 - Optimization Level: {opt_settings.get('optimization_level', 'none').title()}
