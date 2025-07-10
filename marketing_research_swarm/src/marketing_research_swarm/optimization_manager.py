@@ -432,8 +432,6 @@ class OptimizationManager:
                 'message': 'No successful runs yet'
             }
 
-# Global optimization manager instance
-optimization_manager = OptimizationManager()
     def _export_token_usage_to_log(self, metrics: Dict[str, Any], optimization_level: str, workflow_id: str):
         """Export detailed token usage data to log file."""
         try:
@@ -525,3 +523,6 @@ optimization_manager = OptimizationManager()
             
         except Exception as e:
             print(f"[ERROR] Failed to export token usage to log: {e}")
+
+# Global optimization manager instance
+optimization_manager = OptimizationManager()
