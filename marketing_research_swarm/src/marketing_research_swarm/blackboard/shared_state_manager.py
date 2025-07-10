@@ -149,6 +149,28 @@ class SharedStateManager:
                     }
                 ]
             },
+            'custom_market_research': {
+                'tasks': [
+                    {
+                        'task_id': 'market_research',
+                        'task_type': 'market_research',
+                        'dependencies': [],
+                        'agent': 'market_research_analyst'
+                    },
+                    {
+                        'task_id': 'competitive_analysis',
+                        'task_type': 'competitive_analysis',
+                        'dependencies': ['market_research'],
+                        'agent': 'competitive_analyst'
+                    },
+                    {
+                        'task_id': 'content_strategy',
+                        'task_type': 'content_strategy',
+                        'dependencies': ['market_research', 'competitive_analysis'],
+                        'agent': 'content_strategist'
+                    }
+                ]
+            },
             'comprehensive_analysis': {
                 'tasks': [
                     {

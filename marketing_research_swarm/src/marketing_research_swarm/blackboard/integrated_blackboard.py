@@ -206,8 +206,20 @@ class IntegratedBlackboardSystem:
             if self.shared_state_manager:
                 try:
                     # Create workflow in shared state manager
+                    # Map workflow types to valid shared state manager types
+                    workflow_type_mapping = {
+                        'roi_analysis': 'roi_analysis',
+                        'sales_forecast': 'sales_forecast', 
+                        'brand_performance': 'brand_performance',
+                        'comprehensive': 'comprehensive_analysis',
+                        'market_research': 'custom_market_research',  # Use custom 3-agent workflow
+                        'blackboard': 'custom_market_research',  # Use custom 3-agent workflow for blackboard
+                        'custom_market_research': 'custom_market_research'
+                    }
+                    
+                    mapped_workflow_type = workflow_type_mapping.get(workflow_type, 'comprehensive_analysis')
                     shared_workflow_id = self.shared_state_manager.create_workflow(
-                        workflow_type=workflow_type,
+                        workflow_type=mapped_workflow_type,
                         filters=initial_data or {}
                     )
                     shared_state = {'shared_workflow_id': shared_workflow_id}
