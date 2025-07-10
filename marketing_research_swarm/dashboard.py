@@ -913,24 +913,12 @@ def main():
             
             optimization_level = st.selectbox(
                 "Optimization Level",
-                ["comprehensive", "blackboard", "full", "partial", "none"],
+                ["blackboard", "full", "partial", "none"],
                 index=0,
                 help="Choose optimization level for token reduction"
             )
             
-            if optimization_level == "comprehensive":
-                st.success("🌟 **Comprehensive Flow**: Complete workflow with all 9 agents")
-                st.markdown("""
-                **Complete Marketing Research Workflow:**
-                - 🏗️ **Phase 1**: Foundation (market_research_analyst)
-                - 🔬 **Phase 2**: Analysis (data_analyst, competitive_analyst, brand_performance_specialist)
-                - 🎯 **Phase 3**: Strategy (brand_strategist, campaign_optimizer, forecasting_specialist)
-                - ✍️ **Phase 4**: Content (content_strategist, creative_copywriter)
-                - ✅ Proper dependency management and execution order
-                - ✅ Reference-based context isolation (80% token reduction)
-                - ✅ Complete end-to-end marketing analysis
-                """)
-            elif optimization_level == "blackboard":
+            if optimization_level == "blackboard":
                 st.success("🚀 **Blackboard System**: 85-95% token reduction expected")
                 st.markdown("""
                 **Advanced Optimizations Applied:**

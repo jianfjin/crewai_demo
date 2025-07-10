@@ -34,6 +34,7 @@ from ..tools.advanced_tools import (
 from ..tools.context_aware_tools import create_context_aware_tools, reference_retriever
 from crewai_tools import SerperDevTool, WebsiteSearchTool
 from .integrated_blackboard import get_integrated_blackboard
+from .agent_dependency_manager import get_dependency_manager
 from .state_aware_agents import StateAwareAgent
 
 
@@ -53,6 +54,25 @@ class BlackboardMarketingResearchCrew:
         self.tasks_config = load_yaml(tasks_config_path)
         self.selected_agents = selected_agents  # List of selected agent names
         self.blackboard = get_integrated_blackboard()
+        self.dependency_manager = get_dependency_manager()
+        
+        # Resolve dependencies and optimize agent order if selected_agents provided
+        if self.selected_agents:
+            try:
+                self.optimized_agent_order = self.dependency_manager.resolve_dependencies(self.selected_agents)
+                print(f"[DEPENDENCY] Optimized agent order: {self.optimized_agent_order}")
+                
+                # Validate the combination
+                validation = self.dependency_manager.validate_combination(self.selected_agents)
+                if validation['valid']:
+                    print(f"[DEPENDENCY] Agent combination validated - Efficiency: {validation['efficiency']}")
+                    if validation.get('recommendations'):
+                        print(f"[DEPENDENCY] Recommendations: {validation['recommendations']}")
+                else:
+                    print(f"[DEPENDENCY] Warning: {validation['error']}")
+            except Exception as e:
+                print(f"[DEPENDENCY] Error resolving dependencies: {e}")
+                self.optimized_agent_order = self.selected_agents
         
         # Remove duplicate blackboard initialization
         
