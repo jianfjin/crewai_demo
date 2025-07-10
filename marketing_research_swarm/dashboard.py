@@ -662,17 +662,83 @@ def main():
         st.error("Unable to load agents configuration. Please check the file path and try again.")
         return
     
-    # Sidebar for agent selection
-    st.sidebar.markdown("## 🤖 Agent Selection")
-    st.sidebar.markdown("Select the agents you want to include in your analysis:")
+    # Sidebar for agent phase selection and optimal analysis types
+    st.sidebar.markdown("## 🤖 Agent Phase Selection")
+    st.sidebar.markdown("Select agents by phase or choose optimal analysis types:")
+    
+    # Show Agent Phases
+    st.sidebar.markdown("### 🏗️ Agent Phases")
+    st.sidebar.markdown("""
+    **FOUNDATION**: market_research_analyst, data_analyst  
+    **ANALYSIS**: competitive_analyst, brand_performance_specialist  
+    **STRATEGY**: brand_strategist, campaign_optimizer, forecasting_specialist  
+    **CONTENT**: content_strategist, creative_copywriter
+    """)
+    
+    # Add optimal analysis types suggestions
+    st.sidebar.markdown("### 📊 Optimal Analysis Types")
+    st.sidebar.markdown("Choose from pre-configured optimal combinations:")
+    
+    try:
+        from marketing_research_swarm.blackboard.agent_dependency_manager import get_dependency_manager
+        dependency_manager = get_dependency_manager()
+        analysis_types = dependency_manager.get_analysis_types()
+        
+        # Create selectbox for analysis types
+        analysis_type_options = ["custom"] + [key for key in analysis_types.keys() if key != "custom"]
+        analysis_type_labels = ["Custom Selection"] + [analysis_types[key]["name"] for key in analysis_types.keys() if key != "custom"]
+        
+        selected_analysis_type = st.sidebar.selectbox(
+            "Analysis Type",
+            options=analysis_type_options,
+            format_func=lambda x: dict(zip(analysis_type_options, analysis_type_labels)).get(x, x),
+            help="Choose an optimal analysis type or select custom for manual agent selection"
+        )
+        
+        # Show analysis type info
+        if selected_analysis_type != "custom":
+            analysis_info = analysis_types[selected_analysis_type]
+            st.sidebar.info(f"**{analysis_info['name']}**\n\n{analysis_info['description']}\n\n"
+                          f"**Focus**: {analysis_info['focus']}\n"
+                          f"**Duration**: {analysis_info['expected_duration']}\n"
+                          f"**Token Efficiency**: {analysis_info['token_efficiency']}")
+            
+            # Auto-select optimal agents for this analysis type
+            optimal_agents = analysis_info['agents']
+        else:
+            optimal_agents = None
+            st.sidebar.info("**Custom Selection**\n\nManually select agents based on your specific needs. Dependencies will be automatically resolved.")
+    
+    except ImportError:
+        st.sidebar.warning("⚠️ Advanced agent dependency management not available")
+        selected_analysis_type = "custom"
+        optimal_agents = None
     
     available_agents = list(agents_config.keys())
-    selected_agents = st.sidebar.multiselect(
-        "Choose Agents",
-        available_agents,
-        default=available_agents[:3],  # Select first 3 by default
-        help="Select one or more agents to participate in the analysis"
-    )
+    
+    # Use optimal agents if analysis type is selected, otherwise manual selection
+    if selected_analysis_type != "custom" and optimal_agents:
+        selected_agents = optimal_agents
+        st.sidebar.success(f"✅ **Auto-selected {len(selected_agents)} agents** for {analysis_types[selected_analysis_type]['name']}")
+        st.sidebar.markdown("**Selected Agents:**")
+        for agent in selected_agents:
+            st.sidebar.markdown(f"• {agent}")
+        
+        # Option to override with custom selection
+        if st.sidebar.checkbox("Override with custom selection", help="Manually select different agents"):
+            selected_agents = st.sidebar.multiselect(
+                "Choose Custom Agents",
+                available_agents,
+                default=optimal_agents,
+                help="Select agents from different phases for optimal workflow"
+            )
+    else:
+        selected_agents = st.sidebar.multiselect(
+            "Choose Agents by Phase",
+            available_agents,
+            default=available_agents[:3],  # Select first 3 by default
+            help="Select agents from different phases for optimal workflow"
+        )
     
     # Display selected agents info
     if selected_agents:
