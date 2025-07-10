@@ -6,6 +6,25 @@ import json
 import os
 import hashlib
 
+def make_json_serializable(obj):
+    """Convert pandas/numpy objects to JSON-serializable types."""
+    if isinstance(obj, (np.integer, np.int64)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, pd.Series):
+        return obj.to_dict()
+    elif isinstance(obj, pd.DataFrame):
+        return obj.to_dict('records')
+    elif isinstance(obj, dict):
+        return {key: make_json_serializable(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [make_json_serializable(item) for item in obj]
+    else:
+        return obj
+
 # Global cache for data sharing
 _GLOBAL_DATA_CACHE = {}
 
@@ -740,9 +759,12 @@ class AnalyzeKPIsTool(BaseTool):
                     top_region = df.groupby('region')['total_revenue'].sum().idxmax()
                     kpis['top_performing_region'] = top_region
             
+            # Make all KPIs JSON serializable
+            serializable_kpis = make_json_serializable(kpis)
+            
             analysis = {
-                'kpis': kpis,
-                'data_points': len(df),
+                'kpis': serializable_kpis,
+                'data_points': int(len(df)),
                 'kpi_insights': f"Analysis of {len(df)} data points reveals key performance metrics across business dimensions"
             }
             
