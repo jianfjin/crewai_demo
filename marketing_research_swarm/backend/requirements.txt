@@ -1,0 +1,24 @@
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+python-multipart>=0.0.6
+python-dotenv>=1.0.0
+
+# Core dependencies from main project
+crewai[tools]>=0.34.0
+langchain-openai>=0.2.1
+langchain-community>=0.3.1
+pandas>=2.2.0
+numpy>=1.26.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.17.0
+scikit-learn>=1.4.0
+statsmodels>=0.14.0
+yfinance>=0.2.28
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+PyYAML>=6.0
+tiktoken>=0.5.0
+langchain-ollama>=0.3.3
+uuid>=1.30
