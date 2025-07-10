@@ -352,6 +352,9 @@ class OptimizationManager:
             # Extract metrics
             metrics = self.extract_metrics_from_output(str(result))
             
+            # Export token usage data to log
+            self._export_token_usage_to_log(metrics, optimization_level, workflow_id)
+            
             # Record optimization result
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
@@ -431,3 +434,94 @@ class OptimizationManager:
 
 # Global optimization manager instance
 optimization_manager = OptimizationManager()
+    def _export_token_usage_to_log(self, metrics: Dict[str, Any], optimization_level: str, workflow_id: str):
+        """Export detailed token usage data to log file."""
+        try:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            print(f"\n{'='*80}")
+            print(f"[TOKEN USAGE EXPORT] {timestamp}")
+            print(f"Workflow ID: {workflow_id}")
+            print(f"Optimization Level: {optimization_level}")
+            print(f"{'='*80}")
+            
+            # Overall metrics
+            print(f"\nOVERALL TOKEN USAGE:")
+            print(f"Total Tokens: {metrics.get('total_tokens', 0):,}")
+            print(f"Input Tokens: {metrics.get('input_tokens', 0):,}")
+            print(f"Output Tokens: {metrics.get('output_tokens', 0):,}")
+            print(f"Total Cost: ${metrics.get('total_cost', 0):.6f}")
+            print(f"Model Used: {metrics.get('model_used', 'unknown')}")
+            print(f"Duration: {metrics.get('total_duration', 0):.2f}s")
+            print(f"Requests: {metrics.get('successful_requests', 0)}")
+            print(f"Source: {metrics.get('source', 'unknown')}")
+            
+            # Agent-level breakdown
+            if 'agent_usage' in metrics:
+                print(f"\nAGENT-LEVEL BREAKDOWN:")
+                agent_usage = metrics['agent_usage']
+                
+                for agent_name, agent_data in agent_usage.items():
+                    print(f"\n{agent_name.upper()}:")
+                    print(f"  Total Tokens: {agent_data.get('total_tokens', 0):,}")
+                    print(f"  Input Tokens: {agent_data.get('input_tokens', 0):,}")
+                    print(f"  Output Tokens: {agent_data.get('output_tokens', 0):,}")
+                    print(f"  Cost: ${agent_data.get('cost', 0):.6f}")
+                    
+                    # Task breakdown for this agent
+                    if 'tasks' in agent_data:
+                        print(f"  Tasks:")
+                        for task_name, task_data in agent_data['tasks'].items():
+                            print(f"    {task_name}: {task_data.get('tokens', 0):,} tokens ({task_data.get('duration', 0):.1f}s)")
+            
+            # Tool usage breakdown
+            if 'tool_usage' in metrics:
+                print(f"\nTOOL USAGE BREAKDOWN:")
+                tool_usage = metrics['tool_usage']
+                
+                for tool_name, tool_data in tool_usage.items():
+                    calls = tool_data.get('calls', 0)
+                    tokens = tool_data.get('tokens', 0)
+                    avg_per_call = tokens / max(calls, 1)
+                    print(f"{tool_name}:")
+                    print(f"  Calls: {calls}")
+                    print(f"  Total Tokens: {tokens:,}")
+                    print(f"  Avg per Call: {avg_per_call:.0f}")
+            
+            # Step-by-step execution log
+            if 'execution_log' in metrics:
+                print(f"\nEXECUTION LOG:")
+                execution_log = metrics['execution_log']
+                
+                for step in execution_log:
+                    step_num = step.get('step', 0)
+                    agent = step.get('agent', 'unknown')
+                    action = step.get('action', 'unknown')
+                    tokens = step.get('tokens', 0)
+                    duration = step.get('duration', 0)
+                    status = step.get('status', 'unknown')
+                    rate = tokens / max(duration, 0.1)
+                    
+                    print(f"Step {step_num}: {agent} - {action}")
+                    print(f"  Tokens: {tokens:,}")
+                    print(f"  Duration: {duration:.2f}s")
+                    print(f"  Rate: {rate:.0f} tok/s")
+                    print(f"  Status: {status}")
+            
+            # Performance summary
+            total_tokens = metrics.get('total_tokens', 0)
+            total_duration = metrics.get('total_duration', 1)
+            total_cost = metrics.get('total_cost', 0)
+            
+            print(f"\nPERFORMANCE SUMMARY:")
+            print(f"Token Efficiency: {total_tokens/max(total_duration, 1):.0f} tokens/second")
+            print(f"Cost Efficiency: ${total_cost/max(total_duration/60, 1):.6f} per minute")
+            print(f"Estimated: {'Yes' if metrics.get('estimated', True) else 'No'}")
+            print(f"Optimization: {optimization_level.upper()}")
+            
+            print(f"\n{'='*80}")
+            print(f"[END TOKEN USAGE EXPORT]")
+            print(f"{'='*80}\n")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to export token usage to log: {e}")
