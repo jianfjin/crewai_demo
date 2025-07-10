@@ -18,6 +18,47 @@ export interface AnalysisRequest {
   analysis_type: string
   selected_agents: string[]
   optimization_level: string
+  
+  // Campaign Basics
+  target_audience: string
+  campaign_type: string
+  budget: number
+  duration: string
+  
+  // Analysis Focus
+  analysis_focus: string
+  business_objective: string
+  competitive_landscape: string
+  
+  // Market Segments
+  market_segments: string[]
+  product_categories: string[]
+  key_metrics: string[]
+  
+  // Brands & Goals
+  brands: string[]
+  campaign_goals: string[]
+  
+  // Forecast & Metrics
+  forecast_periods: number
+  expected_revenue: number
+  competitive_analysis: boolean
+  market_share_analysis: boolean
+  
+  // Brand Metrics
+  brand_awareness: number
+  sentiment_score: number
+  market_position: string
+  
+  // Optimization Settings
+  token_budget: number
+  context_strategy: string
+  enable_caching: boolean
+  enable_mem0: boolean
+  enable_token_tracking: boolean
+  enable_optimization_tools: boolean
+  show_comparison: boolean
+  
   custom_inputs?: Record<string, any>
 }
 

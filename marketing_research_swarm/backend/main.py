@@ -44,6 +44,47 @@ class AnalysisRequest(BaseModel):
     analysis_type: str
     selected_agents: List[str]
     optimization_level: str = "blackboard"
+    
+    # Campaign Basics
+    target_audience: str = "health-conscious millennials and premium beverage consumers"
+    campaign_type: str = "multi-channel global marketing campaign"
+    budget: int = 250000
+    duration: str = "6 months"
+    
+    # Analysis Focus
+    analysis_focus: str = "global beverage market performance and brand optimization"
+    business_objective: str = "Optimize beverage portfolio performance across global markets"
+    competitive_landscape: str = "global beverage market with diverse categories"
+    
+    # Market Segments
+    market_segments: List[str] = ["North America", "Europe", "Asia Pacific"]
+    product_categories: List[str] = ["Cola", "Juice", "Energy", "Sports"]
+    key_metrics: List[str] = ["brand_performance", "category_trends", "profitability_analysis"]
+    
+    # Brands & Goals
+    brands: List[str] = ["Coca-Cola", "Pepsi", "Red Bull"]
+    campaign_goals: List[str] = ["Optimize brand portfolio performance across global markets"]
+    
+    # Forecast & Metrics
+    forecast_periods: int = 30
+    expected_revenue: int = 25000
+    competitive_analysis: bool = True
+    market_share_analysis: bool = True
+    
+    # Brand Metrics
+    brand_awareness: float = 75.0
+    sentiment_score: float = 0.6
+    market_position: str = "Leader"
+    
+    # Optimization Settings
+    token_budget: int = 4000
+    context_strategy: str = "progressive_pruning"
+    enable_caching: bool = True
+    enable_mem0: bool = True
+    enable_token_tracking: bool = True
+    enable_optimization_tools: bool = True
+    show_comparison: bool = False
+    
     custom_inputs: Optional[Dict[str, Any]] = None
 
 class AnalysisResponse(BaseModel):
@@ -127,50 +168,79 @@ async def get_available_agents():
 @app.get("/api/analysis-types", response_model=List[AnalysisTypeInfo])
 async def get_analysis_types():
     """Get available analysis types with recommended agent combinations"""
-    analysis_types = [
-        AnalysisTypeInfo(
-            name="roi_analysis",
-            description="Comprehensive ROI and profitability analysis",
-            recommended_agents=["market_research_analyst", "data_analyst", "financial_analyst"],
-            estimated_duration=180,
-            complexity="Medium"
-        ),
-        AnalysisTypeInfo(
-            name="brand_performance",
-            description="Brand performance and competitive analysis",
-            recommended_agents=["brand_performance_specialist", "competitive_analyst", "market_research_analyst"],
-            estimated_duration=240,
-            complexity="High"
-        ),
-        AnalysisTypeInfo(
-            name="sales_forecast",
-            description="Sales forecasting and trend analysis",
-            recommended_agents=["data_analyst", "market_research_analyst", "financial_analyst"],
-            estimated_duration=200,
-            complexity="Medium"
-        ),
-        AnalysisTypeInfo(
-            name="content_strategy",
-            description="Content strategy and creative campaign development",
-            recommended_agents=["content_strategist", "creative_copywriter", "market_research_analyst"],
-            estimated_duration=160,
-            complexity="Medium"
-        ),
-        AnalysisTypeInfo(
-            name="comprehensive",
-            description="Complete marketing research with all agents",
-            recommended_agents=list(optimization_manager.load_agents_config().keys()),
-            estimated_duration=300,
-            complexity="High"
-        ),
-        AnalysisTypeInfo(
+    try:
+        # Try to get analysis types from dependency manager
+        from marketing_research_swarm.blackboard.agent_dependency_manager import get_dependency_manager
+        dependency_manager = get_dependency_manager()
+        analysis_types_config = dependency_manager.get_analysis_types()
+        
+        analysis_types = []
+        for key, config in analysis_types_config.items():
+            if key != "custom":
+                analysis_types.append(AnalysisTypeInfo(
+                    name=key,
+                    description=config["description"],
+                    recommended_agents=config["agents"],
+                    estimated_duration=int(config["expected_duration"].replace("min", "")) if "min" in config["expected_duration"] else 180,
+                    complexity=config.get("complexity", "Medium")
+                ))
+        
+        # Add custom option
+        analysis_types.append(AnalysisTypeInfo(
             name="custom",
             description="Custom analysis with user-selected agents",
             recommended_agents=[],
             estimated_duration=120,
             complexity="Variable"
-        )
-    ]
+        ))
+        
+    except ImportError:
+        # Fallback to static analysis types
+        analysis_types = [
+            AnalysisTypeInfo(
+                name="roi_analysis",
+                description="Comprehensive ROI and profitability analysis",
+                recommended_agents=["market_research_analyst", "data_analyst", "campaign_optimizer"],
+                estimated_duration=180,
+                complexity="Medium"
+            ),
+            AnalysisTypeInfo(
+                name="brand_performance",
+                description="Brand performance and competitive analysis",
+                recommended_agents=["brand_performance_specialist", "competitive_analyst", "market_research_analyst"],
+                estimated_duration=240,
+                complexity="High"
+            ),
+            AnalysisTypeInfo(
+                name="sales_forecast",
+                description="Sales forecasting and trend analysis",
+                recommended_agents=["forecasting_specialist", "data_analyst", "market_research_analyst"],
+                estimated_duration=200,
+                complexity="Medium"
+            ),
+            AnalysisTypeInfo(
+                name="content_strategy",
+                description="Content strategy and creative campaign development",
+                recommended_agents=["content_strategist", "creative_copywriter", "market_research_analyst"],
+                estimated_duration=160,
+                complexity="Medium"
+            ),
+            AnalysisTypeInfo(
+                name="comprehensive",
+                description="Complete marketing research with all agents",
+                recommended_agents=["market_research_analyst", "data_analyst", "competitive_analyst", "brand_performance_specialist", "content_strategist"],
+                estimated_duration=300,
+                complexity="High"
+            ),
+            AnalysisTypeInfo(
+                name="custom",
+                description="Custom analysis with user-selected agents",
+                recommended_agents=[],
+                estimated_duration=120,
+                complexity="Variable"
+            )
+        ]
+    
     return analysis_types
 
 @app.post("/api/analysis/start", response_model=AnalysisResponse)
