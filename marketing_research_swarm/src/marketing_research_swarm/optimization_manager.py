@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 import json
 import uuid
+import time
 from .blackboard.integrated_blackboard import get_integrated_blackboard
 from .utils.token_tracker import get_token_tracker
 
@@ -682,11 +683,28 @@ class OptimizationManager:
                 print(f"[AGENTS] Selected agents: {selected_agents}")
                 
                 # Run the comprehensive flow (this is a CrewAI Flow, not a regular crew)
-                # CrewAI Flow expects to be called with direct parameters to the @start method
-                result = flow.kickoff(
-                    selected_agents=selected_agents, 
-                    task_params=task_params
-                )
+                # Based on dynamic_crewai_flow.py, flows expect direct parameters
+                print(f"[FLOW] Calling comprehensive flow with agents: {selected_agents}")
+                print(f"[FLOW] Task params: {task_params}")
+                
+                try:
+                    # Call flow with direct parameters (like dynamic_crewai_flow.py line 384)
+                    result = flow.kickoff(
+                        selected_agents=selected_agents,
+                        task_params=task_params
+                    )
+                    print(f"[FLOW] Flow completed successfully")
+                except Exception as flow_error:
+                    print(f"[FLOW] Flow execution failed: {flow_error}")
+                    # Create a fallback result for token tracking
+                    result = {
+                        'error': str(flow_error),
+                        'selected_agents': selected_agents,
+                        'task_params': task_params,
+                        'workflow_id': f"failed_comprehensive_{int(time.time())}",
+                        'agent_results': {},
+                        'token_usage': {'total_tokens': 0}
+                    }
             else:
                 crew = self.get_crew_instance(
                     mode=crew_mode,
