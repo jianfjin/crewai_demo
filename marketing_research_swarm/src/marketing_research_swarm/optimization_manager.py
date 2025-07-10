@@ -112,6 +112,10 @@ class OptimizationManager:
     def extract_metrics_from_output(self, output: Any) -> Dict[str, Any]:
         """Extract comprehensive token usage metrics from crew output."""
         try:
+            # Handle comprehensive flow output format
+            if isinstance(output, object) and hasattr(output, 'token_usage') and hasattr(output, 'workflow_id'):
+                return self._extract_from_comprehensive_flow_output(output)
+            
             # Handle blackboard crew output format
             if isinstance(output, dict) and 'workflow_summary' in output:
                 return self._extract_from_blackboard_output(output)
@@ -314,6 +318,174 @@ class OptimizationManager:
             print(f"[TOKEN] Error extracting from blackboard output: {e}")
             return self._create_enhanced_fallback_metrics(8000, 'blackboard_error')
     
+    def _extract_from_comprehensive_flow_output(self, output: Any) -> Dict[str, Any]:
+        """Extract token usage metrics from comprehensive flow output."""
+        try:
+            # Get token usage from the flow state
+            token_usage = getattr(output, 'token_usage', {})
+            workflow_id = getattr(output, 'workflow_id', 'unknown')
+            selected_agents = getattr(output, 'selected_agents', [])
+            agent_results = getattr(output, 'agent_results', {})
+            
+            print(f"[TOKEN] Extracting from comprehensive flow: {workflow_id}")
+            print(f"[TOKEN] Selected agents: {selected_agents}")
+            print(f"[TOKEN] Token usage data: {token_usage}")
+            
+            # Extract token stats from the flow's token tracking
+            if token_usage and isinstance(token_usage, dict):
+                total_tokens = token_usage.get('actual_total_tokens', token_usage.get('total_tokens', 0))
+                prompt_tokens = token_usage.get('actual_prompt_tokens', token_usage.get('prompt_tokens', 0))
+                completion_tokens = token_usage.get('actual_completion_tokens', token_usage.get('completion_tokens', 0))
+                duration = token_usage.get('total_duration_seconds', 0)
+                
+                # If we have actual token data, use it
+                if total_tokens > 0:
+                    return self._format_comprehensive_flow_token_stats(
+                        token_usage, selected_agents, 'comprehensive_flow_actual'
+                    )
+            
+            # Fallback: estimate based on agent results
+            if agent_results:
+                total_result_length = sum(len(str(result.get('result', ''))) for result in agent_results.values())
+                estimated_tokens = min(total_result_length * 0.3, 15000)  # More generous for comprehensive flow
+                
+                return self._create_comprehensive_flow_fallback_metrics(
+                    estimated_tokens, selected_agents, 'comprehensive_flow_fallback'
+                )
+            
+            # Final fallback
+            return self._create_comprehensive_flow_fallback_metrics(
+                8000, selected_agents or ['market_research_analyst', 'competitive_analyst', 'content_strategist'], 
+                'comprehensive_flow_error'
+            )
+            
+        except Exception as e:
+            print(f"[TOKEN] Error extracting from comprehensive flow output: {e}")
+            return self._create_comprehensive_flow_fallback_metrics(
+                8000, ['market_research_analyst', 'competitive_analyst', 'content_strategist'], 
+                'comprehensive_flow_exception'
+            )
+    
+    def _format_comprehensive_flow_token_stats(self, token_stats: Dict[str, Any], selected_agents: List[str], source: str) -> Dict[str, Any]:
+        """Format token stats from comprehensive flow into standard metrics format."""
+        try:
+            total_tokens = token_stats.get('actual_total_tokens', token_stats.get('total_tokens', 0))
+            prompt_tokens = token_stats.get('actual_prompt_tokens', token_stats.get('prompt_tokens', 0))
+            completion_tokens = token_stats.get('actual_completion_tokens', token_stats.get('completion_tokens', 0))
+            duration = token_stats.get('total_duration_seconds', 0)
+            
+            # If we don't have breakdown, estimate it
+            if total_tokens == 0 and (prompt_tokens > 0 or completion_tokens > 0):
+                total_tokens = prompt_tokens + completion_tokens
+            elif total_tokens > 0 and prompt_tokens == 0 and completion_tokens == 0:
+                prompt_tokens = int(total_tokens * 0.7)
+                completion_tokens = int(total_tokens * 0.3)
+            
+            # Create agent breakdown for selected agents
+            agent_usage = self._create_selected_agent_breakdown(total_tokens, selected_agents)
+            
+            return {
+                'total_tokens': total_tokens,
+                'input_tokens': prompt_tokens,
+                'output_tokens': completion_tokens,
+                'total_cost': total_tokens * 0.0000025,
+                'successful_requests': len(selected_agents),
+                'estimated': False,
+                'source': source,
+                'agent_usage': agent_usage,
+                'tool_usage': self._create_tool_usage_breakdown(total_tokens),
+                'execution_log': self._create_execution_log(agent_usage),
+                'model_used': 'gpt-4o-mini',
+                'total_duration': duration if duration > 0 else 120.0
+            }
+            
+        except Exception as e:
+            print(f"[TOKEN] Error formatting comprehensive flow token stats: {e}")
+            return self._create_comprehensive_flow_fallback_metrics(8000, selected_agents, f'{source}_format_error')
+    
+    def _create_comprehensive_flow_fallback_metrics(self, estimated_tokens: int, selected_agents: List[str], source: str) -> Dict[str, Any]:
+        """Create fallback metrics for comprehensive flow with selected agents."""
+        agent_usage = self._create_selected_agent_breakdown(estimated_tokens, selected_agents)
+        tool_usage = self._create_tool_usage_breakdown(estimated_tokens)
+        execution_log = self._create_execution_log(agent_usage)
+        
+        return {
+            'total_tokens': int(estimated_tokens),
+            'input_tokens': int(estimated_tokens * 0.7),
+            'output_tokens': int(estimated_tokens * 0.3),
+            'total_cost': estimated_tokens * 0.0000025,
+            'successful_requests': len(selected_agents),
+            'estimated': True,
+            'source': source,
+            'agent_usage': agent_usage,
+            'tool_usage': tool_usage,
+            'execution_log': execution_log,
+            'model_used': 'gpt-4o-mini',
+            'total_duration': 120.0
+        }
+    
+    def _create_selected_agent_breakdown(self, total_tokens: int, selected_agents: List[str]) -> Dict[str, Any]:
+        """Create agent breakdown for dynamically selected agents."""
+        if not selected_agents:
+            selected_agents = ['market_research_analyst', 'competitive_analyst', 'content_strategist']
+        
+        # Distribute tokens among selected agents
+        num_agents = len(selected_agents)
+        base_tokens_per_agent = total_tokens // num_agents
+        
+        agent_usage = {}
+        
+        # Define agent weights (some agents typically use more tokens)
+        agent_weights = {
+            'market_research_analyst': 1.2,
+            'data_analyst': 1.1,
+            'competitive_analyst': 1.0,
+            'brand_performance_specialist': 0.9,
+            'brand_strategist': 0.8,
+            'campaign_optimizer': 0.7,
+            'forecasting_specialist': 0.9,
+            'content_strategist': 0.8,
+            'creative_copywriter': 0.6
+        }
+        
+        # Calculate weighted distribution
+        total_weight = sum(agent_weights.get(agent, 1.0) for agent in selected_agents)
+        
+        for i, agent in enumerate(selected_agents):
+            weight = agent_weights.get(agent, 1.0)
+            agent_tokens = int((total_tokens * weight) / total_weight)
+            
+            agent_usage[agent] = {
+                'total_tokens': agent_tokens,
+                'input_tokens': int(agent_tokens * 0.7),
+                'output_tokens': int(agent_tokens * 0.3),
+                'cost': agent_tokens * 0.0000025,
+                'tasks': {
+                    self._get_task_name_for_agent(agent): {
+                        'tokens': agent_tokens,
+                        'duration': 45.0 + (i * 5),  # Staggered durations
+                        'status': 'completed'
+                    }
+                }
+            }
+        
+        return agent_usage
+    
+    def _get_task_name_for_agent(self, agent: str) -> str:
+        """Get task name for a given agent."""
+        task_mapping = {
+            'market_research_analyst': 'market_research',
+            'data_analyst': 'data_analysis',
+            'competitive_analyst': 'competitive_analysis',
+            'brand_performance_specialist': 'brand_performance',
+            'brand_strategist': 'brand_strategy',
+            'campaign_optimizer': 'campaign_optimization',
+            'forecasting_specialist': 'sales_forecast',
+            'content_strategist': 'content_strategy',
+            'creative_copywriter': 'creative_copywriting'
+        }
+        return task_mapping.get(agent, 'general_task')
+    
     def _format_blackboard_token_stats(self, token_stats: Dict[str, Any], source: str) -> Dict[str, Any]:
         """Format token stats from blackboard into standard metrics format."""
         try:
@@ -490,15 +662,12 @@ class OptimizationManager:
         try:
             # Get crew instance
             if crew_mode == "comprehensive":
-                crew = self.get_crew_instance(mode=crew_mode)
+                flow = self.get_crew_instance(mode=crew_mode)
                 
-                # For comprehensive flow, we need to prepare agent selection and task params
-                # Default to all 9 agents for comprehensive analysis
-                selected_agents = [
-                    'market_research_analyst', 'data_analyst', 'competitive_analyst',
-                    'brand_performance_specialist', 'brand_strategist', 'campaign_optimizer',
-                    'forecasting_specialist', 'content_strategist', 'creative_copywriter'
-                ]
+                # Extract selected agents from inputs (if provided) or use your 3 selected agents
+                selected_agents = inputs.get('selected_agents', [
+                    'market_research_analyst', 'competitive_analyst', 'content_strategist'
+                ])
                 
                 # Convert inputs to task_params format expected by comprehensive flow
                 task_params = {
@@ -511,7 +680,13 @@ class OptimizationManager:
                 
                 print(f"[ANALYSIS] Running {optimization_level} optimization with {crew_mode} flow")
                 print(f"[AGENTS] Selected agents: {selected_agents}")
-                result = crew.kickoff(selected_agents=selected_agents, task_params=task_params)
+                
+                # Run the comprehensive flow (this is a CrewAI Flow, not a regular crew)
+                # CrewAI Flow expects to be called with direct parameters to the @start method
+                result = flow.kickoff(
+                    selected_agents=selected_agents, 
+                    task_params=task_params
+                )
             else:
                 crew = self.get_crew_instance(
                     mode=crew_mode,
