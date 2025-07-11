@@ -29,7 +29,11 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # React dev server
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "https://super-space-guide-jxg7rrvxg72jr56-3000.app.github.dev"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -145,12 +149,34 @@ async def root():
 async def get_available_agents():
     """Get list of available agents with their configurations"""
     try:
-        agents_config = optimization_manager.load_agents_config()
+        import yaml
+        import os
+        
+        # Load agents configuration directly
+        agents_path = os.path.join(os.path.dirname(__file__), '..', 'src', 'marketing_research_swarm', 'config', 'agents.yaml')
+        with open(agents_path, 'r') as file:
+            agents_config = yaml.safe_load(file)
+        
         agents = []
         
         for agent_key, agent_config in agents_config.items():
             # Get phase information from dependency manager
-            phase = dependency_manager.get_agent_phase(agent_key)
+            try:
+                phase = dependency_manager.get_agent_phase(agent_key)
+            except:
+                # Fallback phase mapping
+                phase_mapping = {
+                    'market_research_analyst': 'FOUNDATION',
+                    'data_analyst': 'FOUNDATION',
+                    'competitive_analyst': 'ANALYSIS',
+                    'brand_performance_specialist': 'ANALYSIS',
+                    'brand_strategist': 'STRATEGY',
+                    'campaign_optimizer': 'STRATEGY',
+                    'forecasting_specialist': 'STRATEGY',
+                    'content_strategist': 'CONTENT',
+                    'creative_copywriter': 'CONTENT'
+                }
+                phase = phase_mapping.get(agent_key, 'UNKNOWN')
             
             agent_info = AgentInfo(
                 role=agent_config.get('role', agent_key),
@@ -194,7 +220,8 @@ async def get_analysis_types():
             complexity="Variable"
         ))
         
-    except ImportError:
+    except Exception as e:
+        print(f"Error loading dynamic analysis types: {e}")
         # Fallback to static analysis types
         analysis_types = [
             AnalysisTypeInfo(
