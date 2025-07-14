@@ -277,14 +277,23 @@ async def start_analysis(request: AnalysisRequest, background_tasks: BackgroundT
         # Generate unique analysis ID
         analysis_id = str(uuid.uuid4())
         
-        # Validate agents
-        available_agents = list(optimization_manager.load_agents_config().keys())
-        invalid_agents = [agent for agent in request.selected_agents if agent not in available_agents]
-        if invalid_agents:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid agents: {invalid_agents}. Available agents: {available_agents}"
-            )
+        # Validate agents - load from config file directly
+        import yaml
+        import os
+        try:
+            agents_path = os.path.join(os.path.dirname(__file__), '..', 'src', 'marketing_research_swarm', 'config', 'agents.yaml')
+            with open(agents_path, 'r') as file:
+                agents_config = yaml.safe_load(file)
+            available_agents = list(agents_config.keys())
+            invalid_agents = [agent for agent in request.selected_agents if agent not in available_agents]
+            if invalid_agents:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid agents: {invalid_agents}. Available agents: {available_agents}"
+                )
+        except Exception as e:
+            print(f"Warning: Could not validate agents: {e}")
+            # Continue without validation
         
         # Initialize analysis tracking
         running_analyses[analysis_id] = {
@@ -446,12 +455,36 @@ async def run_analysis_background(analysis_id: str, request: AnalysisRequest):
         running_analyses[analysis_id]["current_step"] = "Starting agent execution"
         running_analyses[analysis_id]["progress"] = 20.0
         
+        # Prepare inputs with all request data
+        analysis_inputs = {
+            'analysis_type': request.analysis_type,
+            'selected_agents': request.selected_agents,
+            'target_audience': request.target_audience,
+            'campaign_type': request.campaign_type,
+            'budget': request.budget,
+            'duration': request.duration,
+            'analysis_focus': request.analysis_focus,
+            'business_objective': request.business_objective,
+            'competitive_landscape': request.competitive_landscape,
+            'market_segments': request.market_segments,
+            'product_categories': request.product_categories,
+            'key_metrics': request.key_metrics,
+            'brands': request.brands,
+            'campaign_goals': request.campaign_goals,
+            'forecast_periods': request.forecast_periods,
+            'expected_revenue': request.expected_revenue,
+            'competitive_analysis': request.competitive_analysis,
+            'market_share_analysis': request.market_share_analysis,
+            'brand_awareness': request.brand_awareness,
+            'sentiment_score': request.sentiment_score,
+            'market_position': request.market_position,
+            **inputs  # Include any custom inputs
+        }
+        
         # Run the analysis using optimization manager
         result = optimization_manager.run_analysis_with_optimization(
-            analysis_type=request.analysis_type,
-            selected_agents=request.selected_agents,
-            optimization_level=request.optimization_level,
-            inputs=inputs
+            inputs=analysis_inputs,
+            optimization_level=request.optimization_level
         )
         
         # Update progress during execution (this would need to be integrated with the optimization manager)
