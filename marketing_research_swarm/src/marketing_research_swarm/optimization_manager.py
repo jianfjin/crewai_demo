@@ -28,9 +28,16 @@ class OptimizationManager:
         
         if mode == "blackboard":
             from .blackboard.blackboard_crew import create_blackboard_crew
-            # Create blackboard crew with config paths
-            agents_config = kwargs.get('agents_config_path', 'src/marketing_research_swarm/config/agents.yaml')
-            tasks_config = kwargs.get('tasks_config_path', 'src/marketing_research_swarm/config/tasks.yaml')
+            import os
+            # Create blackboard crew with absolute config paths
+            # __file__ is in src/marketing_research_swarm/optimization_manager.py
+            # We need to go up to the project root and then to src/marketing_research_swarm/config/
+            current_dir = os.path.dirname(os.path.abspath(__file__))  # src/marketing_research_swarm/
+            config_dir = os.path.join(current_dir, 'config')
+            default_agents_config = os.path.join(config_dir, 'agents.yaml')
+            default_tasks_config = os.path.join(config_dir, 'tasks.yaml')
+            agents_config = kwargs.get('agents_config_path', default_agents_config)
+            tasks_config = kwargs.get('tasks_config_path', default_tasks_config)
             return create_blackboard_crew(agents_config, tasks_config)
         elif mode == "optimized":
             from .crew_optimized import OptimizedMarketingResearchCrew
@@ -776,23 +783,28 @@ class OptimizationManager:
             except Exception as e:
                 print(f"[ERROR] Failed to start {optimization_level} workflow: {e}")
         
-        # Configure optimization based on level
+        # Configure optimization based on level with absolute paths
+        import os
+        # __file__ is in src/marketing_research_swarm/optimization_manager.py
+        current_dir = os.path.dirname(os.path.abspath(__file__))  # src/marketing_research_swarm/
+        config_dir = os.path.join(current_dir, 'config')
+        
         if optimization_level == "full":
             crew_mode = "optimized"
-            agents_config_path = "src/marketing_research_swarm/config/agents_optimized.yaml"
-            tasks_config_path = custom_tasks_config_path or "src/marketing_research_swarm/config/tasks_optimized.yaml"
+            agents_config_path = os.path.join(config_dir, "agents_optimized.yaml")
+            tasks_config_path = custom_tasks_config_path or os.path.join(config_dir, "tasks_optimized.yaml")
         elif optimization_level == "blackboard":
             crew_mode = "blackboard"
-            agents_config_path = "src/marketing_research_swarm/config/agents.yaml"
-            tasks_config_path = custom_tasks_config_path or "src/marketing_research_swarm/config/tasks_context_aware.yaml"
+            agents_config_path = os.path.join(config_dir, "agents.yaml")
+            tasks_config_path = custom_tasks_config_path or os.path.join(config_dir, "tasks_context_aware.yaml")
         elif optimization_level == "partial":
             crew_mode = "simple_optimized"
-            agents_config_path = "src/marketing_research_swarm/config/agents.yaml"
-            tasks_config_path = custom_tasks_config_path or "src/marketing_research_swarm/config/tasks.yaml"
+            agents_config_path = os.path.join(config_dir, "agents.yaml")
+            tasks_config_path = custom_tasks_config_path or os.path.join(config_dir, "tasks.yaml")
         else:  # "none"
             crew_mode = "standard"
-            agents_config_path = "src/marketing_research_swarm/config/agents.yaml"
-            tasks_config_path = custom_tasks_config_path or "src/marketing_research_swarm/config/tasks.yaml"
+            agents_config_path = os.path.join(config_dir, "agents.yaml")
+            tasks_config_path = custom_tasks_config_path or os.path.join(config_dir, "tasks.yaml")
         
         try:
             # Get crew instance

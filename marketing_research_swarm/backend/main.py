@@ -459,7 +459,7 @@ async def run_analysis_background(analysis_id: str, request: AnalysisRequest):
         running_analyses[analysis_id]["current_step"] = "Starting agent execution"
         running_analyses[analysis_id]["progress"] = 20.0
         
-        # Prepare inputs with all request data
+        # Prepare inputs with all request data including required template variables
         analysis_inputs = {
             'analysis_type': request.analysis_type,
             'selected_agents': request.selected_agents,
@@ -482,6 +482,11 @@ async def run_analysis_background(analysis_id: str, request: AnalysisRequest):
             'brand_awareness': request.brand_awareness,
             'sentiment_score': request.sentiment_score,
             'market_position': request.market_position,
+            # Required template variables for tasks
+            'data_file_path': 'data/enhanced_beverage_sales_data.csv',  # Default data file
+            'budget': str(request.budget),  # Convert to string for template
+            'duration': request.duration,
+            'campaign_goals': ', '.join(request.campaign_goals) if isinstance(request.campaign_goals, list) else str(request.campaign_goals),
             **inputs  # Include any custom inputs
         }
         
