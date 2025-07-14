@@ -465,7 +465,7 @@ async def run_analysis_background(analysis_id: str, request: AnalysisRequest):
             'selected_agents': request.selected_agents,
             'target_audience': request.target_audience,
             'campaign_type': request.campaign_type,
-            'budget': request.budget,
+            'budget': str(request.budget),  # Convert to string for template usage
             'duration': request.duration,
             'analysis_focus': request.analysis_focus,
             'business_objective': request.business_objective,
@@ -474,7 +474,7 @@ async def run_analysis_background(analysis_id: str, request: AnalysisRequest):
             'product_categories': request.product_categories,
             'key_metrics': request.key_metrics,
             'brands': request.brands,
-            'campaign_goals': request.campaign_goals,
+            'campaign_goals': ', '.join(request.campaign_goals) if isinstance(request.campaign_goals, list) else str(request.campaign_goals),
             'forecast_periods': request.forecast_periods,
             'expected_revenue': request.expected_revenue,
             'competitive_analysis': request.competitive_analysis,
@@ -484,9 +484,6 @@ async def run_analysis_background(analysis_id: str, request: AnalysisRequest):
             'market_position': request.market_position,
             # Required template variables for tasks
             'data_file_path': 'data/enhanced_beverage_sales_data.csv',  # Default data file
-            'budget': str(request.budget),  # Convert to string for template
-            'duration': request.duration,
-            'campaign_goals': ', '.join(request.campaign_goals) if isinstance(request.campaign_goals, list) else str(request.campaign_goals),
             **inputs  # Include any custom inputs
         }
         
@@ -512,6 +509,22 @@ async def run_analysis_background(analysis_id: str, request: AnalysisRequest):
         end_time = datetime.now()
         duration = (end_time - running_analyses[analysis_id]["start_time"]).total_seconds()
         
+        # Extract and properly format the result
+        result_content = ""
+        if isinstance(result, dict):
+            if "result" in result:
+                result_data = result["result"]
+                # Convert complex objects to formatted string
+                if isinstance(result_data, dict):
+                    # Format as JSON for complex objects
+                    result_content = json.dumps(result_data, indent=2, default=str)
+                else:
+                    result_content = str(result_data)
+            else:
+                result_content = json.dumps(result, indent=2, default=str)
+        else:
+            result_content = str(result)
+        
         completed_analyses[analysis_id] = {
             **running_analyses[analysis_id],
             "status": "completed",
@@ -519,9 +532,9 @@ async def run_analysis_background(analysis_id: str, request: AnalysisRequest):
             "current_step": "Analysis completed",
             "end_time": end_time,
             "duration": duration,
-            "result": result.get("result", "") if isinstance(result, dict) else str(result),
-            "token_usage": result.get("token_usage", {}) if isinstance(result, dict) else {},
-            "performance_metrics": result.get("performance", {}) if isinstance(result, dict) else {}
+            "result": result_content,
+            "token_usage": result.get("metrics", {}) if isinstance(result, dict) else {},
+            "performance_metrics": result.get("optimization_record", {}) if isinstance(result, dict) else {}
         }
         
         # Remove from running analyses
