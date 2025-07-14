@@ -17,6 +17,10 @@ import json
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
+# Change working directory to project root to fix relative paths
+project_root = os.path.join(os.path.dirname(__file__), '..')
+os.chdir(project_root)
+
 from marketing_research_swarm.optimization_manager import OptimizationManager
 from marketing_research_swarm.blackboard.agent_dependency_manager import AgentDependencyManager
 
