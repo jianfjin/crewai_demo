@@ -319,10 +319,18 @@ async def start_analysis(request: AnalysisRequest, background_tasks: BackgroundT
         
         # Estimate duration based on agents and optimization level
         base_duration = len(request.selected_agents) * 60  # 60 seconds per agent
-        if request.optimization_level == "blackboard":
+        
+        # Use partial optimization as default for best performance
+        optimization_level = request.optimization_level or "partial"
+        
+        if optimization_level == "blackboard":
             estimated_duration = int(base_duration * 0.7)  # 30% faster with blackboard
+        elif optimization_level == "partial":
+            estimated_duration = int(base_duration * 0.05)  # 95% faster with partial optimization
+        elif optimization_level == "full":
+            estimated_duration = int(base_duration * 0.1)   # 90% faster with full optimization
         else:
-            estimated_duration = base_duration
+            estimated_duration = base_duration  # Standard duration for "none"
         
         return AnalysisResponse(
             analysis_id=analysis_id,
@@ -487,10 +495,13 @@ async def run_analysis_background(analysis_id: str, request: AnalysisRequest):
             **inputs  # Include any custom inputs
         }
         
+        # Use partial optimization as default for best performance
+        optimization_level = request.optimization_level or "partial"
+        
         # Run the analysis using optimization manager
         result = optimization_manager.run_analysis_with_optimization(
             inputs=analysis_inputs,
-            optimization_level=request.optimization_level
+            optimization_level=optimization_level
         )
         
         # Update progress during execution (this would need to be integrated with the optimization manager)
