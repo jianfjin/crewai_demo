@@ -452,6 +452,97 @@ async def cancel_analysis(analysis_id: str):
     
     raise HTTPException(status_code=404, detail="Analysis not found or already completed")
 
+def extract_blackboard_result(result):
+    """Extract result content from various CrewAI and blackboard output formats"""
+    try:
+        if isinstance(result, dict):
+            # Handle blackboard crew output format
+            if 'result' in result:
+                crew_result = result['result']
+                
+                # Handle CrewAI CrewOutput objects
+                if hasattr(crew_result, 'raw'):
+                    return crew_result.raw
+                elif hasattr(crew_result, 'result'):
+                    return crew_result.result
+                elif hasattr(crew_result, 'tasks_output'):
+                    # Extract from tasks output
+                    tasks_output = crew_result.tasks_output
+                    if tasks_output and len(tasks_output) > 0:
+                        # Get the last task output (final result)
+                        final_task = tasks_output[-1]
+                        if hasattr(final_task, 'raw'):
+                            return final_task.raw
+                        elif hasattr(final_task, 'result'):
+                            return final_task.result
+                        else:
+                            return str(final_task)
+                elif isinstance(crew_result, dict):
+                    # Format as readable JSON
+                    return json.dumps(crew_result, indent=2, default=str)
+                else:
+                    return str(crew_result)
+            
+            # Handle workflow summary format
+            elif 'workflow_summary' in result:
+                workflow_summary = result['workflow_summary']
+                
+                # Try to extract agent results
+                if 'agent_results' in workflow_summary:
+                    agent_results = workflow_summary['agent_results']
+                    
+                    # Combine all agent results into a comprehensive report
+                    combined_results = []
+                    for agent_name, agent_data in agent_results.items():
+                        if 'results' in agent_data:
+                            results = agent_data['results']
+                            combined_results.append(f"## {agent_name.replace('_', ' ').title()} Results\n")
+                            
+                            for key, value in results.items():
+                                if isinstance(value, str) and len(value) > 100:
+                                    combined_results.append(f"**{key}**: {value}\n")
+                                elif isinstance(value, dict):
+                                    combined_results.append(f"**{key}**: {json.dumps(value, indent=2)}\n")
+                                else:
+                                    combined_results.append(f"**{key}**: {value}\n")
+                            combined_results.append("\n---\n")
+                    
+                    if combined_results:
+                        return "\n".join(combined_results)
+                
+                # Fallback to workflow summary
+                return json.dumps(workflow_summary, indent=2, default=str)
+            
+            # Handle direct result dictionary
+            else:
+                return json.dumps(result, indent=2, default=str)
+        
+        # Handle string results
+        elif isinstance(result, str):
+            return result
+        
+        # Handle other object types
+        else:
+            # Try to extract from CrewAI objects
+            if hasattr(result, 'raw'):
+                return result.raw
+            elif hasattr(result, 'result'):
+                return result.result
+            elif hasattr(result, 'tasks_output'):
+                tasks_output = result.tasks_output
+                if tasks_output and len(tasks_output) > 0:
+                    final_task = tasks_output[-1]
+                    if hasattr(final_task, 'raw'):
+                        return final_task.raw
+                    else:
+                        return str(final_task)
+            else:
+                return str(result)
+                
+    except Exception as e:
+        print(f"Error extracting blackboard result: {e}")
+        return f"Analysis completed but result extraction failed: {str(e)}\n\nRaw result: {str(result)[:1000]}..."
+
 async def run_analysis_background(analysis_id: str, request: AnalysisRequest):
     """Run the analysis in the background"""
     try:
@@ -521,20 +612,7 @@ async def run_analysis_background(analysis_id: str, request: AnalysisRequest):
         duration = (end_time - running_analyses[analysis_id]["start_time"]).total_seconds()
         
         # Extract and properly format the result
-        result_content = ""
-        if isinstance(result, dict):
-            if "result" in result:
-                result_data = result["result"]
-                # Convert complex objects to formatted string
-                if isinstance(result_data, dict):
-                    # Format as JSON for complex objects
-                    result_content = json.dumps(result_data, indent=2, default=str)
-                else:
-                    result_content = str(result_data)
-            else:
-                result_content = json.dumps(result, indent=2, default=str)
-        else:
-            result_content = str(result)
+        result_content = extract_blackboard_result(result)
         
         completed_analyses[analysis_id] = {
             **running_analyses[analysis_id],
