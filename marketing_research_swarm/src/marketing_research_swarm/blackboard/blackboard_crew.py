@@ -248,16 +248,11 @@ class BlackboardMarketingResearchCrew:
             return 'general_analysis'
 
 
-class BlackboardCoordinatedCrew(Crew):
+class BlackboardCoordinatedCrew:
     """
     Enhanced Crew that coordinates execution through the blackboard system.
+    Uses composition instead of inheritance to avoid Pydantic field conflicts.
     """
-    
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    
-    # Define additional fields for Pydantic
-    workflow_id: str = Field(default="", description="Workflow identifier")
-    blackboard_system: Any = Field(default=None, description="Blackboard system instance")
     
     def __init__(self, 
                  agents: List[StateAwareAgent],
@@ -275,11 +270,14 @@ class BlackboardCoordinatedCrew(Crew):
             blackboard_system: Integrated blackboard system
             **kwargs: Additional crew arguments
         """
-        super().__init__(
+        # Store blackboard-specific attributes
+        self.workflow_id = workflow_id
+        self.blackboard_system = blackboard_system
+        
+        # Create the actual Crew instance
+        self._crew = Crew(
             agents=agents, 
             tasks=tasks, 
-            workflow_id=workflow_id,
-            blackboard_system=blackboard_system,
             **kwargs
         )
         
@@ -305,7 +303,7 @@ class BlackboardCoordinatedCrew(Crew):
         
         # Execute with coordination
         try:
-            result = super().kickoff(inputs=inputs)
+            result = self._crew.kickoff(inputs=inputs)
             
             # Post-execution: Update final results
             self._finalize_results(result)
