@@ -38,7 +38,8 @@ class OptimizationManager:
             default_tasks_config = os.path.join(config_dir, 'tasks.yaml')
             agents_config = kwargs.get('agents_config_path', default_agents_config)
             tasks_config = kwargs.get('tasks_config_path', default_tasks_config)
-            return create_blackboard_crew(agents_config, tasks_config)
+            selected_agents = kwargs.get('selected_agents', None)
+            return create_blackboard_crew(agents_config, tasks_config, selected_agents)
         elif mode == "optimized":
             from .crew_optimized import OptimizedMarketingResearchCrew
             return OptimizedMarketingResearchCrew(**kwargs)
@@ -807,12 +808,19 @@ class OptimizationManager:
             tasks_config_path = custom_tasks_config_path or os.path.join(config_dir, "tasks.yaml")
         
         try:
-            # Get crew instance
+            # Extract selected agents from inputs
+            selected_agents = inputs.get('selected_agents', None)
+            
+            # Get crew instance with selected agents
             crew = self.get_crew_instance(
                 mode=crew_mode,
                 agents_config_path=agents_config_path,
-                tasks_config_path=tasks_config_path
+                tasks_config_path=tasks_config_path,
+                selected_agents=selected_agents
             )
+            
+            print(f"[OPTIMIZATION_MANAGER] Selected agents: {selected_agents}")
+            print(f"[OPTIMIZATION_MANAGER] Crew mode: {crew_mode}")
             
             # Run analysis
             print(f"[ANALYSIS] Running {optimization_level} optimization with {crew_mode} crew")

@@ -230,11 +230,19 @@ class BlackboardMarketingResearchCrew:
         )
         
         try:
-            # Create state-aware agents in optimal execution order
+            # Create state-aware agents in optimal execution order - ONLY SELECTED AGENTS
             agents = []
-            agent_execution_order = self.optimized_agent_order if self.optimized_agent_order else list(self.agents_config.keys())
             
-            print(f"[EXECUTION_ORDER] Creating agents in order: {agent_execution_order}")
+            # Filter to only selected agents
+            if self.selected_agents:
+                # Use optimized order but filter to only selected agents
+                agent_execution_order = [agent for agent in self.optimized_agent_order if agent in self.selected_agents]
+                print(f"[SELECTED_AGENTS] User selected: {self.selected_agents}")
+                print(f"[EXECUTION_ORDER] Creating only selected agents in order: {agent_execution_order}")
+            else:
+                # Fallback to all agents if no selection
+                agent_execution_order = self.optimized_agent_order if self.optimized_agent_order else list(self.agents_config.keys())
+                print(f"[EXECUTION_ORDER] Creating all agents in order: {agent_execution_order}")
             
             for agent_name in agent_execution_order:
                 if agent_name in self.agents_config:
@@ -243,16 +251,18 @@ class BlackboardMarketingResearchCrew:
                     agents.append(agent)
                     print(f"[AGENT_CREATED] {agent_name} with {len(agent.tools)} tools")
             
-            # Create tasks from the custom tasks config in the same order
+            # Create tasks from the custom tasks config in the same order - ONLY FOR SELECTED AGENTS
             tasks = []
             for agent_name in agent_execution_order:
-                # Find task for this agent
+                # Find task for this agent (only if it's in selected agents)
                 for task_config in self.tasks_config.values():
                     if task_config.get('agent', '').strip() == agent_name:
                         task = self._create_blackboard_task(task_config, agents)
                         tasks.append(task)
                         print(f"[TASK_CREATED] Task for {agent_name}")
                         break
+            
+            print(f"[FINAL_SUMMARY] Created {len(agents)} agents and {len(tasks)} tasks for selected agents: {self.selected_agents}")
             
             # Create crew with blackboard coordination
             crew = BlackboardCoordinatedCrew(
