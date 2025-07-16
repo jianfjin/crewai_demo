@@ -25,47 +25,60 @@ def make_json_serializable(obj):
     else:
         return obj
 
-# Global cache for data sharing
-_GLOBAL_DATA_CACHE = {}
+# Use optimized shared cache
+try:
+    from ..performance.shared_data_cache import get_shared_cache
+    _USE_OPTIMIZED_CACHE = True
+except ImportError:
+    _USE_OPTIMIZED_CACHE = False
+    # Fallback to simple cache
+    _GLOBAL_DATA_CACHE = {}
 
 def get_cached_data(data_path: str = None) -> pd.DataFrame:
     """
-    Get cached data using the same strategy as optimized tools
+    Get cached data using optimized shared cache or fallback
     """
-    global _GLOBAL_DATA_CACHE
-    
-    # If no data path provided, return sample data
-    if not data_path:
-        return create_sample_beverage_data()
-    
-    # Generate cache key
-    cache_key = hashlib.md5(data_path.encode()).hexdigest()
-    
-    # Check if data is already cached
-    if cache_key in _GLOBAL_DATA_CACHE:
-        return _GLOBAL_DATA_CACHE[cache_key].copy()
-    
-    # Load and cache data
-    try:
-        if data_path.endswith('.csv'):
-            df = pd.read_csv(data_path)
-        elif data_path.endswith('.json'):
-            df = pd.read_json(data_path)
-        else:
-            # Try CSV first, then JSON
-            try:
-                df = pd.read_csv(data_path)
-            except:
-                df = pd.read_json(data_path)
-        
-        # Cache the data
-        _GLOBAL_DATA_CACHE[cache_key] = df.copy()
+    if _USE_OPTIMIZED_CACHE:
+        # Use optimized shared cache
+        shared_cache = get_shared_cache()
+        df, cache_info = shared_cache.get_or_load_data(data_path)
         return df
+    else:
+        # Fallback to simple cache
+        global _GLOBAL_DATA_CACHE
         
-    except Exception as e:
-        print(f"Error loading data from {data_path}: {e}")
-        # Return sample data as fallback
-        return create_sample_beverage_data()
+        # If no data path provided, return sample data
+        if not data_path:
+            return create_sample_beverage_data()
+        
+        # Generate cache key
+        cache_key = hashlib.md5(data_path.encode()).hexdigest()
+        
+        # Check if data is already cached
+        if cache_key in _GLOBAL_DATA_CACHE:
+            return _GLOBAL_DATA_CACHE[cache_key].copy()
+        
+        # Load and cache data
+        try:
+            if data_path.endswith('.csv'):
+                df = pd.read_csv(data_path)
+            elif data_path.endswith('.json'):
+                df = pd.read_json(data_path)
+            else:
+                # Try CSV first, then JSON
+                try:
+                    df = pd.read_csv(data_path)
+                except:
+                    df = pd.read_json(data_path)
+            
+            # Cache the data
+            _GLOBAL_DATA_CACHE[cache_key] = df.copy()
+            return df
+            
+        except Exception as e:
+            print(f"Error loading data from {data_path}: {e}")
+            # Return sample data as fallback
+            return create_sample_beverage_data()
 
 def create_sample_beverage_data() -> pd.DataFrame:
     """Create sample beverage data for analysis when no data file is available"""

@@ -63,7 +63,7 @@ class IntegratedBlackboardSystem:
     
     def __init__(self, 
                  enable_context_manager: bool = True,
-                 enable_memory_manager: bool = True,
+                 enable_memory_manager: bool = False,  # Disabled by default for performance
                  enable_cache_manager: bool = True,
                  enable_token_tracking: bool = True):
         """
@@ -97,12 +97,17 @@ class IntegratedBlackboardSystem:
             except Exception as e:
                 self.logger.warning(f"Failed to initialize AdvancedContextManager: {e}")
                 
+        # Disable memory manager by default for performance optimization
         if enable_memory_manager and MarketingMemoryManager:
             try:
                 self.memory_manager = MarketingMemoryManager()
                 self.logger.info("MarketingMemoryManager initialized")
             except Exception as e:
                 self.logger.warning(f"Failed to initialize MarketingMemoryManager: {e}")
+        else:
+            self.memory_manager = None
+            if enable_memory_manager:
+                self.logger.info("Memory manager disabled for performance optimization")
                 
         if enable_cache_manager and get_analysis_cache:
             try:
@@ -127,10 +132,11 @@ class IntegratedBlackboardSystem:
         self.reference_manager = get_reference_manager()
         self.logger.info("ResultReferenceManager initialized")
         
-        # Initialize enhanced token tracker
-        from .enhanced_token_tracker import get_blackboard_tracker
-        self.blackboard_tracker = get_blackboard_tracker()
-        self.logger.info("BlackboardTokenTracker initialized")
+        # Initialize enhanced token tracker (disabled for performance optimization)
+        # from .enhanced_token_tracker import get_blackboard_tracker
+        # self.blackboard_tracker = get_blackboard_tracker()
+        self.blackboard_tracker = None
+        self.logger.info("BlackboardTokenTracker disabled for performance optimization")
         
         # Integrated workflow contexts
         self.workflow_contexts: Dict[str, IntegratedWorkflowContext] = {}
