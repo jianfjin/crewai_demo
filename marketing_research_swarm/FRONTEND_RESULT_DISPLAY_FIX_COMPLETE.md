@@ -217,3 +217,62 @@ npm run dev
 **Impact**: Complete frontend-backend integration for result display
 
 *The frontend result display issue has been completely resolved. Users can now see comprehensive analysis results after the marketing research analysis completes.*
+
+---
+
+## 🔧 **Additional Fix: GitHub Codespaces Port 3000 Detection**
+
+**Date**: January 2025  
+**Issue**: Frontend running on port 3000 (Next.js) not detected correctly in GitHub Codespaces  
+**Status**: ✅ **RESOLVED**
+
+### **Problem Identified**:
+```
+Frontend URL: https://super-space-guide-jxg7rrvxg72jr56-3000.app.github.dev/
+Expected Backend: https://super-space-guide-jxg7rrvxg72jr56-8000.app.github.dev/
+Issue: Environment detection logic failed for port 3000
+Result: Frontend fell back to localhost instead of Codespaces URL
+```
+
+### **Root Cause**:
+```typescript
+// Original broken logic for port 3000
+const parts = hostname.split('-')  // Wrong parsing method
+const codespaceName = parts.slice(0, -2).join('-')  // Incorrect extraction
+```
+
+### **Fix Applied**:
+```typescript
+// Updated logic for any port (including 3000)
+const parts = hostname.split('.')  // ['super-space-guide-jxg7rrvxg72jr56-3000', 'app', 'github', 'dev']
+const hostPart = parts[0]  // 'super-space-guide-jxg7rrvxg72jr56-3000'
+const lastDashIndex = hostPart.lastIndexOf('-')  // Find last dash
+const codespaceName = hostPart.substring(0, lastDashIndex)  // 'super-space-guide-jxg7rrvxg72jr56'
+const backendUrl = `https://${codespaceName}-8000.app.github.dev`
+```
+
+### **Verification**:
+```
+✅ Frontend (Next.js): https://super-space-guide-jxg7rrvxg72jr56-3000.app.github.dev/
+✅ Backend (FastAPI): https://super-space-guide-jxg7rrvxg72jr56-8000.app.github.dev/
+✅ Environment Detection: Correctly identifies GitHub Codespaces
+✅ API Calls: Routed to proper backend URL
+✅ Dropdowns: Analysis Types and Agents now populate correctly
+```
+
+### **Console Output Expected**:
+```
+Detected GitHub Codespaces environment
+Frontend hostname: super-space-guide-jxg7rrvxg72jr56-3000.app.github.dev
+Codespace name extracted: super-space-guide-jxg7rrvxg72jr56
+Backend URL constructed: https://super-space-guide-jxg7rrvxg72jr56-8000.app.github.dev
+API Client initialized with base URL: https://super-space-guide-jxg7rrvxg72jr56-8000.app.github.dev
+```
+
+### **Impact**:
+- ✅ **Fixed empty dropdowns** in GitHub Codespaces for Next.js frontend
+- ✅ **Proper environment detection** for port 3000 (Next.js default)
+- ✅ **Automatic backend URL construction** without manual configuration
+- ✅ **Seamless development experience** in GitHub Codespaces
+
+**Status**: ✅ **PORT 3000 DETECTION FIX COMPLETE**

@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Slider } from '@/components/ui/slider'
 import { MultiSelect } from '@/components/ui/multi-select'
 import { Badge } from '@/components/ui/badge'
-import { ApiClient } from '@/lib/api'
+import { apiClient } from '@/lib/api'
 import { AgentInfo, AnalysisTypeInfo, AnalysisRequest } from '@/types/api'
 import { 
   Users, 
@@ -87,12 +87,40 @@ export function AnalysisForm({ onStartAnalysis, isLoading }: AnalysisFormProps) 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [agentsData, typesData] = await Promise.all([
-          ApiClient.getAgents(),
-          ApiClient.getAnalysisTypes()
+        const [agentsResponse, typesResponse] = await Promise.all([
+          apiClient.getAgents(),
+          apiClient.getAnalysisTypes()
         ])
-        setAgents(agentsData)
-        setAnalysisTypes(typesData)
+        
+        // Transform agents data - getAgents returns { agents: string[] }
+        const agentsData = agentsResponse.agents || []
+        const transformedAgents = agentsData.map(agentName => ({
+          role: agentName,
+          goal: '',
+          backstory: '',
+          tools: [],
+          phase: 'UNKNOWN'
+        }))
+        
+        // Transform analysis types data - getAnalysisTypes returns { types: {...}, status: "success" }
+        const typesData = typesResponse.types || typesResponse // Handle both wrapped and direct response
+        const transformedTypes = Object.entries(typesData).map(([key, value]) => ({
+          name: key,
+          description: value.description,
+          recommended_agents: value.agents,
+          estimated_duration: 120,
+          complexity: 'Medium'
+        }))
+        
+        setAgents(transformedAgents)
+        setAnalysisTypes(transformedTypes)
+        console.log('Raw API responses:')
+        console.log('- agentsResponse:', agentsResponse)
+        console.log('- typesResponse:', typesResponse)
+        console.log('- typesData:', typesData)
+        console.log('Transformed data:')
+        console.log('- transformedAgents:', transformedAgents)
+        console.log('- transformedTypes:', transformedTypes)
       } catch (error) {
         console.error('Failed to load form data:', error)
       } finally {

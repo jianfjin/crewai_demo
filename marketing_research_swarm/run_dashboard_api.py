@@ -39,10 +39,19 @@ def start_backend():
     
     try:
         # Start backend in background
-        backend_process = subprocess.Popen([
-            sys.executable, "-m", "uvicorn", "main:app",
-            "--reload", "--port", "8000", "--host", "localhost"
-        ], cwd=backend_dir)
+        # Check if we're in a uv environment
+        if os.environ.get('UV_PROJECT_ENVIRONMENT') or 'uv' in sys.executable:
+            print("🔍 Using uv to start backend...")
+            backend_process = subprocess.Popen([
+                "uv", "run", "uvicorn", "main:app",
+                "--reload", "--port", "8000", "--host", "localhost"
+            ], cwd=backend_dir)
+        else:
+            print("🔍 Using python to start backend...")
+            backend_process = subprocess.Popen([
+                sys.executable, "-m", "uvicorn", "main:app",
+                "--reload", "--port", "8000", "--host", "localhost"
+            ], cwd=backend_dir)
         
         # Wait for backend to start
         print("⏳ Waiting for backend to start...")
@@ -64,27 +73,47 @@ def start_backend():
 def install_requirements():
     """Install dashboard requirements"""
     try:
-        # Check if requirements file exists
-        if os.path.exists("requirements_dashboard.txt"):
-            subprocess.check_call([
-                sys.executable, "-m", "pip", "install", "-r", "requirements_dashboard.txt"
-            ])
+        # Check if we're in a uv environment
+        if os.environ.get('UV_PROJECT_ENVIRONMENT') or 'uv' in sys.executable:
+            print("🔍 Detected uv environment, using uv for package installation...")
+            
+            # Use uv to install requirements
+            if os.path.exists("requirements_dashboard.txt"):
+                subprocess.check_call(["uv", "pip", "install", "-r", "requirements_dashboard.txt"])
+            else:
+                # Install basic requirements with uv
+                requirements = [
+                    "streamlit>=1.28.0",
+                    "requests>=2.31.0", 
+                    "pandas>=2.0.0",
+                    "plotly>=5.15.0"
+                ]
+                subprocess.check_call(["uv", "pip", "install"] + requirements)
         else:
-            # Install basic requirements
-            requirements = [
-                "streamlit>=1.28.0",
-                "requests>=2.31.0",
-                "pandas>=2.0.0",
-                "plotly>=5.15.0"
-            ]
-            subprocess.check_call([
-                sys.executable, "-m", "pip", "install"
-            ] + requirements)
+            # Fallback to regular pip
+            print("🔍 Using pip for package installation...")
+            
+            if os.path.exists("requirements_dashboard.txt"):
+                subprocess.check_call([
+                    sys.executable, "-m", "pip", "install", "-r", "requirements_dashboard.txt"
+                ])
+            else:
+                # Install basic requirements
+                requirements = [
+                    "streamlit>=1.28.0",
+                    "requests>=2.31.0",
+                    "pandas>=2.0.0", 
+                    "plotly>=5.15.0"
+                ]
+                subprocess.check_call([
+                    sys.executable, "-m", "pip", "install"
+                ] + requirements)
         
         print("✅ Dashboard requirements installed successfully!")
         return True
     except subprocess.CalledProcessError as e:
         print(f"❌ Error installing requirements: {e}")
+        print("💡 Try running manually: uv pip install streamlit requests pandas plotly")
         return False
 
 def launch_api_dashboard():
@@ -105,12 +134,23 @@ def launch_api_dashboard():
         print("Press Ctrl+C to stop the dashboard")
         print("="*60 + "\n")
         
-        subprocess.run([
-            sys.executable, "-m", "streamlit", "run", "dashboard_api.py",
-            "--server.port", "8501",
-            "--server.address", "localhost",
-            "--browser.gatherUsageStats", "false"
-        ])
+        # Check if we're in a uv environment
+        if os.environ.get('UV_PROJECT_ENVIRONMENT') or 'uv' in sys.executable:
+            print("🔍 Using uv to run Streamlit...")
+            subprocess.run([
+                "uv", "run", "streamlit", "run", "dashboard_api.py",
+                "--server.port", "8501",
+                "--server.address", "localhost",
+                "--browser.gatherUsageStats", "false"
+            ])
+        else:
+            print("🔍 Using python to run Streamlit...")
+            subprocess.run([
+                sys.executable, "-m", "streamlit", "run", "dashboard_api.py",
+                "--server.port", "8501",
+                "--server.address", "localhost",
+                "--browser.gatherUsageStats", "false"
+            ])
     except KeyboardInterrupt:
         print("\n🛑 API Dashboard stopped by user")
     except Exception as e:

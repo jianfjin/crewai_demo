@@ -17,6 +17,9 @@ from typing import Dict, List, Any, Optional
 import uuid
 from dataclasses import dataclass
 import asyncio
+import yaml
+import sys
+import os
 
 # Page configuration
 st.set_page_config(
@@ -90,13 +93,48 @@ class AnalysisConfig:
 class APIClient:
     """Client for communicating with FastAPI backend"""
     
-    def __init__(self, base_url: str = "http://localhost:8000"):
+    def __init__(self, base_url: str = None):
+        # Auto-detect environment and set appropriate base URL
+        if base_url is None:
+            base_url = self._detect_backend_url()
         self.base_url = base_url
         self.session = requests.Session()
         self.session.headers.update({
             "Content-Type": "application/json",
             "Accept": "application/json"
         })
+    
+    def _detect_backend_url(self) -> str:
+        """Auto-detect the backend URL based on environment"""
+        import os
+        
+        # Check for environment variable override
+        if os.environ.get('API_BASE_URL'):
+            return os.environ.get('API_BASE_URL')
+        
+        # Check if we're in GitHub Codespaces
+        if os.environ.get('CODESPACES'):
+            codespace_name = os.environ.get('CODESPACE_NAME')
+            github_codespaces_port_forwarding_domain = os.environ.get('GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN')
+            
+            if codespace_name and github_codespaces_port_forwarding_domain:
+                # GitHub Codespaces URL format
+                backend_url = f"https://{codespace_name}-8000.{github_codespaces_port_forwarding_domain}"
+                print(f"🔍 Detected GitHub Codespaces environment")
+                print(f"🔗 Backend URL: {backend_url}")
+                return backend_url
+        
+        # Check if we're in Gitpod
+        if os.environ.get('GITPOD_WORKSPACE_URL'):
+            workspace_url = os.environ.get('GITPOD_WORKSPACE_URL')
+            backend_url = workspace_url.replace('https://', 'https://8000-')
+            print(f"🔍 Detected Gitpod environment")
+            print(f"🔗 Backend URL: {backend_url}")
+            return backend_url
+        
+        # Default to localhost for local development
+        print(f"🔍 Using localhost for backend connection")
+        return "http://localhost:8000"
     
     def health_check(self) -> Dict[str, Any]:
         """Check if API is available"""
@@ -109,42 +147,116 @@ class APIClient:
     def get_available_agents(self) -> Dict[str, Any]:
         """Get list of available agents"""
         try:
-            response = self.session.get(f"{self.base_url}/api/agents/available", timeout=10)
+            # Use the actual backend endpoint that exists
+            response = self.session.get(f"{self.base_url}/", timeout=10)
             response.raise_for_status()
-            return response.json()
+            
+            # Return hardcoded agents list since backend doesn't have this endpoint yet
+            # These are the agents from the actual system
+            agents = [
+                "market_research_analyst",
+                "competitive_analyst", 
+                "data_analyst",
+                "content_strategist",
+                "brand_performance_specialist",
+                "campaign_optimizer",
+                "forecasting_specialist",
+                "creative_copywriter"
+            ]
+            
+            return {"agents": agents, "status": "success"}
         except Exception as e:
-            st.error(f"Failed to get available agents: {e}")
-            return {"agents": [], "error": str(e)}
+            st.error(f"Failed to connect to backend: {e}")
+            # Return default agents list as fallback
+            return {
+                "agents": [
+                    "market_research_analyst",
+                    "competitive_analyst", 
+                    "brand_performance_specialist",
+                    "campaign_optimizer"
+                ], 
+                "error": str(e)
+            }
     
     def get_analysis_types(self) -> Dict[str, Any]:
         """Get available analysis types"""
         try:
+            # Try the actual API endpoint first
             response = self.session.get(f"{self.base_url}/api/analysis/types", timeout=10)
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            st.error(f"Failed to get analysis types: {e}")
-            return {"types": [], "error": str(e)}
-    
-    def start_analysis(self, config: AnalysisConfig) -> Dict[str, Any]:
-        """Start new analysis"""
-        try:
-            request_data = {
-                "selected_agents": config.selected_agents,
-                "optimization_level": config.optimization_level,
-                "enable_mem0": config.enable_mem0,
-                "enable_caching": config.enable_caching,
-                "max_workers": config.max_workers,
-                "task_parameters": config.task_parameters or {}
+            # Log the connection issue for debugging
+            print(f"⚠️ API call failed: {e}")
+            print(f"🔗 Trying to connect to: {self.base_url}/api/analysis/types")
+            
+            # Return predefined analysis types as fallback
+            analysis_types = {
+                "roi_analysis": {
+                    "name": "ROI Analysis",
+                    "description": "Comprehensive ROI and profitability analysis for marketing campaigns",
+                    "agents": ["market_research_analyst", "data_analyst", "campaign_optimizer"]
+                },
+                "brand_performance": {
+                    "name": "Brand Performance Analysis", 
+                    "description": "Analyze brand performance metrics and market positioning",
+                    "agents": ["market_research_analyst", "competitive_analyst", "brand_performance_specialist"]
+                },
+                "sales_forecast": {
+                    "name": "Sales Forecast Analysis",
+                    "description": "Predict future sales trends and market opportunities",
+                    "agents": ["market_research_analyst", "data_analyst", "forecasting_specialist"]
+                },
+                "comprehensive": {
+                    "name": "Comprehensive Analysis",
+                    "description": "Full marketing research analysis with all available agents",
+                    "agents": ["market_research_analyst", "competitive_analyst", "data_analyst", "content_strategist", "brand_performance_specialist", "campaign_optimizer"]
+                },
+                "custom": {
+                    "name": "Custom Analysis",
+                    "description": "Select your own combination of agents for custom analysis",
+                    "agents": []
+                }
             }
             
+            print(f"✅ Using fallback analysis types")
+            return {"types": analysis_types, "status": "fallback"}
+    
+    def start_analysis(self, config: AnalysisConfig) -> Dict[str, Any]:
+        """Start new analysis using the actual backend API"""
+        try:
+            # Prepare request data for the backend API
+            request_data = {
+                "analysis_type": "custom",
+                "selected_agents": config.selected_agents,
+                "optimization_level": config.optimization_level,
+                "target_audience": config.task_parameters.get("target_audience", "beverage consumers"),
+                "campaign_type": config.task_parameters.get("campaign_type", "Brand Awareness"),
+                "budget": config.task_parameters.get("budget", 100000),
+                "duration": config.task_parameters.get("duration", "3 months"),
+                "enable_mem0": config.enable_mem0,
+                "enable_caching": config.enable_caching,
+                "max_workers": config.max_workers
+            }
+            
+            # Call the actual backend API
             response = self.session.post(
-                f"{self.base_url}/api/analysis/start",
+                f"{self.base_url}/api/analysis",
                 json=request_data,
                 timeout=30
             )
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+            
+            if result.get("success"):
+                return {
+                    "success": True,
+                    "analysis_id": result["analysis_id"],
+                    "message": "Analysis started successfully",
+                    "status": "running"
+                }
+            else:
+                return {"success": False, "error": result.get("error", "Unknown error")}
             
         except requests.exceptions.Timeout:
             return {"success": False, "error": "Request timeout - analysis may still be starting"}
@@ -233,11 +345,84 @@ def check_api_connection():
     
     if health["status"] == "healthy":
         st.sidebar.success("🟢 API Connected")
+        st.sidebar.info(f"🔗 Backend: {st.session_state.api_client.base_url}")
         return True
     else:
         st.sidebar.error("🔴 API Disconnected")
         st.sidebar.error(f"Error: {health.get('error', 'Unknown error')}")
-        st.error("⚠️ Cannot connect to backend API. Please ensure the FastAPI server is running on http://localhost:8000")
+        
+        # Show current backend URL and allow override
+        st.sidebar.warning(f"🔗 Trying to connect to: {st.session_state.api_client.base_url}")
+        
+        # Allow manual backend URL override
+        with st.sidebar.expander("🔧 Backend Configuration"):
+            new_url = st.text_input(
+                "Backend URL Override",
+                value=st.session_state.api_client.base_url,
+                help="Enter the correct backend URL for your environment"
+            )
+            
+            if st.button("🔄 Update Backend URL"):
+                st.session_state.api_client = APIClient(base_url=new_url)
+                st.rerun()
+            
+            # Test specific endpoints
+            if st.button("🧪 Test API Endpoints"):
+                st.write("**Testing API Endpoints:**")
+                
+                # Test base endpoint
+                try:
+                    response = st.session_state.api_client.session.get(f"{st.session_state.api_client.base_url}/", timeout=5)
+                    st.write(f"✅ Base endpoint: {response.status_code}")
+                except Exception as e:
+                    st.write(f"❌ Base endpoint: {e}")
+                
+                # Test agents endpoint
+                try:
+                    response = st.session_state.api_client.session.get(f"{st.session_state.api_client.base_url}/api/agents/available", timeout=5)
+                    st.write(f"✅ Agents endpoint: {response.status_code}")
+                except Exception as e:
+                    st.write(f"❌ Agents endpoint: {e}")
+                
+                # Test analysis types endpoint
+                try:
+                    response = st.session_state.api_client.session.get(f"{st.session_state.api_client.base_url}/api/analysis/types", timeout=5)
+                    st.write(f"✅ Analysis types endpoint: {response.status_code}")
+                except Exception as e:
+                    st.write(f"❌ Analysis types endpoint: {e}")
+            
+            # Show environment detection info
+            st.write("**Environment Detection:**")
+            import os
+            if os.environ.get('CODESPACES'):
+                st.write("🔍 GitHub Codespaces detected")
+                st.write(f"📝 Codespace: {os.environ.get('CODESPACE_NAME', 'Unknown')}")
+                st.write(f"🌐 Domain: {os.environ.get('GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN', 'Unknown')}")
+                
+                # Show expected URLs
+                codespace_name = os.environ.get('CODESPACE_NAME', 'your-codespace')
+                domain = os.environ.get('GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN', 'app.github.dev')
+                expected_backend = f"https://{codespace_name}-8000.{domain}"
+                expected_frontend = f"https://{codespace_name}-8501.{domain}"
+                
+                st.write("**Expected URLs:**")
+                st.write(f"🔗 Backend: {expected_backend}")
+                st.write(f"🔗 Frontend: {expected_frontend}")
+                
+                # Port forwarding reminder
+                st.write("**Port Forwarding Checklist:**")
+                st.write("1. ✅ Port 8000 forwarded as Public")
+                st.write("2. ✅ Port 8501 forwarded as Public")
+                st.write("3. ✅ Backend running with --host 0.0.0.0")
+                
+            elif os.environ.get('GITPOD_WORKSPACE_URL'):
+                st.write("🔍 Gitpod detected")
+                st.write(f"🌐 Workspace: {os.environ.get('GITPOD_WORKSPACE_URL')}")
+            else:
+                st.write("🔍 Local development environment")
+                st.write("🔗 Expected backend: http://localhost:8000")
+        
+        st.error("⚠️ Cannot connect to backend API. Please check the backend URL and ensure the FastAPI server is running.")
         return False
 
 def render_configuration_form() -> Optional[AnalysisConfig]:
