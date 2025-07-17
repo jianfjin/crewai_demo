@@ -20,14 +20,21 @@ export default function Dashboard() {
   const handleStartAnalysis = async (request: AnalysisRequest) => {
     setIsStarting(true)
     try {
+      console.log('Starting analysis with request:', request)
       const response = await apiClient.startAnalysis(request)
-      if (response.analysis_id) {
+      console.log('Analysis response:', response)
+      
+      if (response.success && response.analysis_id) {
         setCurrentAnalysisId(response.analysis_id)
+        setAppState('monitoring')
+        console.log('Successfully started analysis:', response.analysis_id)
+      } else {
+        console.error('Analysis failed to start:', response.error)
+        alert(`Failed to start analysis: ${response.error || 'Unknown error'}`)
       }
-      setAppState('monitoring')
     } catch (error) {
       console.error('Failed to start analysis:', error)
-      // TODO: Show error toast
+      alert(`Failed to start analysis: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsStarting(false)
     }
