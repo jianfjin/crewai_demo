@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AnalysisForm } from '@/components/analysis-form'
 import { AnalysisMonitor } from '@/components/analysis-monitor'
 import { AnalysisResults } from '@/components/analysis-results'
-import { ApiClient } from '@/lib/api'
+import { apiClient } from '@/lib/api'
 import { AnalysisRequest, AnalysisResult } from '@/types/api'
 import { Brain, Zap, Users, BarChart3 } from 'lucide-react'
 
@@ -20,8 +20,10 @@ export default function Dashboard() {
   const handleStartAnalysis = async (request: AnalysisRequest) => {
     setIsStarting(true)
     try {
-      const response = await ApiClient.startAnalysis(request)
-      setCurrentAnalysisId(response.analysis_id)
+      const response = await apiClient.startAnalysis(request)
+      if (response.analysis_id) {
+        setCurrentAnalysisId(response.analysis_id)
+      }
       setAppState('monitoring')
     } catch (error) {
       console.error('Failed to start analysis:', error)

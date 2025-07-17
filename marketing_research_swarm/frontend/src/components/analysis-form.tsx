@@ -104,13 +104,16 @@ export function AnalysisForm({ onStartAnalysis, isLoading }: AnalysisFormProps) 
         
         // Transform analysis types data - getAnalysisTypes returns { types: {...}, status: "success" }
         const typesData = typesResponse.types || typesResponse // Handle both wrapped and direct response
-        const transformedTypes = Object.entries(typesData).map(([key, value]) => ({
-          name: key,
-          description: value.description,
-          recommended_agents: value.agents,
-          estimated_duration: 120,
-          complexity: 'Medium'
-        }))
+        const transformedTypes = Object.entries(typesData).map(([key, value]) => {
+          const typeData = value as { description: string; agents: string[] }
+          return {
+            name: key,
+            description: typeData.description,
+            recommended_agents: typeData.agents,
+            estimated_duration: 120,
+            complexity: 'Medium' as const
+          }
+        })
         
         setAgents(transformedAgents)
         setAnalysisTypes(transformedTypes)

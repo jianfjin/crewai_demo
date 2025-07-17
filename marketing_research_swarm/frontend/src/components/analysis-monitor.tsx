@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ApiClient } from '@/lib/api'
+import { apiClient } from '@/lib/api'
 import { AnalysisStatus, AnalysisResult, TokenUsage } from '@/types/api'
 import { formatDuration, formatTokens, formatCost } from '@/lib/utils'
 import { 
@@ -35,11 +35,11 @@ export function AnalysisMonitor({ analysisId, onComplete, onCancel }: AnalysisMo
   useEffect(() => {
     const pollStatus = async () => {
       try {
-        const statusData = await ApiClient.getAnalysisStatus(analysisId)
+        const statusData = await apiClient.getAnalysisStatus(analysisId)
         setStatus(statusData)
 
         if (statusData.status === 'completed' || statusData.status === 'failed') {
-          const resultData = await ApiClient.getAnalysisResult(analysisId)
+          const resultData = await apiClient.getAnalysisResult(analysisId)
           setResult(resultData)
           onComplete(resultData)
           return
@@ -61,7 +61,7 @@ export function AnalysisMonitor({ analysisId, onComplete, onCancel }: AnalysisMo
 
   const handleCancel = async () => {
     try {
-      await ApiClient.cancelAnalysis(analysisId)
+      await apiClient.cancelAnalysis(analysisId)
       onCancel()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel analysis')
