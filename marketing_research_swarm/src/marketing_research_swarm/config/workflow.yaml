@@ -1,0 +1,109 @@
+workflow:
+  name: marketing_research_workflow
+  version: 1.0.0
+  description: LangGraph-based marketing research workflow
+  max_retries: 2
+  timeout_minutes: 30
+  checkpoint_enabled: true
+  parallel_execution: false
+
+agent_selection:
+  default_agents:
+    - market_research_analyst
+    - data_analyst
+    - content_strategist
+  
+  available_agents:
+    - market_research_analyst
+    - competitive_analyst
+    - data_analyst
+    - content_strategist
+    - creative_copywriter
+    - campaign_optimizer
+    - brand_performance_specialist
+    - forecasting_specialist
+  
+  agent_dependencies:
+    content_strategist:
+      - market_research_analyst
+    creative_copywriter:
+      - content_strategist
+    campaign_optimizer:
+      - data_analyst
+      - content_strategist
+    brand_performance_specialist:
+      - market_research_analyst
+      - data_analyst
+    forecasting_specialist:
+      - data_analyst
+
+execution:
+  sequential_mode: true
+  error_handling: retry_with_fallback
+  result_aggregation: comprehensive
+  progress_tracking: true
+  
+  # Advanced execution settings
+  agent_timeout_minutes: 10
+  inter_agent_delay_seconds: 2
+  memory_optimization: true
+  context_sharing: true
+
+output:
+  format: structured_json
+  include_metadata: true
+  save_intermediate_results: true
+  export_formats:
+    - json
+    - markdown
+    - csv
+  
+  # Output customization
+  detailed_logging: true
+  performance_metrics: true
+  token_usage_tracking: true
+
+# LangGraph specific settings
+langgraph:
+  checkpoint_storage: cache/workflow_checkpoints.db
+  state_persistence: true
+  graph_visualization: false
+  debug_mode: false
+  
+  # Node configuration
+  node_settings:
+    default_timeout: 600  # 10 minutes
+    retry_policy: exponential_backoff
+    error_propagation: continue_on_error
+  
+  # Edge configuration  
+  edge_settings:
+    conditional_routing: true
+    dynamic_branching: false
+    loop_detection: true
+
+# Integration settings
+integrations:
+  dashboard:
+    enabled: true
+    real_time_updates: true
+    progress_monitoring: true
+  
+  blackboard:
+    enabled: true
+    shared_context: true
+    result_caching: true
+  
+  external_apis:
+    openai:
+      model: gpt-4o-mini
+      temperature: 0.7
+      max_tokens: 2000
+    
+    serper:
+      enabled: false  # Optional web search
+    
+    ollama:
+      fallback_enabled: true
+      model: gemma
+      base_url: http://localhost:11434
