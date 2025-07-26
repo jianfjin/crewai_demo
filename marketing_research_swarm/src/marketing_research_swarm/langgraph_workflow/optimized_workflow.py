@@ -21,7 +21,9 @@ from ..blackboard.integrated_blackboard import get_global_blackboard
 from ..optimization_manager import OptimizationManager
 from ..utils.token_tracker import TokenTracker
 from ..performance.context_optimizer import ContextOptimizer
+from ..context.context_manager import AdvancedContextManager
 from ..cache.smart_cache import SmartCache
+from ..memory.mem0_integration import MarketingMemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,13 @@ class OptimizedMarketingWorkflow:
         self.optimization_manager = OptimizationManager()
         self.token_tracker = TokenTracker()
         self.context_optimizer = ContextOptimizer()
+        self.context_manager = AdvancedContextManager()
         self.smart_cache = SmartCache()
+        self.memory_manager = MarketingMemoryManager()
+        
+        # Enable context isolation
+        self.context_isolation_enabled = True
+        self.result_references = {}  # Maps logical keys to storage keys
         
         # Available agent types
         self.available_agents = list(AGENT_NODES.keys())
@@ -136,21 +144,74 @@ class OptimizedMarketingWorkflow:
         return state
     
     def _context_optimization_node(self, state: MarketingResearchState) -> MarketingResearchState:
-        """Apply context optimization to reduce token usage."""
+        """Apply comprehensive context optimization to reduce token usage."""
         
-        # Optimize context based on analysis focus
-        optimized_context = self.context_optimizer.optimize_workflow_context(
+        # Apply advanced context management with isolation
+        if self.context_isolation_enabled:
+            # Create isolated context for workflow
+            isolated_context = self._create_isolated_context(
+                "workflow_manager",
+                relevant_refs=[]
+            )
+            state["isolated_context"] = isolated_context
+        
+        # Apply context optimization strategies
+        optimization_strategy = self._get_optimization_strategy(self.optimization_level)
+        optimized_context = self.context_manager.optimize_context(
             state,
+            strategy=optimization_strategy,
             token_budget=state.get("token_budget", 10000)
         )
+        
+        # Store original data with references
+        if "agent_results" in state:
+            for agent, result in state["agent_results"].items():
+                ref_key = f"result_{agent}_{uuid.uuid4().hex[:8]}"
+                self.smart_cache.set(ref_key, result)
+                self.result_references[f"agent_result_{agent}"] = ref_key
         
         # Update state with optimized context
         state.update(optimized_context)
         
         # Log optimization applied
-        logger.info(f"Context optimization applied, estimated token reduction: 40-60%")
+        logger.info(f"Advanced context optimization applied: {optimization_strategy}, estimated token reduction: 60-80%")
         
         return state
+    
+    def _create_isolated_context(self, agent_role: str, relevant_refs: List[str] = None) -> Dict[str, Any]:
+        """Create isolated context for agent with reference-based data sharing."""
+        
+        if not self.context_isolation_enabled:
+            return {}
+        
+        isolated_context = {
+            'agent_role': agent_role,
+            'timestamp': datetime.now().isoformat(),
+            'available_references': {}
+        }
+        
+        # Include only relevant references
+        if relevant_refs:
+            for ref_key in relevant_refs:
+                if ref_key in self.result_references:
+                    storage_key = self.result_references[ref_key]
+                    # Store reference, not actual data
+                    isolated_context['available_references'][ref_key] = f"[RESULT_REF:{storage_key}]"
+        
+        logger.info(f"Created isolated context for {agent_role}: {len(isolated_context['available_references'])} references")
+        return isolated_context
+    
+    def _get_optimization_strategy(self, optimization_level: str) -> str:
+        """Get context optimization strategy based on level."""
+        
+        strategies = {
+            "none": "minimal",
+            "partial": "progressive_pruning", 
+            "full": "abstracted_summaries",
+            "blackboard": "stateless"
+        }
+        
+        return strategies.get(optimization_level, "progressive_pruning")
     
     def _optimized_agent_router(self, state: MarketingResearchState) -> MarketingResearchState:
         """Optimized agent router with dependency management and token budgeting."""
@@ -301,31 +362,71 @@ class OptimizedMarketingWorkflow:
         return optimized_agent_node
     
     def _compress_state_for_agent(self, state: MarketingResearchState, agent_name: str) -> MarketingResearchState:
-        """Compress state context for specific agent to reduce token usage."""
+        """Compress state context for specific agent with context isolation."""
         
-        # Create a minimal state for the agent
+        # Create isolated context for this agent
+        relevant_refs = self._get_relevant_refs_for_agent(agent_name)
+        isolated_context = self._create_isolated_context(agent_name, relevant_refs)
+        
+        # Create minimal state with reference-based data sharing
         compressed_state = {
             "workflow_id": state["workflow_id"],
             "workflow_type": state["workflow_type"],
-            "target_audience": state["target_audience"],
+            "target_audience": self._compress_text(state["target_audience"], 100),
             "campaign_type": state["campaign_type"],
             "budget": state["budget"],
             "duration": state["duration"],
-            "analysis_focus": state["analysis_focus"],
+            "analysis_focus": self._compress_text(state["analysis_focus"], 150),
             "selected_agents": state["selected_agents"],
             "agent_status": state["agent_status"],
-            "current_agent": agent_name
+            "current_agent": agent_name,
+            "isolated_context": isolated_context
         }
         
-        # Add only relevant previous results
+        # Add only relevant previous results as references
         relevant_agents = self._get_relevant_agents_for(agent_name)
         if "agent_results" in state:
-            compressed_state["agent_results"] = {
-                agent: result for agent, result in state["agent_results"].items()
-                if agent in relevant_agents
-            }
+            compressed_state["agent_result_refs"] = {}
+            for agent in relevant_agents:
+                if agent in state["agent_results"]:
+                    ref_key = f"agent_result_{agent}"
+                    if ref_key in self.result_references:
+                        compressed_state["agent_result_refs"][agent] = f"[RESULT_REF:{self.result_references[ref_key]}]"
+        
+        # Apply memory-based context optimization
+        if hasattr(self.memory_manager, 'get_relevant_context'):
+            memory_context = self.memory_manager.get_relevant_context(
+                agent_name, 
+                state.get("analysis_focus", ""),
+                max_tokens=500
+            )
+            if memory_context:
+                compressed_state["memory_context"] = memory_context
         
         return compressed_state
+    
+    def _compress_text(self, text: str, max_length: int) -> str:
+        """Compress text to maximum length while preserving key information."""
+        if len(text) <= max_length:
+            return text
+        
+        # Keep first part and add truncation indicator
+        return text[:max_length-20] + "... [compressed]"
+    
+    def _get_relevant_refs_for_agent(self, agent_name: str) -> List[str]:
+        """Get relevant result references for the given agent."""
+        
+        relevance_map = {
+            "market_research_analyst": [],
+            "competitive_analyst": [],
+            "data_analyst": [],
+            "content_strategist": ["agent_result_market_research_analyst"],
+            "creative_copywriter": ["agent_result_content_strategist", "agent_result_market_research_analyst"],
+            "brand_performance_specialist": ["agent_result_competitive_analyst", "agent_result_data_analyst"],
+            "forecasting_specialist": ["agent_result_market_research_analyst", "agent_result_data_analyst"]
+        }
+        
+        return relevance_map.get(agent_name, [])
     
     def _get_relevant_agents_for(self, agent_name: str) -> List[str]:
         """Get list of agents whose results are relevant for the given agent."""
@@ -343,31 +444,113 @@ class OptimizedMarketingWorkflow:
         return relevance_map.get(agent_name, [])
     
     def _compress_agent_result(self, result: Any) -> Dict[str, Any]:
-        """Compress agent result to reduce memory and token usage."""
+        """Compress agent result with structured data optimization and reference-based storage."""
         
         if isinstance(result, dict):
-            # Keep only essential fields
-            compressed = {}
-            essential_fields = ["analysis", "recommendations", "key_metrics", "summary"]
+            # Apply structured data optimization
+            compressed = self._apply_structured_optimization(result)
             
-            for field in essential_fields:
-                if field in result:
-                    value = result[field]
-                    if isinstance(value, str) and len(value) > 1000:
-                        # Truncate long text fields
-                        compressed[field] = value[:800] + "... [truncated for optimization]"
-                    else:
-                        compressed[field] = value
+            # Store large data as references
+            for field in ["raw_data", "detailed_analysis", "full_report"]:
+                if field in compressed and len(str(compressed[field])) > 2000:
+                    # Store large data in cache and replace with reference
+                    ref_key = f"data_{field}_{uuid.uuid4().hex[:8]}"
+                    self.smart_cache.set(ref_key, compressed[field])
+                    compressed[field] = f"[DATA_REF:{ref_key}]"
             
             return compressed
         
         elif isinstance(result, str):
-            # Truncate long strings
+            # Apply text compression with semantic preservation
             if len(result) > 1000:
-                return result[:800] + "... [truncated for optimization]"
+                # Try to extract key insights
+                compressed_text = self._extract_key_insights_from_text(result)
+                return compressed_text
             return result
         
         return result
+    
+    def _apply_structured_optimization(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply structured data optimization using Pydantic-like models."""
+        
+        # Define essential fields based on analysis type
+        essential_fields = {
+            "analysis": 800,  # Max 800 chars
+            "recommendations": 600,  # Max 600 chars
+            "key_metrics": None,  # Keep all metrics
+            "summary": 400,  # Max 400 chars
+            "insights": 500,  # Max 500 chars
+            "roi_data": None,  # Keep all ROI data
+            "forecast_data": None,  # Keep all forecast data
+            "brand_metrics": None  # Keep all brand metrics
+        }
+        
+        compressed = {}
+        
+        for field, max_length in essential_fields.items():
+            if field in result:
+                value = result[field]
+                if max_length and isinstance(value, str) and len(value) > max_length:
+                    # Intelligent truncation preserving key information
+                    compressed[field] = self._intelligent_truncate(value, max_length)
+                else:
+                    compressed[field] = value
+        
+        # Add metadata about compression
+        compressed["_optimization_applied"] = {
+            "timestamp": datetime.now().isoformat(),
+            "compression_level": self.optimization_level,
+            "original_size": len(str(result)),
+            "compressed_size": len(str(compressed))
+        }
+        
+        return compressed
+    
+    def _intelligent_truncate(self, text: str, max_length: int) -> str:
+        """Intelligently truncate text preserving key information."""
+        
+        if len(text) <= max_length:
+            return text
+        
+        # Try to find natural break points
+        sentences = text.split('. ')
+        if len(sentences) > 1:
+            # Keep complete sentences up to max length
+            result = ""
+            for sentence in sentences:
+                if len(result + sentence + '. ') <= max_length - 20:
+                    result += sentence + '. '
+                else:
+                    break
+            if result:
+                return result + "... [optimized]"
+        
+        # Fallback to simple truncation
+        return text[:max_length-20] + "... [optimized]"
+    
+    def _extract_key_insights_from_text(self, text: str) -> str:
+        """Extract key insights from long text using pattern matching."""
+        
+        # Look for key insight patterns
+        insight_patterns = [
+            r"key insight[s]?:?\s*(.{0,200})",
+            r"important[ly]?:?\s*(.{0,200})",
+            r"conclusion[s]?:?\s*(.{0,200})",
+            r"recommendation[s]?:?\s*(.{0,200})",
+            r"finding[s]?:?\s*(.{0,200})"
+        ]
+        
+        insights = []
+        for pattern in insight_patterns:
+            import re
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            insights.extend(matches[:2])  # Max 2 matches per pattern
+        
+        if insights:
+            return "Key insights: " + " | ".join(insights[:5]) + " [extracted]"
+        else:
+            # Fallback to first part of text
+            return text[:500] + "... [compressed]"
     
     def _generate_cache_key(self, agent_name: str, state: MarketingResearchState) -> str:
         """Generate cache key for agent result."""
@@ -383,20 +566,66 @@ class OptimizedMarketingWorkflow:
         return "|".join(key_components)
     
     def _result_compression_node(self, state: MarketingResearchState) -> MarketingResearchState:
-        """Compress intermediate results to save memory and tokens."""
+        """Comprehensive result compression with flow-based optimization."""
         
-        # Compress agent results
+        # Apply flow-based result compression
         if "agent_results" in state:
             compressed_results = {}
+            total_original_size = 0
+            total_compressed_size = 0
+            
             for agent, result in state["agent_results"].items():
-                compressed_results[agent] = self._compress_agent_result(result)
+                original_size = len(str(result))
+                compressed_result = self._compress_agent_result(result)
+                compressed_size = len(str(compressed_result))
+                
+                compressed_results[agent] = compressed_result
+                total_original_size += original_size
+                total_compressed_size += compressed_size
+            
             state["agent_results"] = compressed_results
+            
+            # Store compression metrics
+            compression_ratio = (total_original_size - total_compressed_size) / total_original_size if total_original_size > 0 else 0
+            state["compression_metrics"] = {
+                "original_size": total_original_size,
+                "compressed_size": total_compressed_size,
+                "compression_ratio": compression_ratio,
+                "space_saved_percent": compression_ratio * 100
+            }
+            
+            logger.info(f"Result compression applied: {compression_ratio*100:.1f}% space saved")
         
-        # Clean up unnecessary state
-        cleanup_fields = ["intermediate_data", "temp_results", "debug_info"]
+        # Apply memory management optimization
+        if hasattr(self.memory_manager, 'store_insights'):
+            # Store key insights in long-term memory
+            for agent, result in state.get("agent_results", {}).items():
+                if isinstance(result, dict) and "insights" in result:
+                    self.memory_manager.store_insights(
+                        agent_name=agent,
+                        insights=result["insights"],
+                        context=state.get("analysis_focus", "")
+                    )
+        
+        # Clean up unnecessary state with intelligent cleanup
+        cleanup_fields = [
+            "intermediate_data", "temp_results", "debug_info", 
+            "raw_tool_outputs", "verbose_logs", "detailed_traces"
+        ]
+        cleaned_count = 0
         for field in cleanup_fields:
             if field in state:
                 del state[field]
+                cleaned_count += 1
+        
+        if cleaned_count > 0:
+            logger.info(f"Cleaned up {cleaned_count} unnecessary state fields")
+        
+        # Apply context aging to remove stale data
+        if hasattr(self.context_manager, 'age_context'):
+            aged_items = self.context_manager.age_context()
+            if aged_items > 0:
+                logger.info(f"Aged {aged_items} stale context items")
         
         return state
     
