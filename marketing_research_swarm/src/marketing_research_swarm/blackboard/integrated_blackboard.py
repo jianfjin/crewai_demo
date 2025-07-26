@@ -124,8 +124,12 @@ class IntegratedBlackboardSystem:
                 self.logger.warning(f"Failed to initialize TokenTracker: {e}")
         
         # Initialize shared state manager
-        self.shared_state_manager = SharedStateManager()
-        self.logger.info("SharedStateManager initialized")
+        if SharedStateManager:
+            self.shared_state_manager = SharedStateManager()
+            self.logger.info("SharedStateManager initialized")
+        else:
+            self.shared_state_manager = None
+            self.logger.warning("SharedStateManager not available - some features may be limited")
         
         # Initialize reference manager for agent interdependency
         from .result_reference_system import get_reference_manager
@@ -224,11 +228,14 @@ class IntegratedBlackboardSystem:
                     }
                     
                     mapped_workflow_type = workflow_type_mapping.get(workflow_type, 'comprehensive_analysis')
-                    shared_workflow_id = self.shared_state_manager.create_workflow(
-                        workflow_type=mapped_workflow_type,
-                        filters=initial_data or {}
-                    )
-                    shared_state = {'shared_workflow_id': shared_workflow_id}
+                    if self.shared_state_manager:
+                        shared_workflow_id = self.shared_state_manager.create_workflow(
+                            workflow_type=mapped_workflow_type,
+                            filters=initial_data or {}
+                        )
+                        shared_state = {'shared_workflow_id': shared_workflow_id}
+                    else:
+                        shared_state = {}
                 except Exception as e:
                     self.logger.warning(f"Shared state manager error: {e}")
             
@@ -334,7 +341,7 @@ class IntegratedBlackboardSystem:
                 try:
                     shared_workflow_id = workflow_context.shared_state.get('shared_workflow_id')
                     if shared_workflow_id:
-                        shared_data = self.shared_state_manager.get_workflow_state(shared_workflow_id)
+                        shared_data = self.shared_state_manager.get_workflow(shared_workflow_id)
                         if shared_data:
                             optimized_context['shared_workflow_state'] = shared_data
                 except Exception as e:
@@ -546,7 +553,7 @@ class IntegratedBlackboardSystem:
                 try:
                     shared_workflow_id = workflow_context.shared_state.get('shared_workflow_id')
                     if shared_workflow_id:
-                        shared_stats = self.shared_state_manager.get_workflow_state(shared_workflow_id)
+                        shared_stats = self.shared_state_manager.get_workflow(shared_workflow_id)
                         summary['managers_status']['shared_state'] = {
                             'active': True,
                             'stats': shared_stats

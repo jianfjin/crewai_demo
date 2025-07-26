@@ -24,16 +24,25 @@ sys.path.append('src')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import LangGraph components
+# Import LangGraph components with fallback
 try:
     from marketing_research_swarm.langgraph_workflow.workflow import MarketingResearchWorkflow
     from marketing_research_swarm.langgraph_workflow.optimized_workflow import OptimizedMarketingWorkflow
     from marketing_research_swarm.langgraph_workflow.state import WorkflowStatus
     from langgraph_config import LangGraphConfig
     LANGGRAPH_AVAILABLE = True
+    logger.info("✅ LangGraph components loaded successfully")
 except ImportError as e:
-    logger.error(f"LangGraph components not available: {e}")
+    logger.warning(f"LangGraph components not available: {e}")
+    logger.info("💡 Falling back to CrewAI optimization system")
     LANGGRAPH_AVAILABLE = False
+    
+    # Import CrewAI fallback components
+    try:
+        from marketing_research_swarm.optimization_manager import OptimizationManager as FallbackOptimizationManager
+        CREWAI_FALLBACK_AVAILABLE = True
+    except ImportError:
+        CREWAI_FALLBACK_AVAILABLE = False
 
 # Import optimization components
 try:
@@ -63,13 +72,16 @@ class LangGraphDashboard:
         self.initialize_components()
     
     def initialize_components(self):
-        """Initialize all dashboard components."""
+        """Initialize all dashboard components with fallback support."""
         try:
             if LANGGRAPH_AVAILABLE:
                 self.config = LangGraphConfig()
                 self.workflow = MarketingResearchWorkflow()
                 self.optimized_workflow = OptimizedMarketingWorkflow()
                 logger.info("✅ LangGraph components initialized")
+            elif CREWAI_FALLBACK_AVAILABLE:
+                self.fallback_manager = FallbackOptimizationManager()
+                logger.info("✅ CrewAI fallback components initialized")
             
             if OPTIMIZATION_AVAILABLE:
                 self.optimization_manager = OptimizationManager()
@@ -80,6 +92,7 @@ class LangGraphDashboard:
                 
         except Exception as e:
             logger.error(f"Failed to initialize components: {e}")
+            logger.info("💡 Some features may be limited without full dependencies")
     
     def render_header(self):
         """Render the dashboard header."""
@@ -93,11 +106,19 @@ class LangGraphDashboard:
         st.title("🚀 LangGraph Marketing Research Dashboard")
         st.markdown("**Advanced workflow orchestration with intelligent token optimization**")
         
-        # System status
+        # System status with fallback indicators
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            status = "🟢 Ready" if LANGGRAPH_AVAILABLE else "🔴 Unavailable"
-            st.metric("LangGraph", status)
+            if LANGGRAPH_AVAILABLE:
+                status = "🟢 Ready"
+                help_text = "LangGraph workflow available"
+            elif CREWAI_FALLBACK_AVAILABLE:
+                status = "🟡 Fallback"
+                help_text = "Using CrewAI optimization system"
+            else:
+                status = "🔴 Unavailable"
+                help_text = "Install langgraph: pip install langgraph"
+            st.metric("Workflow", status, help=help_text)
         with col2:
             status = "🟢 Active" if OPTIMIZATION_AVAILABLE else "🔴 Disabled"
             st.metric("Optimization", status)
@@ -255,10 +276,22 @@ class LangGraphDashboard:
         return defaults.get(analysis_type, ["market_research_analyst", "data_analyst"])
     
     def run_optimized_analysis(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Run analysis with token optimization strategies."""
-        if not LANGGRAPH_AVAILABLE:
-            return {"success": False, "error": "LangGraph not available"}
+        """Run analysis with token optimization strategies using available system."""
         
+        # Check what systems are available
+        if LANGGRAPH_AVAILABLE:
+            return self._run_langgraph_analysis(config)
+        elif CREWAI_FALLBACK_AVAILABLE:
+            return self._run_crewai_fallback_analysis(config)
+        else:
+            return {
+                "success": False, 
+                "error": "No workflow system available. Please install dependencies.",
+                "installation_help": "Run: pip install langgraph langchain-openai"
+            }
+    
+    def _run_langgraph_analysis(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Run analysis using LangGraph workflow."""
         try:
             # Choose workflow based on optimization level
             if config["optimization_level"] in ["none"]:
@@ -296,7 +329,56 @@ class LangGraphDashboard:
             return result
             
         except Exception as e:
-            logger.error(f"Analysis failed: {e}")
+            logger.error(f"LangGraph analysis failed: {e}")
+            return {"success": False, "error": str(e)}
+    
+    def _run_crewai_fallback_analysis(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Run analysis using CrewAI optimization system as fallback."""
+        try:
+            logger.info("Using CrewAI optimization system (LangGraph fallback)")
+            
+            # Get optimized crew instance
+            crew = self.fallback_manager.get_crew_instance(
+                mode=config["optimization_level"],
+                selected_agents=config["selected_agents"]
+            )
+            
+            # Prepare task parameters
+            task_params = {
+                'target_audience': config["target_audience"],
+                'campaign_type': config["campaign_type"],
+                'budget': config["budget"],
+                'duration': config["duration"],
+                'analysis_focus': config["analysis_focus"]
+            }
+            
+            # Run the crew analysis
+            crew_result = crew.kickoff(inputs=task_params)
+            
+            # Extract metrics
+            metrics = self.fallback_manager.extract_metrics_from_output(crew_result)
+            
+            # Format result to match LangGraph format
+            result = {
+                "success": True,
+                "workflow_id": f"crewai_fallback_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                "workflow_engine": "CrewAI (Fallback)",
+                "status": "completed",
+                "agent_results": {"analysis": str(crew_result)},
+                "token_usage": metrics.get("token_usage", {}),
+                "optimization_metrics": metrics.get("optimization_metrics", {}),
+                "execution_time": metrics.get("execution_time", 0),
+                "summary": {
+                    "optimization_level": config["optimization_level"],
+                    "agents_used": len(config["selected_agents"]),
+                    "fallback_used": True
+                }
+            }
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"CrewAI fallback analysis failed: {e}")
             return {"success": False, "error": str(e)}
     
     def _apply_optimization_strategies(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -566,6 +648,32 @@ class LangGraphDashboard:
         
         # Main content area
         st.header("🎯 Marketing Analysis")
+        
+        # Show installation help if needed
+        if not LANGGRAPH_AVAILABLE and not CREWAI_FALLBACK_AVAILABLE:
+            st.error("⚠️ No workflow system available!")
+            st.markdown("""
+            **To fix this issue:**
+            
+            **Option 1: Install LangGraph (Recommended)**
+            ```bash
+            pip install langgraph langchain-openai streamlit plotly pandas
+            ```
+            
+            **Option 2: Check CrewAI Components**
+            - Ensure `optimization_manager.py` is available
+            - Check that `src/marketing_research_swarm/` is in Python path
+            
+            **Quick Test:**
+            ```bash
+            python -c "from marketing_research_swarm.optimization_manager import OptimizationManager; print('✅ CrewAI OK')"
+            ```
+            """)
+            return
+        
+        # Show fallback notice
+        if not LANGGRAPH_AVAILABLE and CREWAI_FALLBACK_AVAILABLE:
+            st.info("💡 **Using CrewAI Optimization System** - LangGraph not available, but all optimization features work through CrewAI fallback!")
         
         # Run analysis button
         if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
