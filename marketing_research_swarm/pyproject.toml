@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 # Corrected dependencies format to be a valid TOML array of strings.
 # Also removed the redundant 'crewai-tools' dependency (see explanation below).
 dependencies = [
-    "crewai[tools]", # Using the PEP 508 standard for extras
+    "crewai[tools]>=0.34.0", # Using the PEP 508 standard for extras
     "langchain-openai>=0.2.1",
     "langchain-community>=0.3.1",
     "pandas>=2.2.0",
