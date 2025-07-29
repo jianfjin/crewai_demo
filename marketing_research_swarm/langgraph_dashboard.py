@@ -1,28 +1,50 @@
 #!/usr/bin/env python3
 """
 LangGraph Marketing Research Dashboard
-
-A Streamlit dashboard that uses the LangGraph workflow instead of CrewAI,
-with integrated token optimization strategies for efficient LLM usage.
+A Streamlit-based web interface for creating and executing marketing research tasks using LangGraph workflow
 """
 
 import streamlit as st
-import sys
+import yaml
 import os
+import sys
 import json
-import logging
-from datetime import datetime
-from typing import Dict, Any, List, Optional
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from datetime import datetime, timedelta
+from typing import Dict, List, Any
+import tempfile
+import uuid
+import logging
 
-# Add the project root to the Python path
-sys.path.append('src')
+# Add the src directory to the Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Import all components with fallback handling
+try:
+    from marketing_research_swarm.crew_with_tracking import MarketingResearchCrewWithTracking
+    from marketing_research_swarm.blackboard.blackboard_crew import create_blackboard_crew
+    from marketing_research_swarm.blackboard.integrated_blackboard import get_integrated_blackboard
+    from marketing_research_swarm.optimization_manager import optimization_manager
+    from marketing_research_swarm.utils.token_tracker import TokenTracker, get_token_tracker, reset_token_tracker
+    from marketing_research_swarm.context.context_manager import AdvancedContextManager, ContextStrategy
+    from marketing_research_swarm.memory.mem0_integration import Mem0Integration
+    from marketing_research_swarm.persistence.analysis_cache import get_analysis_cache
+    from marketing_research_swarm.tools.optimized_tools import (
+        optimized_profitability_analysis, 
+        optimized_roi_calculator, 
+        optimized_budget_planner
+    )
+    from marketing_research_swarm.main import run_specific_analysis
+    CREWAI_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"CrewAI components not available: {e}")
+    CREWAI_AVAILABLE = False
 
 # Import LangGraph components with fallback
 try:
@@ -34,100 +56,243 @@ try:
     logger.info("✅ LangGraph components loaded successfully")
 except ImportError as e:
     logger.warning(f"LangGraph components not available: {e}")
-    logger.info("💡 Falling back to CrewAI optimization system")
     LANGGRAPH_AVAILABLE = False
-    
-    # Import CrewAI fallback components
+
+def _safe_get_nested(data, key1, key2, default=None):
+    """Safely get nested dictionary values with type checking"""
     try:
-        from marketing_research_swarm.optimization_manager import OptimizationManager as FallbackOptimizationManager
-        CREWAI_FALLBACK_AVAILABLE = True
-    except ImportError:
-        CREWAI_FALLBACK_AVAILABLE = False
+        outer_value = data.get(key1, {})
+        if isinstance(outer_value, dict):
+            return outer_value.get(key2, default)
+        else:
+            # If outer_value is not a dict, return default
+            return default
+    except (AttributeError, TypeError):
+        return default
 
-# Import optimization components
-try:
-    from marketing_research_swarm.optimization_manager import OptimizationManager
-    from marketing_research_swarm.utils.token_tracker import TokenTracker
-    from marketing_research_swarm.performance.context_optimizer import ContextOptimizer
-    from marketing_research_swarm.cache.smart_cache import SmartCache
-    OPTIMIZATION_AVAILABLE = True
-except ImportError as e:
-    logger.error(f"Optimization components not available: {e}")
-    OPTIMIZATION_AVAILABLE = False
+# Page configuration
+st.set_page_config(
+    page_title="LangGraph Marketing Research Dashboard",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS for better styling
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .section-header {
+        font-size: 1.5rem;
+        color: #2c3e50;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 0.5rem;
+    }
+    .metric-card {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid #3498db;
+        margin: 0.5rem 0;
+    }
+    .success-message {
+        background-color: #d4edda;
+        color: #155724;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #c3e6cb;
+    }
+    .error-message {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #f5c6cb;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+def load_agents_config():
+    """Load available agents from agents.yaml"""
+    try:
+        agents_path = 'src/marketing_research_swarm/config/agents.yaml'
+        with open(agents_path, 'r') as file:
+            return yaml.safe_load(file)
+    except FileNotFoundError:
+        st.error(f"Agents configuration file not found at {agents_path}")
+        return {}
+    except Exception as e:
+        st.error(f"Error loading agents configuration: {e}")
+        return {}
+
+def create_custom_task_config(selected_agents: List[str], task_params: Dict[str, Any]) -> str:
+    """Create a custom task configuration YAML file"""
+    
+    # Generate unique task ID
+    task_id = str(uuid.uuid4())[:8]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Create task configuration
+    tasks_config = {}
+    
+    # Map agents to their typical tasks
+    agent_task_mapping = {
+        'market_research_analyst': {
+            'description': f"""Conduct comprehensive market research on the {task_params.get('analysis_focus', 'beverage industry')} using the enhanced sales data from {{data_file_path}}. 
+            Focus on {task_params.get('target_audience', 'target audience')} and analyze {', '.join(task_params.get('market_segments', []))} markets. 
+            Examine {', '.join(task_params.get('product_categories', []))} categories and {', '.join(task_params.get('brands', []))} brands.
+            Business objective: {task_params.get('business_objective', 'Optimize business performance')}""",
+            'expected_output': f"A comprehensive market research report with detailed analysis of {task_params.get('analysis_focus', 'market performance')}, competitive landscape insights, and strategic recommendations for {task_params.get('target_audience', 'the target market')}."
+        },
+        'content_strategist': {
+            'description': f"""Develop a comprehensive content strategy for {task_params.get('campaign_type', 'marketing campaign')} targeting {task_params.get('target_audience', 'target audience')}. 
+            Create strategies for {', '.join(task_params.get('market_segments', []))} markets with budget of ${task_params.get('budget', 0):,} over {task_params.get('duration', '6 months')}.
+            Focus on {', '.join(task_params.get('product_categories', []))} categories and competitive landscape: {task_params.get('competitive_landscape', 'competitive market')}.""",
+            'expected_output': f"A comprehensive content strategy document with channel-specific recommendations, campaign ideas for {task_params.get('duration', '6 months')} duration, and brand positioning strategies."
+        },
+        'creative_copywriter': {
+            'description': f"""Create compelling marketing copy for {task_params.get('campaign_type', 'marketing campaigns')} targeting {task_params.get('target_audience', 'target audience')}. 
+            Develop copy that addresses campaign goals: {', '.join(task_params.get('campaign_goals', []))}. 
+            Focus on {', '.join(task_params.get('brands', []))} brands across {', '.join(task_params.get('market_segments', []))} markets.""",
+            'expected_output': f"A collection of marketing copy including campaign materials, brand messaging, and promotional content tailored for {task_params.get('target_audience', 'the target audience')}."
+        },
+        'data_analyst': {
+            'description': f"""Perform comprehensive data analysis on the sales data from {{data_file_path}} focusing on {', '.join(task_params.get('key_metrics', []))}. 
+            Analyze {', '.join(task_params.get('product_categories', []))} categories across {', '.join(task_params.get('market_segments', []))} regions.
+            Generate forecasts for {task_params.get('forecast_periods', 30)} periods with expected revenue of ${task_params.get('expected_revenue', 25000):,}.
+            Include competitive analysis: {task_params.get('competitive_analysis', True)} and market share analysis: {task_params.get('market_share_analysis', True)}.""",
+            'expected_output': f"A detailed data analysis report with forecasts, trend analysis, performance metrics for {', '.join(task_params.get('key_metrics', []))}, and recommendations for optimization."
+        },
+        'campaign_optimizer': {
+            'description': f"""Optimize {task_params.get('campaign_type', 'marketing campaign')} performance with budget allocation of ${task_params.get('budget', 0):,} over {task_params.get('duration', '6 months')}.
+            Focus on {', '.join(task_params.get('campaign_goals', []))} across {', '.join(task_params.get('market_segments', []))} markets.
+            Optimize for {', '.join(task_params.get('key_metrics', []))} with competitive landscape: {task_params.get('competitive_landscape', 'competitive market')}.""",
+            'expected_output': f"A comprehensive optimization strategy with budget allocation recommendations, performance projections, and specific action plans for {task_params.get('duration', '6 months')} campaign duration."
+        },
+        'brand_performance_specialist': {
+            'description': f"""Monitor and analyze brand performance for {', '.join(task_params.get('brands', []))} across {', '.join(task_params.get('market_segments', []))} markets.
+            Track brand metrics including awareness: {task_params.get('brand_metrics', {}).get('brand_awareness', 'N/A')}, 
+            sentiment score: {task_params.get('brand_metrics', {}).get('sentiment_score', 'N/A')}, 
+            market position: {task_params.get('brand_metrics', {}).get('market_position', 'N/A')}.
+            Focus on {', '.join(task_params.get('product_categories', []))} categories and competitive positioning.""",
+            'expected_output': f"A comprehensive brand performance report with market positioning analysis, competitive insights, and strategic recommendations for {', '.join(task_params.get('brands', []))} brands."
+        },
+        'competitive_analyst': {
+            'description': f"""Analyze competitive landscape and market positioning for {', '.join(task_params.get('brands', []))} in the {task_params.get('analysis_focus', 'beverage industry')}.
+            Examine competitive dynamics across {', '.join(task_params.get('market_segments', []))} markets and {', '.join(task_params.get('product_categories', []))} categories.
+            Assess market share, competitive threats, pricing strategies, and positioning opportunities.
+            Focus on competitive intelligence for {task_params.get('target_audience', 'target market')} with budget considerations of ${task_params.get('budget', 0):,}.""",
+            'expected_output': f"A detailed competitive analysis report with market positioning insights, competitive landscape mapping, threat assessment, and strategic recommendations for competitive advantage."
+        },
+        'brand_strategist': {
+            'description': f"""Develop strategic brand recommendations based on competitive analysis and market insights for {', '.join(task_params.get('brands', []))}.
+            Create brand optimization strategies for {', '.join(task_params.get('market_segments', []))} markets with focus on {', '.join(task_params.get('campaign_goals', []))}.
+            Evaluate brand health, identify growth opportunities, and develop actionable strategies for brand performance improvement.
+            Consider budget allocation of ${task_params.get('budget', 0):,} over {task_params.get('duration', '6 months')} for brand initiatives.""",
+            'expected_output': f"A comprehensive brand strategy document with optimization recommendations, growth opportunities, brand health assessment, and actionable strategic plans for brand improvement."
+        },
+        'forecasting_specialist': {
+            'description': f"""Generate accurate sales forecasts and predictive models for {', '.join(task_params.get('brands', []))} across {', '.join(task_params.get('market_segments', []))} markets.
+            Create forecasts for {task_params.get('forecast_periods', 30)} periods with expected revenue targets of ${task_params.get('expected_revenue', 25000):,}.
+            Apply advanced forecasting techniques considering seasonal patterns, market trends, and competitive factors.
+            Focus on {', '.join(task_params.get('product_categories', []))} categories and key metrics: {', '.join(task_params.get('key_metrics', []))}.""",
+            'expected_output': f"A detailed sales forecast report with predictive models, confidence intervals, scenario planning, and strategic recommendations for {task_params.get('forecast_periods', 30)} periods ahead."
+        }
+    }
+    
+    # Create tasks for selected agents in the order they were selected
+    for i, agent in enumerate(selected_agents):
+        if agent in agent_task_mapping:
+            # Use zero-padded index to maintain order
+            task_name = f"{i:02d}_{agent}_task_{task_id}"
+            tasks_config[task_name] = {
+                'description': agent_task_mapping[agent]['description'],
+                'expected_output': agent_task_mapping[agent]['expected_output'],
+                'agent': agent
+            }
+    
+    # Save to temporary file
+    config_dir = 'src/marketing_research_swarm/config'
+    os.makedirs(config_dir, exist_ok=True)
+    
+    config_filename = f"tasks_custom_{timestamp}_{task_id}.yaml"
+    config_path = os.path.join(config_dir, config_filename)
+    
+    with open(config_path, 'w') as file:
+        yaml.dump(tasks_config, file, default_flow_style=False, indent=2)
+    
+    return config_path
 
 
+# Initialize global components
+workflow = None
+config = None
+optimization_manager = None
+token_tracker = None
+context_optimizer = None
+smart_cache = None
+
+def initialize_components():
+    """Initialize all dashboard components with fallback support."""
+    global workflow, config, optimization_manager, token_tracker, context_optimizer, smart_cache
+    
+    try:
+        if LANGGRAPH_AVAILABLE:
+            from langgraph_config import LangGraphConfig
+            config = LangGraphConfig()
+            workflow = MarketingResearchWorkflow()
+            logger.info("✅ LangGraph components initialized")
+        
+        if CREWAI_AVAILABLE:
+            optimization_manager = optimization_manager
+            token_tracker = get_token_tracker()
+            logger.info("✅ Optimization components initialized")
+            
+    except Exception as e:
+        logger.error(f"Failed to initialize components: {e}")
+        logger.info("💡 Some features may be limited without full dependencies")
+    
+def render_header():
+    """Render the dashboard header."""
+    st.title("🚀 LangGraph Marketing Research Dashboard")
+    st.markdown("**Advanced workflow orchestration with intelligent token optimization**")
+    
+    # System status with fallback indicators
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        if LANGGRAPH_AVAILABLE:
+            status = "🟢 Ready"
+            help_text = "LangGraph workflow available"
+        elif CREWAI_AVAILABLE:
+            status = "🟡 Fallback"
+            help_text = "Using CrewAI optimization system"
+        else:
+            status = "🔴 Unavailable"
+            help_text = "Install langgraph: pip install langgraph"
+        st.metric("Workflow", status, help=help_text)
+    with col2:
+        status = "🟢 Active" if CREWAI_AVAILABLE else "🔴 Disabled"
+        st.metric("Optimization", status)
+    with col3:
+        cache_status = "🟢 Active" if smart_cache else "🔴 Disabled"
+        st.metric("Smart Cache", cache_status)
+    with col4:
+        tracker_status = "🟢 Tracking" if token_tracker else "🔴 Disabled"
+        st.metric("Token Tracker", tracker_status)
+    
 class LangGraphDashboard:
-    """Streamlit dashboard for LangGraph workflow with token optimization."""
+    """LangGraph Marketing Research Dashboard class."""
     
     def __init__(self):
         """Initialize the dashboard."""
-        self.workflow = None
-        self.config = None
-        self.optimization_manager = None
-        self.token_tracker = None
-        self.context_optimizer = None
-        self.smart_cache = None
-        
-        # Initialize components
-        self.initialize_components()
-    
-    def initialize_components(self):
-        """Initialize all dashboard components with fallback support."""
-        try:
-            if LANGGRAPH_AVAILABLE:
-                self.config = LangGraphConfig()
-                self.workflow = MarketingResearchWorkflow()
-                self.optimized_workflow = OptimizedMarketingWorkflow()
-                logger.info("✅ LangGraph components initialized")
-            elif CREWAI_FALLBACK_AVAILABLE:
-                self.fallback_manager = FallbackOptimizationManager()
-                logger.info("✅ CrewAI fallback components initialized")
-            
-            if OPTIMIZATION_AVAILABLE:
-                self.optimization_manager = OptimizationManager()
-                self.token_tracker = TokenTracker()
-                self.context_optimizer = ContextOptimizer()
-                self.smart_cache = SmartCache()
-                logger.info("✅ Optimization components initialized")
-                
-        except Exception as e:
-            logger.error(f"Failed to initialize components: {e}")
-            logger.info("💡 Some features may be limited without full dependencies")
-    
-    def render_header(self):
-        """Render the dashboard header."""
-        st.set_page_config(
-            page_title="LangGraph Marketing Research",
-            page_icon="🚀",
-            layout="wide",
-            initial_sidebar_state="expanded"
-        )
-        
-        st.title("🚀 LangGraph Marketing Research Dashboard")
-        st.markdown("**Advanced workflow orchestration with intelligent token optimization**")
-        
-        # System status with fallback indicators
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            if LANGGRAPH_AVAILABLE:
-                status = "🟢 Ready"
-                help_text = "LangGraph workflow available"
-            elif CREWAI_FALLBACK_AVAILABLE:
-                status = "🟡 Fallback"
-                help_text = "Using CrewAI optimization system"
-            else:
-                status = "🔴 Unavailable"
-                help_text = "Install langgraph: pip install langgraph"
-            st.metric("Workflow", status, help=help_text)
-        with col2:
-            status = "🟢 Active" if OPTIMIZATION_AVAILABLE else "🔴 Disabled"
-            st.metric("Optimization", status)
-        with col3:
-            cache_status = "🟢 Active" if self.smart_cache else "🔴 Disabled"
-            st.metric("Smart Cache", cache_status)
-        with col4:
-            tracker_status = "🟢 Tracking" if self.token_tracker else "🔴 Disabled"
-            st.metric("Token Tracker", tracker_status)
+        pass
     
     def render_sidebar(self):
         """Render the sidebar configuration."""
