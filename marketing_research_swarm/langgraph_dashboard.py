@@ -135,19 +135,62 @@ try:
     
     # Create a simple mock workflow for now to avoid CrewAI dependencies
     class MockLangGraphWorkflow:
-        def __init__(self):
+        def __init__(self, checkpoint_path=None, optimization_level="full", **kwargs):
             self.available_agents = ["market_research_analyst", "data_analyst", "content_strategist"]
+            self.checkpoint_path = checkpoint_path
+            self.optimization_level = optimization_level
         
         def run(self, inputs):
             return {
                 "success": True,
-                "workflow_id": "mock_langgraph_workflow",
+                "workflow_id": f"mock_langgraph_workflow_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 "status": "completed",
-                "results": {"message": "LangGraph workflow executed successfully (mock)"}
+                "results": {
+                    "message": "LangGraph workflow executed successfully (mock)",
+                    "optimization_level": self.optimization_level,
+                    "agents_used": self.available_agents[:2],  # Simulate using first 2 agents
+                    "analysis_summary": "Mock analysis completed with LangGraph workflow system"
+                },
+                "agent_results": {
+                    "market_research_analyst": {"analysis": "Market research completed (mock)"},
+                    "data_analyst": {"analysis": "Data analysis completed (mock)"}
+                },
+                "execution_time": 5.0  # Mock execution time
             }
         
-        def execute_workflow(self, **kwargs):
-            return self.run(kwargs)
+        def execute_workflow(self, selected_agents=None, target_audience="", campaign_type="", 
+                           budget=0, duration="", analysis_focus="", analysis_type="marketing_research", **kwargs):
+            # Simulate a more realistic workflow execution
+            workflow_result = {
+                "success": True,
+                "workflow_id": f"mock_langgraph_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                "status": "completed",
+                "final_state": {
+                    "selected_agents": selected_agents or self.available_agents[:2],
+                    "target_audience": target_audience,
+                    "campaign_type": campaign_type,
+                    "budget": budget,
+                    "duration": duration,
+                    "analysis_focus": analysis_focus,
+                    "analysis_type": analysis_type
+                },
+                "summary": {
+                    "workflow_type": analysis_type,
+                    "execution_time": 5.0,
+                    "total_agents": len(selected_agents) if selected_agents else 2,
+                    "completed_agents": len(selected_agents) if selected_agents else 2,
+                    "success_rate": 1.0
+                },
+                "agent_results": {
+                    agent: {"analysis": f"Mock analysis from {agent} for {analysis_type}"}
+                    for agent in (selected_agents or self.available_agents[:2])
+                }
+            }
+            return workflow_result
+        
+        def create_initial_state(self, **kwargs):
+            # Mock state creation
+            return {"workflow_id": f"mock_{datetime.now().strftime('%Y%m%d_%H%M%S')}", **kwargs}
     
     MarketingResearchWorkflow = MockLangGraphWorkflow
     OptimizedMarketingWorkflow = MockLangGraphWorkflow
