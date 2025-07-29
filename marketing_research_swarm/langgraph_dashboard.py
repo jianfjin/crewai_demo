@@ -806,7 +806,7 @@ class LangGraphDashboard:
     
     def run(self):
         """Run the main dashboard application."""
-        self.render_header()
+        render_header()
         
         # Get configuration from sidebar
         config = self.render_sidebar()
