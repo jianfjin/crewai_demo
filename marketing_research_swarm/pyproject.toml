@@ -5,7 +5,7 @@ description = "AI-powered marketing research analysis using CrewAI multi-agent s
 # Corrected authors format to be a list of strings
 authors = [{ name = "jianfjin", email = "jianfjin@gmail.com" }]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13, <3.14"
 
 # Corrected dependencies format to be a valid TOML array of strings.
 # Also removed the redundant 'crewai-tools' dependency (see explanation below).
