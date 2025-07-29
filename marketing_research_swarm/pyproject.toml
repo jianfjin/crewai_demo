@@ -5,12 +5,12 @@ description = "AI-powered marketing research analysis using CrewAI multi-agent s
 # Corrected authors format to be a list of strings
 authors = [{ name = "jianfjin", email = "jianfjin@gmail.com" }]
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10, <3.13"
 
 # Corrected dependencies format to be a valid TOML array of strings.
 # Also removed the redundant 'crewai-tools' dependency (see explanation below).
 dependencies = [
-    "crewai[tools]>=0.35.0", # Using the PEP 508 standard for extras
+    "crewai[tools]>=0.34.0", # Using the PEP 508 standard for extras
     "langchain-openai>=0.2.1",
     "langchain-community>=0.3.1",
     "pandas>=2.2.0",
