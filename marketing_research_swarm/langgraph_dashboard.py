@@ -446,7 +446,7 @@ class LangGraphDashboard:
         # Check what systems are available
         if LANGGRAPH_AVAILABLE:
             return self._run_langgraph_analysis(config)
-        elif CREWAI_FALLBACK_AVAILABLE:
+        elif CREWAI_AVAILABLE:
             return self._run_crewai_fallback_analysis(config)
         else:
             return {
@@ -815,7 +815,7 @@ class LangGraphDashboard:
         st.header("🎯 Marketing Analysis")
         
         # Show installation help if needed
-        if not LANGGRAPH_AVAILABLE and not CREWAI_FALLBACK_AVAILABLE:
+        if not LANGGRAPH_AVAILABLE and not CREWAI_AVAILABLE:
             st.error("⚠️ No workflow system available!")
             st.markdown("""
             **To fix this issue:**
@@ -837,7 +837,7 @@ class LangGraphDashboard:
             return
         
         # Show fallback notice
-        if not LANGGRAPH_AVAILABLE and CREWAI_FALLBACK_AVAILABLE:
+        if not LANGGRAPH_AVAILABLE and CREWAI_AVAILABLE:
             st.info("💡 **Using CrewAI Optimization System** - LangGraph not available, but all optimization features work through CrewAI fallback!")
         
         # Run analysis button
