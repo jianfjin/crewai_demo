@@ -16,25 +16,24 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any
 import tempfile
 import uuid
+import sqlite3
 
 # Add the src directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
+if sqlite3.sqlite_version_info < (3, 35, 0):
+    try:
+        # Try to use pysqlite3 instead
+        import pysqlite3 as sqlite3
+        sys.modules['sqlite3'] = sqlite3
+        print(f"Using pysqlite3 version: {sqlite3.sqlite_version}")
+    except ImportError:
+        print("pysqlite3 not available, using system sqlite3")
+
 try:
-    from marketing_research_swarm.crew_with_tracking import MarketingResearchCrewWithTracking
-    from marketing_research_swarm.blackboard.blackboard_crew import create_blackboard_crew
-    from marketing_research_swarm.blackboard.integrated_blackboard import get_integrated_blackboard
     from marketing_research_swarm.optimization_manager import optimization_manager
     from marketing_research_swarm.utils.token_tracker import TokenTracker, get_token_tracker, reset_token_tracker
-    from marketing_research_swarm.context.context_manager import AdvancedContextManager, ContextStrategy
-    from marketing_research_swarm.memory.mem0_integration import Mem0Integration
-    from marketing_research_swarm.persistence.analysis_cache import get_analysis_cache
-    from marketing_research_swarm.tools.optimized_tools import (
-        optimized_profitability_analysis, 
-        optimized_roi_calculator, 
-        optimized_budget_planner
-    )
-    from marketing_research_swarm.main import run_specific_analysis
+
 except ImportError as e:
     st.error(f"Import error: {e}")
     st.error("Please ensure you're running from the correct directory and all dependencies are installed.")

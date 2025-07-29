@@ -30,6 +30,7 @@ dependencies = [
     "langchain-ollama>=0.3.3",
     "streamlit>=1.46.1",
     "uuid>=1.30",
+    "pysqlite3-binary",
 ]
 
 [project.scripts]
