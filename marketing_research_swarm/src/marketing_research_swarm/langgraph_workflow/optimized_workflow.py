@@ -13,7 +13,7 @@ from datetime import datetime
 import uuid
 
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.sqlite import SqliteSaver
+# from langgraph.checkpoint.sqlite import SqliteSaver
 
 from .state import MarketingResearchState, WorkflowStatus, AgentStatus
 from .agents import AGENT_NODES
@@ -37,7 +37,8 @@ class OptimizedMarketingWorkflow:
     def __init__(self, checkpoint_path: Optional[str] = None, optimization_level: str = "full"):
         """Initialize the optimized workflow."""
         self.checkpoint_path = checkpoint_path or "cache/workflow_checkpoints.db"
-        self.checkpointer = SqliteSaver.from_conn_string(self.checkpoint_path)
+        # self.checkpointer = SqliteSaver.from_conn_string(self.checkpoint_path)
+        self.checkpointer = None
         self.blackboard = get_global_blackboard()
         self.optimization_level = optimization_level
         

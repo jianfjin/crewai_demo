@@ -82,6 +82,27 @@ optimization_manager = None
 token_tracker = None
 smart_cache = None
 
+# Create MockOptimizationManager class first
+class MockOptimizationManager:
+    def run_analysis(self, *args, **kwargs):
+        return {"error": "OptimizationManager not available", "results": {}}
+    
+    def run_analysis_with_optimization(self, *args, **kwargs):
+        return {"error": "OptimizationManager not available", "results": {}}
+    
+    def get_token_usage(self):
+        return {"total_tokens": 0, "cost": 0.0}
+
+# Try to import and instantiate OptimizationManager first
+try:
+    from marketing_research_swarm.optimization_manager import OptimizationManager
+    optimization_manager = OptimizationManager()
+    logger.info(f"✅ Optimization manager imported: {type(optimization_manager)}")
+except Exception as opt_e:
+    logger.error(f"Optimization manager not available: {opt_e}")
+    optimization_manager = MockOptimizationManager()
+    logger.info(f"✅ Using MockOptimizationManager: {type(optimization_manager)}")
+
 # Import all components with fallback handling
 try:
     from marketing_research_swarm.crew_with_tracking import MarketingResearchCrewWithTracking
@@ -98,29 +119,10 @@ try:
     )
     from marketing_research_swarm.main import run_specific_analysis
     
-    # Try to import and instantiate OptimizationManager
-    try:
-        from marketing_research_swarm.optimization_manager import OptimizationManager
-        optimization_manager = OptimizationManager()
-        logger.info(f"✅ Optimization manager imported: {type(optimization_manager)}")
-    except Exception as opt_e:
-        logger.error(f"Optimization manager not available: {opt_e}")
-        optimization_manager = None
-        # Create a fallback mock optimization manager
-        class MockOptimizationManager:
-            def run_analysis(self, *args, **kwargs):
-                return {"error": "OptimizationManager not available", "results": {}}
-            
-            def get_token_usage(self):
-                return {"total_tokens": 0, "cost": 0.0}
-        
-        optimization_manager = MockOptimizationManager()
-    
     CREWAI_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"CrewAI components not available: {e}")
     CREWAI_AVAILABLE = False
-    optimization_manager = None
 
 # Import LangGraph components with fallback
 try:
@@ -924,8 +926,15 @@ class LangGraphDashboard:
             optimization_level = opt_settings.get("optimization_level", "blackboard")
             
             # Check if optimization_manager is available
+            global optimization_manager
             if not optimization_manager:
                 logger.error("Optimization manager not available")
+                # Try to recreate MockOptimizationManager if it's None
+                optimization_manager = MockOptimizationManager()
+                logger.info("✅ Recreated MockOptimizationManager for analysis")
+            
+            if not optimization_manager:
+                logger.error("Optimization manager still not available after recreation")
                 return {"success": False, "error": "Optimization manager not initialized. Please check CrewAI installation."}
             
             # Use optimization manager to run analysis

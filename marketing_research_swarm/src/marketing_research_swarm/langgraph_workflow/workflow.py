@@ -12,7 +12,8 @@ from datetime import datetime
 import uuid
 
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.sqlite import SqliteSaver
+# SqliteSaver temporarily disabled - using in-memory state for now
+# from langgraph_checkpoint.sqlite import SqliteSaver
 
 from .state import MarketingResearchState, WorkflowStatus, AgentStatus
 from .agents import AGENT_NODES
@@ -30,7 +31,8 @@ class MarketingResearchWorkflow:
     def __init__(self, checkpoint_path: Optional[str] = None):
         """Initialize the workflow with optional checkpointing."""
         self.checkpoint_path = checkpoint_path or "cache/workflow_checkpoints.db"
-        self.checkpointer = SqliteSaver.from_conn_string(self.checkpoint_path)
+        # self.checkpointer = SqliteSaver.from_conn_string(self.checkpoint_path)
+        self.checkpointer = None
         self.blackboard = get_global_blackboard()
         
         # Available agent types
