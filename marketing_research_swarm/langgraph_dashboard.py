@@ -53,12 +53,16 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Global variables for components
+optimization_manager = None
+token_tracker = None
+smart_cache = None
+
 # Import all components with fallback handling
 try:
     from marketing_research_swarm.crew_with_tracking import MarketingResearchCrewWithTracking
     from marketing_research_swarm.blackboard.blackboard_crew import create_blackboard_crew
     from marketing_research_swarm.blackboard.integrated_blackboard import get_integrated_blackboard
-    from marketing_research_swarm.optimization_manager import optimization_manager
     from marketing_research_swarm.utils.token_tracker import TokenTracker, get_token_tracker, reset_token_tracker
     from marketing_research_swarm.context.context_manager import AdvancedContextManager, ContextStrategy
     from marketing_research_swarm.memory.mem0_integration import Mem0Integration
@@ -69,10 +73,21 @@ try:
         optimized_budget_planner
     )
     from marketing_research_swarm.main import run_specific_analysis
+    
+    # Try to import and instantiate OptimizationManager
+    try:
+        from marketing_research_swarm.optimization_manager import OptimizationManager
+        optimization_manager = OptimizationManager()
+        logger.info(f"✅ Optimization manager imported: {type(optimization_manager)}")
+    except Exception as opt_e:
+        logger.warning(f"OptimizationManager not available: {opt_e}")
+        optimization_manager = None
+    
     CREWAI_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"CrewAI components not available: {e}")
     CREWAI_AVAILABLE = False
+    optimization_manager = None
 
 # Import LangGraph components with fallback
 try:
@@ -279,9 +294,14 @@ def initialize_components():
             logger.info("✅ LangGraph components initialized")
         
         if CREWAI_AVAILABLE:
-            optimization_manager = optimization_manager
+            # Set global variables
+            global optimization_manager, token_tracker, smart_cache
             token_tracker = get_token_tracker()
+            smart_cache = get_analysis_cache()
             logger.info("✅ Optimization components initialized")
+            logger.info(f"   - Optimization manager: {optimization_manager is not None}")
+            logger.info(f"   - Token tracker: {token_tracker is not None}")
+            logger.info(f"   - Smart cache: {smart_cache is not None}")
             
     except Exception as e:
         logger.error(f"Failed to initialize components: {e}")
@@ -869,6 +889,11 @@ class LangGraphDashboard:
             # Get optimization level from settings
             opt_settings = config.get("optimization_settings", {})
             optimization_level = opt_settings.get("optimization_level", "blackboard")
+            
+            # Check if optimization_manager is available
+            if not optimization_manager:
+                logger.error("Optimization manager not available")
+                return {"success": False, "error": "Optimization manager not initialized. Please check CrewAI installation."}
             
             # Use optimization manager to run analysis
             analysis_result = optimization_manager.run_analysis_with_optimization(
