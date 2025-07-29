@@ -17,6 +17,34 @@ from typing import Dict, List, Any
 import tempfile
 import uuid
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# LangSmith configuration
+try:
+    from langsmith import Client
+    from langchain.callbacks.tracers import LangChainTracer
+    from langchain.callbacks.manager import CallbackManager
+    
+    # Initialize LangSmith client
+    LANGSMITH_API_KEY = os.getenv("LANGCHAIN_API_KEY")
+    if LANGSMITH_API_KEY:
+        langsmith_client = Client(api_key=LANGSMITH_API_KEY)
+        LANGSMITH_AVAILABLE = True
+        logger = logging.getLogger(__name__)
+        logger.info("✅ LangSmith monitoring enabled")
+    else:
+        LANGSMITH_AVAILABLE = False
+        langsmith_client = None
+        logger = logging.getLogger(__name__)
+        logger.warning("⚠️ LANGCHAIN_API_KEY not found - LangSmith monitoring disabled")
+except ImportError as e:
+    LANGSMITH_AVAILABLE = False
+    langsmith_client = None
+    logger = logging.getLogger(__name__)
+    logger.warning(f"⚠️ LangSmith not available: {e}")
 
 # Add the src directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -259,13 +287,85 @@ def initialize_components():
         logger.error(f"Failed to initialize components: {e}")
         logger.info("💡 Some features may be limited without full dependencies")
     
+def get_langsmith_run_url(run_id: str) -> str:
+    """Generate LangSmith run URL for monitoring."""
+    if LANGSMITH_AVAILABLE and run_id:
+        return f"https://smith.langchain.com/o/default/projects/p/default/r/{run_id}"
+    return ""
+
+def create_langsmith_tracer(project_name: str = "marketing-research-dashboard") -> CallbackManager:
+    """Create LangSmith tracer for monitoring."""
+    if not LANGSMITH_AVAILABLE:
+        return None
+    
+    try:
+        # Set environment variables for LangSmith
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGCHAIN_PROJECT"] = project_name
+        
+        # Create tracer
+        tracer = LangChainTracer(project_name=project_name)
+        callback_manager = CallbackManager([tracer])
+        
+        return callback_manager
+    except Exception as e:
+        logger.error(f"Failed to create LangSmith tracer: {e}")
+        return None
+
+def monitor_langsmith_runs(project_name: str = "marketing-research-dashboard"):
+    """Display recent LangSmith runs in the dashboard."""
+    if not LANGSMITH_AVAILABLE:
+        return
+    
+    try:
+        # Get recent runs from LangSmith
+        runs = langsmith_client.list_runs(
+            project_name=project_name,
+            limit=10,
+            order="desc"
+        )
+        
+        if runs:
+            st.subheader("🔍 Recent LangSmith Runs")
+            
+            runs_data = []
+            for run in runs:
+                runs_data.append({
+                    "Run ID": run.id[:8] + "...",
+                    "Name": run.name or "Unknown",
+                    "Status": "✅ Success" if run.status == "success" else "❌ Error" if run.status == "error" else "🔄 Running",
+                    "Start Time": run.start_time.strftime("%H:%M:%S") if run.start_time else "N/A",
+                    "Duration": f"{run.total_time:.2f}s" if run.total_time else "N/A",
+                    "Tokens": run.total_tokens if hasattr(run, 'total_tokens') else "N/A",
+                    "URL": get_langsmith_run_url(run.id)
+                })
+            
+            df = pd.DataFrame(runs_data)
+            
+            # Display as interactive table
+            for idx, row in df.iterrows():
+                with st.expander(f"🔗 {row['Name']} - {row['Status']}"):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Duration", row['Duration'])
+                    with col2:
+                        st.metric("Start Time", row['Start Time'])
+                    with col3:
+                        st.metric("Tokens", row['Tokens'])
+                    
+                    if row['URL']:
+                        st.markdown(f"[🔗 View in LangSmith]({row['URL']})")
+                        
+    except Exception as e:
+        st.warning(f"Could not fetch LangSmith runs: {e}")
+
 def render_header():
     """Render the dashboard header."""
     st.title("🚀 LangGraph Marketing Research Dashboard")
     st.markdown("**Advanced workflow orchestration with intelligent token optimization**")
     
     # System status with fallback indicators
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         if LANGGRAPH_AVAILABLE:
             status = "🟢 Ready"
@@ -286,6 +386,9 @@ def render_header():
     with col4:
         tracker_status = "🟢 Tracking" if token_tracker else "🔴 Disabled"
         st.metric("Token Tracker", tracker_status)
+    with col5:
+        langsmith_status = "🟢 Monitoring" if LANGSMITH_AVAILABLE else "🔴 Disabled"
+        st.metric("LangSmith", langsmith_status)
     
 class LangGraphDashboard:
     """LangGraph Marketing Research Dashboard class."""
@@ -648,40 +751,87 @@ class LangGraphDashboard:
             }
     
     def _run_langgraph_analysis(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Run analysis using LangGraph workflow."""
+        """Run analysis using LangGraph workflow with LangSmith monitoring."""
         try:
+            # Create LangSmith tracer for monitoring
+            callback_manager = create_langsmith_tracer("marketing-research-dashboard")
+            
             # Choose workflow based on optimization level
-            if config["optimization_level"] in ["none"]:
-                workflow = self.workflow
+            opt_settings = config.get("optimization_settings", {})
+            optimization_level = opt_settings.get("optimization_level", "none")
+            
+            if optimization_level in ["none"]:
+                workflow = MarketingResearchWorkflow()
                 logger.info("Using standard LangGraph workflow")
             else:
                 # Use optimized workflow for token reduction
-                workflow = OptimizedMarketingWorkflow(optimization_level=config["optimization_level"])
-                logger.info(f"Using optimized LangGraph workflow with level: {config['optimization_level']}")
+                workflow = OptimizedMarketingWorkflow(optimization_level=optimization_level)
+                logger.info(f"Using optimized LangGraph workflow with level: {optimization_level}")
             
             # Apply optimization strategies
             optimized_config = self._apply_optimization_strategies(config)
             
-            # Execute the optimized workflow
+            # Store run information for monitoring
+            run_metadata = {
+                "optimization_level": optimization_level,
+                "selected_agents": optimized_config["selected_agents"],
+                "target_audience": optimized_config["target_audience"],
+                "campaign_type": optimized_config["campaign_type"],
+                "budget": optimized_config["budget"],
+                "langsmith_enabled": LANGSMITH_AVAILABLE
+            }
+            
+            # Execute the optimized workflow with LangSmith tracing
             if hasattr(workflow, 'execute_optimized_workflow'):
-                result = workflow.execute_optimized_workflow(
-                    selected_agents=optimized_config["selected_agents"],
-                    target_audience=optimized_config["target_audience"],
-                    campaign_type=optimized_config["campaign_type"],
-                    budget=optimized_config["budget"],
-                    duration=optimized_config["duration"],
-                    analysis_focus=optimized_config["analysis_focus"],
-                    optimization_config=optimized_config
-                )
+                if callback_manager:
+                    result = workflow.execute_optimized_workflow(
+                        selected_agents=optimized_config["selected_agents"],
+                        target_audience=optimized_config["target_audience"],
+                        campaign_type=optimized_config["campaign_type"],
+                        budget=optimized_config["budget"],
+                        duration=optimized_config["duration"],
+                        analysis_focus=optimized_config["analysis_focus"],
+                        optimization_config=optimized_config,
+                        callbacks=callback_manager.handlers
+                    )
+                else:
+                    result = workflow.execute_optimized_workflow(
+                        selected_agents=optimized_config["selected_agents"],
+                        target_audience=optimized_config["target_audience"],
+                        campaign_type=optimized_config["campaign_type"],
+                        budget=optimized_config["budget"],
+                        duration=optimized_config["duration"],
+                        analysis_focus=optimized_config["analysis_focus"],
+                        optimization_config=optimized_config
+                    )
             else:
-                result = workflow.execute_workflow(
-                    selected_agents=optimized_config["selected_agents"],
-                    target_audience=optimized_config["target_audience"],
-                    campaign_type=optimized_config["campaign_type"],
-                    budget=optimized_config["budget"],
-                    duration=optimized_config["duration"],
-                    analysis_focus=optimized_config["analysis_focus"]
-                )
+                if callback_manager:
+                    result = workflow.execute_workflow(
+                        selected_agents=optimized_config["selected_agents"],
+                        target_audience=optimized_config["target_audience"],
+                        campaign_type=optimized_config["campaign_type"],
+                        budget=optimized_config["budget"],
+                        duration=optimized_config["duration"],
+                        analysis_focus=optimized_config["analysis_focus"],
+                        callbacks=callback_manager.handlers
+                    )
+                else:
+                    result = workflow.execute_workflow(
+                        selected_agents=optimized_config["selected_agents"],
+                        target_audience=optimized_config["target_audience"],
+                        campaign_type=optimized_config["campaign_type"],
+                        budget=optimized_config["budget"],
+                        duration=optimized_config["duration"],
+                        analysis_focus=optimized_config["analysis_focus"]
+                    )
+            
+            # Add monitoring metadata to result
+            if isinstance(result, dict):
+                result["langsmith_monitoring"] = {
+                    "enabled": LANGSMITH_AVAILABLE,
+                    "project": "marketing-research-dashboard",
+                    "run_metadata": run_metadata
+                }
             
             return result
             
@@ -694,26 +844,47 @@ class LangGraphDashboard:
         try:
             logger.info("Using CrewAI optimization system (LangGraph fallback)")
             
-            # Get optimized crew instance
-            crew = self.fallback_manager.get_crew_instance(
-                mode=config["optimization_level"],
-                selected_agents=config["selected_agents"]
-            )
-            
-            # Prepare task parameters
-            task_params = {
+            # Prepare inputs for optimization manager
+            inputs = {
                 'target_audience': config["target_audience"],
                 'campaign_type': config["campaign_type"],
                 'budget': config["budget"],
                 'duration': config["duration"],
-                'analysis_focus': config["analysis_focus"]
+                'analysis_focus': config["analysis_focus"],
+                'business_objective': config.get("business_objective", ""),
+                'competitive_landscape': config.get("competitive_landscape", ""),
+                'market_segments': config.get("market_segments", []),
+                'product_categories': config.get("product_categories", []),
+                'key_metrics': config.get("key_metrics", []),
+                'brands': config.get("brands", []),
+                'campaign_goals': config.get("campaign_goals", []),
+                'forecast_periods': config.get("forecast_periods", 30),
+                'expected_revenue': config.get("expected_revenue", 25000),
+                'brand_metrics': config.get("brand_metrics", {}),
+                'competitive_analysis': config.get("competitive_analysis", True),
+                'market_share_analysis': config.get("market_share_analysis", True),
+                'data_file_path': "data/beverage_sales.csv"  # Default data path
             }
             
-            # Run the crew analysis
-            crew_result = crew.kickoff(inputs=task_params)
+            # Get optimization level from settings
+            opt_settings = config.get("optimization_settings", {})
+            optimization_level = opt_settings.get("optimization_level", "blackboard")
             
-            # Extract metrics
-            metrics = self.fallback_manager.extract_metrics_from_output(crew_result)
+            # Use optimization manager to run analysis
+            analysis_result = optimization_manager.run_analysis_with_optimization(
+                inputs=inputs,
+                optimization_level=optimization_level,
+                custom_tasks_config_path=None  # Will use default tasks
+            )
+            
+            if "error" in analysis_result:
+                logger.error(f"Optimization manager failed: {analysis_result['error']}")
+                return {"success": False, "error": analysis_result['error']}
+            
+            # Extract results and metrics
+            crew_result = analysis_result.get("result", "No result available")
+            metrics = analysis_result.get("metrics", {})
+            optimization_record = analysis_result.get("optimization_record", {})
             
             # Format result to match LangGraph format
             result = {
@@ -722,20 +893,29 @@ class LangGraphDashboard:
                 "workflow_engine": "CrewAI (Fallback)",
                 "status": "completed",
                 "agent_results": {"analysis": str(crew_result)},
-                "token_usage": metrics.get("token_usage", {}),
-                "optimization_metrics": metrics.get("optimization_metrics", {}),
-                "execution_time": metrics.get("execution_time", 0),
+                "token_usage": metrics,
+                "optimization_metrics": optimization_record,
+                "execution_time": analysis_result.get("duration_seconds", 0),
                 "summary": {
-                    "optimization_level": config["optimization_level"],
+                    "optimization_level": optimization_level,
                     "agents_used": len(config["selected_agents"]),
-                    "fallback_used": True
+                    "fallback_used": True,
+                    "total_tokens": metrics.get("total_tokens", 0),
+                    "total_cost": metrics.get("total_cost", 0.0)
                 }
             }
+            
+            logger.info(f"✅ CrewAI fallback analysis completed successfully")
+            logger.info(f"   - Tokens used: {metrics.get('total_tokens', 0):,}")
+            logger.info(f"   - Cost: ${metrics.get('total_cost', 0):.4f}")
+            logger.info(f"   - Duration: {analysis_result.get('duration_seconds', 0):.1f}s")
             
             return result
             
         except Exception as e:
             logger.error(f"CrewAI fallback analysis failed: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return {"success": False, "error": str(e)}
     
     def _apply_optimization_strategies(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -1025,6 +1205,33 @@ class LangGraphDashboard:
         # Main content area
         st.header("🎯 Marketing Analysis")
         
+        # LangSmith Monitoring Section
+        if LANGSMITH_AVAILABLE:
+            with st.expander("🔍 LangSmith Monitoring", expanded=False):
+                st.markdown("**Real-time analysis monitoring with LangSmith**")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🔄 Refresh Runs", help="Refresh LangSmith run data"):
+                        st.rerun()
+                
+                with col2:
+                    project_name = st.text_input(
+                        "Project Name", 
+                        value="marketing-research-dashboard",
+                        help="LangSmith project name for monitoring"
+                    )
+                
+                # Display recent runs
+                monitor_langsmith_runs(project_name)
+                
+                # LangSmith project link
+                if project_name:
+                    langsmith_url = f"https://smith.langchain.com/o/default/projects/p/{project_name}"
+                    st.markdown(f"[🔗 View Full Project in LangSmith]({langsmith_url})")
+        else:
+            st.info("💡 **Enable LangSmith Monitoring**: Set `LANGCHAIN_API_KEY` in your environment to monitor analysis runs in real-time.")
+        
         # Show installation help if needed
         if not LANGGRAPH_AVAILABLE and not CREWAI_AVAILABLE:
             st.error("⚠️ No workflow system available!")
@@ -1057,30 +1264,47 @@ class LangGraphDashboard:
                 st.error("Please select at least one agent to run the analysis.")
                 return
             
-            # Show progress
+            # Show progress with LangSmith monitoring
             with st.spinner("Running optimized analysis..."):
                 progress_bar = st.progress(0)
                 status_text = st.empty()
                 
-                # Update progress (simulated for now)
+                # LangSmith monitoring status
+                if LANGSMITH_AVAILABLE:
+                    langsmith_status = st.empty()
+                    langsmith_status.info("🔍 **LangSmith Monitoring**: Analysis will be tracked in real-time")
+                
+                # Update progress with LangSmith integration
                 for i in range(100):
                     progress_bar.progress(i + 1)
                     if i < 20:
-                        status_text.text("Initializing workflow...")
+                        status_text.text("🔧 Initializing workflow...")
+                        if LANGSMITH_AVAILABLE and i == 10:
+                            langsmith_status.info("🔍 **LangSmith**: Creating trace session...")
                     elif i < 40:
-                        status_text.text("Applying optimization strategies...")
+                        status_text.text("⚡ Applying optimization strategies...")
+                        if LANGSMITH_AVAILABLE and i == 30:
+                            langsmith_status.info("🔍 **LangSmith**: Monitoring agent initialization...")
                     elif i < 60:
-                        status_text.text("Executing agents...")
+                        status_text.text("🤖 Executing agents...")
+                        if LANGSMITH_AVAILABLE and i == 50:
+                            langsmith_status.info("🔍 **LangSmith**: Tracking agent execution and token usage...")
                     elif i < 80:
-                        status_text.text("Processing results...")
+                        status_text.text("📊 Processing results...")
+                        if LANGSMITH_AVAILABLE and i == 70:
+                            langsmith_status.info("🔍 **LangSmith**: Recording performance metrics...")
                     else:
-                        status_text.text("Finalizing analysis...")
+                        status_text.text("✅ Finalizing analysis...")
+                        if LANGSMITH_AVAILABLE and i == 90:
+                            langsmith_status.success("🔍 **LangSmith**: Analysis trace completed!")
                 
                 # Run the actual analysis
                 result = self.run_optimized_analysis(config)
                 
                 progress_bar.empty()
                 status_text.empty()
+                if LANGSMITH_AVAILABLE:
+                    langsmith_status.empty()
             
             # Store result in session state
             st.session_state["last_result"] = result
