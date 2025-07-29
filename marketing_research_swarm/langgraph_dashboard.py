@@ -9,15 +9,39 @@ import yaml
 import os
 import sys
 import json
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
 import tempfile
 import uuid
 import logging
 from dotenv import load_dotenv
+
+# Optional imports with fallbacks
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
+    # Create a mock pandas for basic functionality
+    class MockDataFrame:
+        def __init__(self, data=None):
+            self.data = data or {}
+        def to_dict(self, orient='records'):
+            return [self.data] if self.data else []
+    
+    class MockPandas:
+        DataFrame = MockDataFrame
+    
+    pd = MockPandas()
+
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    px = None
+    go = None
 
 # Load environment variables
 load_dotenv()
@@ -80,8 +104,17 @@ try:
         optimization_manager = OptimizationManager()
         logger.info(f"✅ Optimization manager imported: {type(optimization_manager)}")
     except Exception as opt_e:
-        logger.warning(f"OptimizationManager not available: {opt_e}")
+        logger.error(f"Optimization manager not available: {opt_e}")
         optimization_manager = None
+        # Create a fallback mock optimization manager
+        class MockOptimizationManager:
+            def run_analysis(self, *args, **kwargs):
+                return {"error": "OptimizationManager not available", "results": {}}
+            
+            def get_token_usage(self):
+                return {"total_tokens": 0, "cost": 0.0}
+        
+        optimization_manager = MockOptimizationManager()
     
     CREWAI_AVAILABLE = True
 except ImportError as e:
