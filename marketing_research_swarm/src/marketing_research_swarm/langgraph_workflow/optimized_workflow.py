@@ -17,7 +17,7 @@ from langgraph.graph import StateGraph, END
 
 from .state import MarketingResearchState, WorkflowStatus, AgentStatus
 from .agents import AGENT_NODES
-from ..blackboard.integrated_blackboard import get_global_blackboard
+from ..blackboard.integrated_blackboard import get_integrated_blackboard
 from ..optimization_manager import OptimizationManager
 from ..utils.token_tracker import TokenTracker
 from ..performance.context_optimizer import ContextOptimizer
@@ -39,7 +39,7 @@ class OptimizedMarketingWorkflow:
         self.checkpoint_path = checkpoint_path or "cache/workflow_checkpoints.db"
         # self.checkpointer = SqliteSaver.from_conn_string(self.checkpoint_path)
         self.checkpointer = None
-        self.blackboard = get_global_blackboard()
+        self.blackboard = get_integrated_blackboard()
         self.optimization_level = optimization_level
         
         # Initialize optimization components
