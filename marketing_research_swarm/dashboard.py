@@ -102,7 +102,7 @@ st.markdown("""
 def load_agents_config():
     """Load available agents from agents.yaml"""
     try:
-        agents_path = 'src/marketing_research_swarm/config/agents.yaml'
+        agents_path = 'marketing_research_swarm/src/marketing_research_swarm/config/agents.yaml'
         with open(agents_path, 'r') as file:
             return yaml.safe_load(file)
     except FileNotFoundError:
