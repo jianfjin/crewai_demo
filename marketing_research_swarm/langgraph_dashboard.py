@@ -291,11 +291,11 @@ try:
         # Test instantiation to make sure they work
         test_workflow = RealOptimizedMarketingWorkflow()
         
-        # Use real workflows if available
+        # Use the optimized workflows since they don't have numpy dependencies
         MarketingResearchWorkflow = RealMarketingResearchWorkflow
         OptimizedMarketingWorkflow = RealOptimizedMarketingWorkflow
-        logger.info("✅ Using real LangGraph workflows")
-        st.info("✅ Using real LangGraph workflows")
+        logger.info("✅ Using real optimized LangGraph workflows (numpy-free)")
+        st.info("✅ Using optimized LangGraph workflows with advanced features")
         
     except Exception as workflow_import_error:
         logger.warning(f"Real LangGraph workflows not available: {workflow_import_error}")
@@ -405,40 +405,39 @@ try:
             def create_initial_state(self, **kwargs):
                 return {"workflow_id": f"langgraph_{datetime.now().strftime('%Y%m%d_%H%M%S')}", **kwargs}
         
-        # Try to use numpy-free workflow instead of mock
+        # Try to use optimized workflow instead of mock
         try:
-            from marketing_research_swarm.langgraph_workflow.numpy_free_workflow import NumpyFreeLangGraphWorkflow
+            from marketing_research_swarm.langgraph_workflow.optimized_workflow import OptimizedMarketingWorkflow
             
-            class NumpyFreeWorkflowWrapper:
+            class OptimizedWorkflowWrapper:
                 def __init__(self, checkpoint_path=None, optimization_level="full", **kwargs):
-                    self.workflow = NumpyFreeLangGraphWorkflow()
+                    self.workflow = OptimizedMarketingWorkflow(checkpoint_path=checkpoint_path, optimization_level=optimization_level)
                     self.available_agents = ["market_research_analyst", "data_analyst", "content_strategist", 
                                            "competitive_analyst", "brand_performance_specialist", "forecasting_specialist"]
                     self.checkpoint_path = checkpoint_path
                     self.optimization_level = optimization_level
                 
                 def run(self, inputs, optimization_level="none"):
-                    # Convert inputs to proper format for numpy-free workflow
+                    # Convert inputs to proper format for optimized workflow
                     formatted_inputs = self._format_inputs(inputs)
-                    return self.workflow.execute_workflow(formatted_inputs, optimization_level)
+                    return self.workflow.execute_optimized_workflow(**formatted_inputs, optimization_level=optimization_level)
                 
                 def execute_workflow(self, selected_agents=None, target_audience="", campaign_type="", 
                                    budget=0, duration="", analysis_focus="", optimization_level="none", **kwargs):
-                    # Create properly formatted inputs dictionary
-                    inputs = {
-                        'target_audience': target_audience,
-                        'campaign_type': campaign_type,
-                        'budget': budget,
-                        'duration': duration,
-                        'analysis_focus': analysis_focus,
-                        'selected_agents': selected_agents or ["market_research_analyst", "data_analyst"]
-                    }
-                    # Add any additional kwargs
-                    inputs.update(kwargs)
-                    return self.workflow.execute_workflow(inputs, optimization_level)
+                    # Use the optimized workflow's execute_optimized_workflow method
+                    return self.workflow.execute_optimized_workflow(
+                        selected_agents=selected_agents or ["market_research_analyst", "data_analyst"],
+                        target_audience=target_audience,
+                        campaign_type=campaign_type,
+                        budget=budget,
+                        duration=duration,
+                        analysis_focus=analysis_focus,
+                        optimization_level=optimization_level,
+                        **kwargs
+                    )
                 
                 def _format_inputs(self, inputs):
-                    """Format inputs to match numpy-free workflow expectations."""
+                    """Format inputs to match optimized workflow expectations."""
                     if isinstance(inputs, dict):
                         # Ensure required keys exist with defaults
                         formatted = {
@@ -468,13 +467,13 @@ try:
                 def create_initial_state(self, **kwargs):
                     return {"workflow_id": f"langgraph_{datetime.now().strftime('%Y%m%d_%H%M%S')}", **kwargs}
             
-            MarketingResearchWorkflow = NumpyFreeWorkflowWrapper
-            OptimizedMarketingWorkflow = NumpyFreeWorkflowWrapper
-            logger.info("✅ Using numpy-free LangGraph workflow (REAL ANALYSIS)")
-            st.info("✅ LangGraph components loaded successfully (using numpy-free REAL workflow)")
+            MarketingResearchWorkflow = OptimizedWorkflowWrapper
+            OptimizedMarketingWorkflow = OptimizedWorkflowWrapper
+            logger.info("✅ Using optimized LangGraph workflow (REAL ANALYSIS)")
+            st.info("✅ LangGraph components loaded successfully (using optimized REAL workflow)")
             
-        except Exception as numpy_free_error:
-            logger.error(f"Failed to load numpy-free workflow: {numpy_free_error}")
+        except Exception as optimized_workflow_error:
+            logger.error(f"Failed to load optimized workflow: {optimized_workflow_error}")
             
             # Final fallback to mock
             MarketingResearchWorkflow = MockLangGraphWorkflow
@@ -1166,13 +1165,9 @@ class LangGraphDashboard:
             opt_settings = config.get("optimization_settings", {})
             optimization_level = opt_settings.get("optimization_level", "none")
             
-            if optimization_level in ["none"]:
-                workflow = MarketingResearchWorkflow()
-                logger.info("Using standard LangGraph workflow")
-            else:
-                # Use optimized workflow for token reduction
-                workflow = OptimizedMarketingWorkflow(optimization_level=optimization_level)
-                logger.info(f"Using optimized LangGraph workflow with level: {optimization_level}")
+            # Always use the numpy-free workflow wrapper since it's the only one that works
+            workflow = MarketingResearchWorkflow()  # This is actually OptimizedWorkflowWrapper
+            logger.info(f"Using optimized LangGraph workflow with optimization level: {optimization_level}")
             
             # Apply optimization strategies
             optimized_config = self._apply_optimization_strategies(config)

@@ -809,3 +809,53 @@ class OptimizedMarketingWorkflow:
                 "error": str(e),
                 "workflow_id": initial_state.get("workflow_id") if 'initial_state' in locals() else None
             }
+    
+    def execute_workflow(
+        self,
+        selected_agents: List[str] = None,
+        target_audience: str = "",
+        campaign_type: str = "",
+        budget: float = 0,
+        duration: str = "",
+        analysis_focus: str = "",
+        optimization_level: str = "none",
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Execute workflow with dashboard-compatible interface."""
+        
+        # Use provided agents or default
+        agents = selected_agents or ["market_research_analyst", "data_analyst"]
+        
+        # Update optimization level if provided
+        if optimization_level != "none":
+            self.optimization_level = optimization_level
+        
+        return self.execute_optimized_workflow(
+            selected_agents=agents,
+            target_audience=target_audience,
+            campaign_type=campaign_type,
+            budget=budget,
+            duration=duration,
+            analysis_focus=analysis_focus,
+            **kwargs
+        )
+    
+    def run(self, inputs: Dict[str, Any], optimization_level: str = "none") -> Dict[str, Any]:
+        """Run workflow with inputs dictionary (for compatibility)."""
+        
+        # Update optimization level if provided
+        if optimization_level != "none":
+            self.optimization_level = optimization_level
+        
+        return self.execute_optimized_workflow(
+            selected_agents=inputs.get("selected_agents", ["market_research_analyst", "data_analyst"]),
+            target_audience=inputs.get("target_audience", "target audience"),
+            campaign_type=inputs.get("campaign_type", "marketing campaign"),
+            budget=inputs.get("budget", 50000),
+            duration=inputs.get("duration", "6 months"),
+            analysis_focus=inputs.get("analysis_focus", "market analysis"),
+            **{k: v for k, v in inputs.items() if k not in [
+                "selected_agents", "target_audience", "campaign_type", 
+                "budget", "duration", "analysis_focus"
+            ]}
+        )
