@@ -418,10 +418,52 @@ try:
                     self.optimization_level = optimization_level
                 
                 def run(self, inputs, optimization_level="none"):
+                    # Convert inputs to proper format for numpy-free workflow
+                    formatted_inputs = self._format_inputs(inputs)
+                    return self.workflow.execute_workflow(formatted_inputs, optimization_level)
+                
+                def execute_workflow(self, selected_agents=None, target_audience="", campaign_type="", 
+                                   budget=0, duration="", analysis_focus="", optimization_level="none", **kwargs):
+                    # Create properly formatted inputs dictionary
+                    inputs = {
+                        'target_audience': target_audience,
+                        'campaign_type': campaign_type,
+                        'budget': budget,
+                        'duration': duration,
+                        'analysis_focus': analysis_focus,
+                        'selected_agents': selected_agents or ["market_research_analyst", "data_analyst"]
+                    }
+                    # Add any additional kwargs
+                    inputs.update(kwargs)
                     return self.workflow.execute_workflow(inputs, optimization_level)
                 
-                def execute_workflow(self, inputs, optimization_level="none"):
-                    return self.workflow.execute_workflow(inputs, optimization_level)
+                def _format_inputs(self, inputs):
+                    """Format inputs to match numpy-free workflow expectations."""
+                    if isinstance(inputs, dict):
+                        # Ensure required keys exist with defaults
+                        formatted = {
+                            'target_audience': inputs.get('target_audience', 'target audience'),
+                            'campaign_type': inputs.get('campaign_type', 'marketing campaign'),
+                            'budget': inputs.get('budget', 50000),
+                            'duration': inputs.get('duration', '6 months'),
+                            'analysis_focus': inputs.get('analysis_focus', 'market analysis'),
+                            'selected_agents': inputs.get('selected_agents', ["market_research_analyst", "data_analyst"])
+                        }
+                        # Add any additional keys from original inputs
+                        for key, value in inputs.items():
+                            if key not in formatted:
+                                formatted[key] = value
+                        return formatted
+                    else:
+                        # If inputs is not a dict, create default structure
+                        return {
+                            'target_audience': 'target audience',
+                            'campaign_type': 'marketing campaign',
+                            'budget': 50000,
+                            'duration': '6 months',
+                            'analysis_focus': 'market analysis',
+                            'selected_agents': ["market_research_analyst", "data_analyst"]
+                        }
                 
                 def create_initial_state(self, **kwargs):
                     return {"workflow_id": f"langgraph_{datetime.now().strftime('%Y%m%d_%H%M%S')}", **kwargs}
@@ -1145,49 +1187,37 @@ class LangGraphDashboard:
                 "langsmith_enabled": LANGSMITH_AVAILABLE
             }
             
-            # Execute the optimized workflow with LangSmith tracing
-            if hasattr(workflow, 'execute_optimized_workflow'):
-                if callback_manager:
-                    result = workflow.execute_optimized_workflow(
-                        selected_agents=optimized_config["selected_agents"],
-                        target_audience=optimized_config["target_audience"],
-                        campaign_type=optimized_config["campaign_type"],
-                        budget=optimized_config["budget"],
-                        duration=optimized_config["duration"],
-                        analysis_focus=optimized_config["analysis_focus"],
-                        optimization_config=optimized_config,
-                        callbacks=callback_manager.handlers
-                    )
-                else:
-                    result = workflow.execute_optimized_workflow(
-                        selected_agents=optimized_config["selected_agents"],
-                        target_audience=optimized_config["target_audience"],
-                        campaign_type=optimized_config["campaign_type"],
-                        budget=optimized_config["budget"],
-                        duration=optimized_config["duration"],
-                        analysis_focus=optimized_config["analysis_focus"],
-                        optimization_config=optimized_config
-                    )
-            else:
-                if callback_manager:
-                    result = workflow.execute_workflow(
-                        selected_agents=optimized_config["selected_agents"],
-                        target_audience=optimized_config["target_audience"],
-                        campaign_type=optimized_config["campaign_type"],
-                        budget=optimized_config["budget"],
-                        duration=optimized_config["duration"],
-                        analysis_focus=optimized_config["analysis_focus"],
-                        callbacks=callback_manager.handlers
-                    )
-                else:
-                    result = workflow.execute_workflow(
-                        selected_agents=optimized_config["selected_agents"],
-                        target_audience=optimized_config["target_audience"],
-                        campaign_type=optimized_config["campaign_type"],
-                        budget=optimized_config["budget"],
-                        duration=optimized_config["duration"],
-                        analysis_focus=optimized_config["analysis_focus"]
-                    )
+            # Execute the workflow with proper parameter handling
+            try:
+                # For numpy-free workflow, call with optimization_level parameter
+                result = workflow.execute_workflow(
+                    selected_agents=optimized_config["selected_agents"],
+                    target_audience=optimized_config["target_audience"],
+                    campaign_type=optimized_config["campaign_type"],
+                    budget=optimized_config["budget"],
+                    duration=optimized_config["duration"],
+                    analysis_focus=optimized_config["analysis_focus"],
+                    optimization_level=optimization_level
+                )
+                logger.info(f"✅ Workflow executed successfully with optimization level: {optimization_level}")
+                
+            except Exception as workflow_error:
+                logger.error(f"Workflow execution failed: {workflow_error}")
+                # Fallback: try with inputs dictionary format
+                try:
+                    inputs_dict = {
+                        'selected_agents': optimized_config["selected_agents"],
+                        'target_audience': optimized_config["target_audience"],
+                        'campaign_type': optimized_config["campaign_type"],
+                        'budget': optimized_config["budget"],
+                        'duration': optimized_config["duration"],
+                        'analysis_focus': optimized_config["analysis_focus"]
+                    }
+                    result = workflow.run(inputs_dict, optimization_level)
+                    logger.info("✅ Workflow executed successfully using fallback method")
+                except Exception as fallback_error:
+                    logger.error(f"Fallback execution also failed: {fallback_error}")
+                    raise workflow_error
             
             # Add monitoring metadata to result
             if isinstance(result, dict):
