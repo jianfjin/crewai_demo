@@ -83,6 +83,31 @@ class AdvancedContextManager:
                     self.dependency_graph[dep] = []
                 self.dependency_graph[dep].append(key)
     
+    def optimize_context(self, context: Dict[str, Any], strategy: str = "progressive_pruning", 
+                        token_budget: int = None, required_keys: List[str] = None) -> Dict[str, Any]:
+        """Optimize context using specified strategy - main interface method"""
+        
+        # Update token budget if provided
+        if token_budget:
+            self.token_budget = token_budget
+        
+        # Add context elements if not already tracked
+        for key, value in context.items():
+            if key not in self.context_elements:
+                self.add_context(key, value, ContextPriority.USEFUL)
+        
+        # Map string strategy to enum
+        strategy_map = {
+            "progressive_pruning": ContextStrategy.PROGRESSIVE_PRUNING,
+            "abstracted_summaries": ContextStrategy.ABSTRACTED_SUMMARIES,
+            "minimal": ContextStrategy.MINIMAL_CONTEXT,
+            "stateless": ContextStrategy.STATELESS
+        }
+        
+        strategy_enum = strategy_map.get(strategy, ContextStrategy.PROGRESSIVE_PRUNING)
+        
+        return self.get_optimized_context(strategy_enum, required_keys)
+    
     def get_optimized_context(self, strategy: ContextStrategy = ContextStrategy.PROGRESSIVE_PRUNING,
                             required_keys: List[str] = None) -> Dict[str, Any]:
         """Get optimized context using specified strategy"""
