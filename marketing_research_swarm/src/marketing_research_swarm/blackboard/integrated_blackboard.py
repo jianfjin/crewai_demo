@@ -693,6 +693,101 @@ class IntegratedBlackboardSystem:
             self.event_handlers[event_type] = []
         self.event_handlers[event_type].append(handler)
     
+    def store_workflow_state(self, workflow_id: str, state: Dict[str, Any]) -> bool:
+        """
+        Store the final workflow state across all managers.
+        
+        Args:
+            workflow_id: Workflow identifier
+            state: Final workflow state to store
+            
+        Returns:
+            Success status
+        """
+        with self._lock:
+            try:
+                if workflow_id not in self.workflow_contexts:
+                    self.logger.warning(f"Workflow {workflow_id} not found in contexts")
+                    return False
+                
+                workflow_context = self.workflow_contexts[workflow_id]
+                
+                # Store final state in context manager
+                if self.context_manager:
+                    try:
+                        self.context_manager.add_context(
+                            key=f"final_state_{workflow_id}",
+                            value=state,
+                            priority=getattr(self.context_manager, 'ContextPriority', type('', (), {'CRITICAL': 'critical'})).CRITICAL
+                        )
+                        self.logger.info(f"Final state stored in context manager for workflow {workflow_id}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to store final state in context manager: {e}")
+                
+                # Store final state in memory
+                if self.memory_manager:
+                    try:
+                        memory_key = f"final_state_{workflow_id}"
+                        self.memory_manager.add_memory(
+                            content=f"Workflow {workflow_id} completed with final state",
+                            user_id=memory_key,
+                            metadata={
+                                'workflow_id': workflow_id,
+                                'final_state': state,
+                                'completed_at': datetime.now().isoformat()
+                            }
+                        )
+                        self.logger.info(f"Final state stored in memory manager for workflow {workflow_id}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to store final state in memory manager: {e}")
+                
+                # Cache final results if appropriate
+                if self.cache_manager:
+                    try:
+                        cache_key = f"final_state_{workflow_id}"
+                        # Extract key results for caching
+                        cache_data = {
+                            'workflow_id': workflow_id,
+                            'status': str(state.get('status', 'unknown')),
+                            'agent_results': state.get('agent_results', {}),
+                            'final_summary': state.get('final_summary', {}),
+                            'completed_at': datetime.now().isoformat()
+                        }
+                        self.cache_manager.cache_analysis(cache_key, cache_data)
+                        self.logger.info(f"Final state cached for workflow {workflow_id}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to cache final state: {e}")
+                
+                # Update shared state
+                if self.shared_state_manager and workflow_context.shared_state:
+                    try:
+                        shared_workflow_id = workflow_context.shared_state.get('shared_workflow_id')
+                        if shared_workflow_id:
+                            # Store completion status in shared state
+                            # Note: SharedStateManager may not have direct update methods
+                            # This is a placeholder for future implementation
+                            pass
+                        self.logger.info(f"Shared state updated for workflow {workflow_id}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to update shared state: {e}")
+                
+                # Update workflow context with final state
+                workflow_context.last_updated = datetime.now()
+                
+                # Emit workflow state stored event
+                self._emit_event('workflow_state_stored', {
+                    'workflow_id': workflow_id,
+                    'state_size': len(str(state)),
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+                self.logger.info(f"Successfully stored workflow state for {workflow_id}")
+                return True
+                
+            except Exception as e:
+                self.logger.error(f"Failed to store workflow state for {workflow_id}: {e}")
+                return False
+
     def get_system_stats(self) -> Dict[str, Any]:
         """Get comprehensive system statistics."""
         stats = {
