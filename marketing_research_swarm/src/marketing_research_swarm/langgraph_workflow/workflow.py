@@ -102,6 +102,15 @@ class MarketingResearchWorkflow:
         if "agent_status" not in state:
             state["agent_status"] = {}
         
+        if "agent_errors" not in state:
+            state["agent_errors"] = {}
+        
+        if "shared_data" not in state:
+            state["shared_data"] = {}
+        
+        if "shared_context" not in state:
+            state["shared_context"] = {}
+        
         # Set all selected agents to pending
         for agent in state["selected_agents"]:
             state["agent_status"][agent] = AgentStatus.PENDING

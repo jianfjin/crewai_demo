@@ -230,7 +230,7 @@ def create_initial_state(
 
 def update_agent_status(state: MarketingResearchState, agent_role: str, status: AgentStatus) -> MarketingResearchState:
     """Update the status of a specific agent."""
-    state['agent_statuses'][agent_role] = status
+    state['agent_status'][agent_role] = status
     state['updated_at'] = datetime.now()
     return state
 
@@ -243,7 +243,7 @@ def store_agent_result(
 ) -> MarketingResearchState:
     """Store results from an agent execution."""
     state['agent_results'][agent_role] = result
-    state['agent_statuses'][agent_role] = AgentStatus.COMPLETED
+    state['agent_status'][agent_role] = AgentStatus.COMPLETED
     state['updated_at'] = datetime.now()
     
     # Store token usage if provided
@@ -278,7 +278,7 @@ def store_agent_result(
 def store_agent_error(state: MarketingResearchState, agent_role: str, error: str) -> MarketingResearchState:
     """Store error from an agent execution."""
     state['agent_errors'][agent_role] = error
-    state['agent_statuses'][agent_role] = AgentStatus.FAILED
+    state['agent_status'][agent_role] = AgentStatus.FAILED
     state['errors'].append(f"{agent_role}: {error}")
     state['updated_at'] = datetime.now()
     return state
@@ -374,7 +374,7 @@ def get_agent_context(state: MarketingResearchState, agent_role: str) -> Dict[st
 def is_workflow_complete(state: MarketingResearchState) -> bool:
     """Check if the workflow is complete (all selected agents have finished)."""
     for agent in state['selected_agents']:
-        status = state['agent_statuses'].get(agent, AgentStatus.PENDING)
+        status = state['agent_status'].get(agent, AgentStatus.PENDING)
         if status not in [AgentStatus.COMPLETED, AgentStatus.FAILED, AgentStatus.SKIPPED]:
             return False
     return True
@@ -399,7 +399,7 @@ def get_next_agent(state: MarketingResearchState) -> Optional[str]:
     
     for agent in state['selected_agents']:
         # Skip if already completed, failed, or running
-        status = state['agent_statuses'].get(agent, AgentStatus.PENDING)
+        status = state['agent_status'].get(agent, AgentStatus.PENDING)
         if status != AgentStatus.PENDING:
             continue
         
@@ -409,7 +409,7 @@ def get_next_agent(state: MarketingResearchState) -> Optional[str]:
         
         for dep_agent in agent_dependencies:
             if dep_agent in state['selected_agents']:
-                dep_status = state['agent_statuses'].get(dep_agent, AgentStatus.PENDING)
+                dep_status = state['agent_status'].get(dep_agent, AgentStatus.PENDING)
                 if dep_status != AgentStatus.COMPLETED:
                     dependencies_satisfied = False
                     break
