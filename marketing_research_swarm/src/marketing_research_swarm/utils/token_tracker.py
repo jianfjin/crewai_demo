@@ -77,6 +77,7 @@ class TokenTracker:
         self.model_name = model_name
         self.crew_usage: Optional[CrewTokenUsage] = None
         self.current_task: Optional[TaskTokenUsage] = None
+        self.workflow_tracking = {}  # Track workflow-level metrics
         
         # Initialize tokenizer for the model
         try:
@@ -84,6 +85,79 @@ class TokenTracker:
         except KeyError:
             # Fallback to cl100k_base for unknown models
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
+    
+    def start_tracking(self, workflow_id: str, optimization_level: str = "none") -> Dict[str, Any]:
+        """Start tracking token usage for a workflow."""
+        self.workflow_tracking[workflow_id] = {
+            "start_time": datetime.now(),
+            "optimization_level": optimization_level,
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "llm_calls": 0,
+            "tool_calls": 0,
+            "status": "running"
+        }
+        return self.workflow_tracking[workflow_id]
+    
+    def stop_tracking(self, workflow_id: str) -> Dict[str, Any]:
+        """Stop tracking and return final metrics for a workflow."""
+        if workflow_id not in self.workflow_tracking:
+            return {"error": f"No tracking data found for workflow {workflow_id}"}
+        
+        tracking_data = self.workflow_tracking[workflow_id]
+        tracking_data["end_time"] = datetime.now()
+        tracking_data["duration_seconds"] = (
+            tracking_data["end_time"] - tracking_data["start_time"]
+        ).total_seconds()
+        tracking_data["status"] = "completed"
+        
+        # Calculate cost estimate
+        total_tokens = tracking_data["total_tokens"]
+        tracking_data["estimated_cost"] = total_tokens * 0.0000025  # Rough estimate for gpt-4o-mini
+        
+        return tracking_data
+    
+    def get_current_usage(self) -> int:
+        """Get current total token usage across all workflows."""
+        total = 0
+        for workflow_data in self.workflow_tracking.values():
+            total += workflow_data.get("total_tokens", 0)
+        
+        # Also include crew usage if available
+        if self.crew_usage:
+            total += self.crew_usage.total_token_usage.total_tokens
+            
+        return total
+    
+    def get_usage_summary(self) -> Dict[str, Any]:
+        """Get comprehensive usage summary across all tracking."""
+        summary = {
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_cost": 0.0,
+            "workflow_count": len(self.workflow_tracking),
+            "active_workflows": 0
+        }
+        
+        for workflow_data in self.workflow_tracking.values():
+            summary["total_tokens"] += workflow_data.get("total_tokens", 0)
+            summary["prompt_tokens"] += workflow_data.get("prompt_tokens", 0)
+            summary["completion_tokens"] += workflow_data.get("completion_tokens", 0)
+            if workflow_data.get("status") == "running":
+                summary["active_workflows"] += 1
+        
+        # Include crew usage if available
+        if self.crew_usage:
+            summary["total_tokens"] += self.crew_usage.total_token_usage.total_tokens
+            summary["prompt_tokens"] += self.crew_usage.total_token_usage.prompt_tokens
+            summary["completion_tokens"] += self.crew_usage.total_token_usage.completion_tokens
+        
+        # Calculate estimated cost
+        summary["total_cost"] = summary["total_tokens"] * 0.0000025
+        
+        return summary
     
     def start_crew_tracking(self, crew_id: str) -> CrewTokenUsage:
         """Start tracking token usage for a crew execution."""
@@ -284,115 +358,6 @@ class TokenAnalyzer:
         
         return recommendations
 
-class TokenTracker:
-    """Tracks token usage across crew execution."""
-    
-    def __init__(self, model_name: str = "gpt-4o-mini"):
-        self.model_name = model_name
-        self.crew_usage: Optional[CrewTokenUsage] = None
-        self.current_task: Optional[TaskTokenUsage] = None
-        
-        # Initialize tokenizer for the model
-        try:
-            self.tokenizer = tiktoken.encoding_for_model(model_name)
-        except KeyError:
-            # Fallback to cl100k_base for unknown models
-            self.tokenizer = tiktoken.get_encoding("cl100k_base")
-    
-    def start_crew_tracking(self, crew_id: str) -> CrewTokenUsage:
-        """Start tracking token usage for a crew execution."""
-        self.crew_usage = CrewTokenUsage(
-            crew_id=crew_id,
-            start_time=datetime.now(),
-            model_name=self.model_name
-        )
-        return self.crew_usage
-    
-    def start_task_tracking(self, task_name: str, agent_name: str) -> TaskTokenUsage:
-        """Start tracking token usage for a task."""
-        self.current_task = TaskTokenUsage(
-            task_name=task_name,
-            agent_name=agent_name,
-            start_time=datetime.now()
-        )
-        return self.current_task
-    
-    def record_llm_usage(self, prompt: str, response: str, actual_usage: Optional[Dict] = None) -> TokenUsage:
-        """Record token usage for an LLM call."""
-        if actual_usage:
-            # Use actual usage from API response if available
-            token_usage = TokenUsage(
-                prompt_tokens=actual_usage.get('prompt_tokens', 0),
-                completion_tokens=actual_usage.get('completion_tokens', 0),
-                total_tokens=actual_usage.get('total_tokens', 0)
-            )
-        else:
-            # Estimate token usage using tiktoken
-            prompt_tokens = len(self.tokenizer.encode(prompt))
-            completion_tokens = len(self.tokenizer.encode(response))
-            token_usage = TokenUsage(
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                total_tokens=prompt_tokens + completion_tokens
-            )
-        
-        # Update current task if tracking
-        if self.current_task:
-            self.current_task.token_usage += token_usage
-            self.current_task.llm_calls += 1
-        
-        # Update crew usage if tracking
-        if self.crew_usage:
-            self.crew_usage.total_token_usage += token_usage
-        
-        return token_usage
-    
-    def complete_current_task(self, status: str = "completed", error_message: Optional[str] = None):
-        """Complete the current task tracking."""
-        if self.current_task:
-            self.current_task.complete(self.current_task.token_usage, status, error_message)
-            
-            # Add to crew usage if tracking
-            if self.crew_usage:
-                self.crew_usage.task_usages.append(self.current_task)
-            
-            self.current_task = None
-    
-    def complete_crew_tracking(self) -> Optional[CrewTokenUsage]:
-        """Complete crew tracking and return final usage."""
-        if self.crew_usage:
-            self.crew_usage.end_time = datetime.now()
-            self.crew_usage.duration_seconds = (
-                self.crew_usage.end_time - self.crew_usage.start_time
-            ).total_seconds()
-            
-            crew_usage = self.crew_usage
-            self.crew_usage = None
-            return crew_usage
-        return None
-    
-    def get_metrics(self) -> Dict[str, Any]:
-        """Get comprehensive metrics for the tracker."""
-        if not self.crew_usage:
-            return {
-                'total_tokens': 0,
-                'prompt_tokens': 0,
-                'completion_tokens': 0,
-                'total_cost': 0.0,
-                'successful_requests': 0,
-                'estimated': True,
-                'source': 'no_tracking_data'
-            }
-        
-        return {
-            'total_tokens': self.crew_usage.total_token_usage.total_tokens,
-            'prompt_tokens': self.crew_usage.total_token_usage.prompt_tokens,
-            'completion_tokens': self.crew_usage.total_token_usage.completion_tokens,
-            'total_cost': self.crew_usage.total_token_usage.total_tokens * 0.0000025,  # Rough estimate
-            'successful_requests': len(self.crew_usage.task_usages),
-            'estimated': False,
-            'source': 'crew_tracking'
-        }
 
 # Global token tracker instance
 _global_tracker = None

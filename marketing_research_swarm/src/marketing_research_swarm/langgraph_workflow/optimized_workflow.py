@@ -785,6 +785,9 @@ class OptimizedMarketingWorkflow:
             config = {"configurable": {"thread_id": initial_state["workflow_id"]}}
             final_state = self.workflow.invoke(initial_state, config=config)
             
+            # Stop token tracking
+            final_stats = self.token_tracker.stop_tracking(initial_state["workflow_id"])
+            
             # Return comprehensive result
             return {
                 "success": True,
@@ -795,7 +798,7 @@ class OptimizedMarketingWorkflow:
                 "agent_results": final_state.get("agent_results", {}),
                 "execution_time": (final_state["updated_at"] - final_state["created_at"]).total_seconds(),
                 "optimization_applied": final_state.get("optimization_applied", {}),
-                "token_usage": final_state.get("final_summary", {}).get("token_usage", {}),
+                "token_usage": final_stats,
                 "optimization_metrics": final_state.get("final_summary", {}).get("optimization_metrics", {})
             }
             
