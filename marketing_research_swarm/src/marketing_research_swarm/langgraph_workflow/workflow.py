@@ -111,6 +111,12 @@ class MarketingResearchWorkflow:
         if "shared_context" not in state:
             state["shared_context"] = {}
         
+        if "errors" not in state:
+            state["errors"] = []
+        
+        if "warnings" not in state:
+            state["warnings"] = []
+        
         # Set all selected agents to pending
         for agent in state["selected_agents"]:
             state["agent_status"][agent] = AgentStatus.PENDING
@@ -322,7 +328,10 @@ class MarketingResearchWorkflow:
             # Results and state
             agent_results={},
             agent_status={},
+            agent_errors={},
+            shared_data={},
             shared_context={},
+            cached_results={},
             
             # Configuration
             market_segments=kwargs.get("market_segments", ["premium", "mass_market"]),
@@ -336,6 +345,33 @@ class MarketingResearchWorkflow:
             # Optional fields
             data_file_path=kwargs.get("data_file_path", "data/beverage_sales_data.csv"),
             forecast_periods=kwargs.get("forecast_periods", 30),
+            
+            # Analysis results (all start as None)
+            market_research_results=None,
+            competitive_analysis_results=None,
+            data_analysis_results=None,
+            content_strategy_results=None,
+            copywriting_results=None,
+            campaign_optimization_results=None,
+            brand_performance_results=None,
+            forecasting_results=None,
+            
+            # Final outputs
+            final_report=None,
+            recommendations=None,
+            next_steps=None,
+            completed_at=None,
+            final_summary=None,
+            
+            # Error handling
+            errors=[],
+            warnings=[],
+            
+            # Performance metrics
+            total_token_usage={'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
+            execution_time=None,
+            cache_hits=0,
+            cache_misses=0
         )
         
         return state

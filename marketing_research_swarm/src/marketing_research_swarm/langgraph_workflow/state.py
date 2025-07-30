@@ -73,6 +73,7 @@ class MarketingResearchState(TypedDict):
     agent_token_usage: Dict[str, Dict[str, int]]
     
     # Shared data and context
+    shared_data: Dict[str, Any]
     shared_context: Dict[str, Any]
     cached_results: Dict[str, Any]
     
@@ -189,6 +190,7 @@ def create_initial_state(
         agent_token_usage={},
         
         # Shared data and context
+        shared_data={},
         shared_context={},
         cached_results={},
         
@@ -286,6 +288,8 @@ def store_agent_error(state: MarketingResearchState, agent_role: str, error: str
 
 def update_shared_data(state: MarketingResearchState, key: str, value: Any) -> MarketingResearchState:
     """Update shared data that can be accessed by all agents."""
+    if 'shared_data' not in state:
+        state['shared_data'] = {}
     state['shared_data'][key] = value
     state['updated_at'] = datetime.now()
     return state
@@ -311,7 +315,7 @@ def get_agent_context(state: MarketingResearchState, agent_role: str) -> Dict[st
         'key_metrics': state['key_metrics'],
         'brands': state['brands'],
         'campaign_goals': state['campaign_goals'],
-        'shared_data': state['shared_data'],
+        'shared_data': state.get('shared_data', {}),
         'cached_results': state['cached_results']
     }
     
