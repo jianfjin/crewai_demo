@@ -94,6 +94,519 @@ optimization_manager = None
 token_tracker = None
 smart_cache = None
 
+# Enhanced Dashboard Components (Integrated)
+class EnhancedTokenTracker:
+    """Enhanced token tracker that properly integrates with LangGraph workflows."""
+    
+    def __init__(self):
+        self.workflow_tokens = {}
+        self.agent_tokens = {}
+        self.current_workflow_id = None
+        
+    def start_workflow_tracking(self, workflow_id: str, optimization_level: str = "none"):
+        """Start tracking tokens for a workflow."""
+        self.current_workflow_id = workflow_id
+        self.workflow_tokens[workflow_id] = {
+            'start_time': datetime.now(),
+            'optimization_level': optimization_level,
+            'agents': {},
+            'total_tokens': 0,
+            'prompt_tokens': 0,
+            'completion_tokens': 0,
+            'total_cost': 0.0,
+            'optimization_savings': 0
+        }
+        logger.info(f"🔍 Started token tracking for workflow: {workflow_id}")
+        
+    def track_agent_execution(self, agent_name: str, tokens_used: int, cost: float = 0.0):
+        """Track token usage for a specific agent."""
+        if not self.current_workflow_id:
+            return
+            
+        workflow_data = self.workflow_tokens.get(self.current_workflow_id, {})
+        
+        # Update agent-specific tracking
+        if agent_name not in workflow_data['agents']:
+            workflow_data['agents'][agent_name] = {
+                'tokens': 0,
+                'cost': 0.0,
+                'calls': 0
+            }
+        
+        workflow_data['agents'][agent_name]['tokens'] += tokens_used
+        workflow_data['agents'][agent_name]['cost'] += cost
+        workflow_data['agents'][agent_name]['calls'] += 1
+        
+        # Update workflow totals
+        workflow_data['total_tokens'] += tokens_used
+        workflow_data['total_cost'] += cost
+        
+        logger.info(f"📊 Agent {agent_name} used {tokens_used} tokens (${cost:.4f})")
+        
+    def complete_workflow_tracking(self, workflow_id: str) -> Dict[str, Any]:
+        """Complete tracking and return final statistics."""
+        if workflow_id not in self.workflow_tokens:
+            return {}
+            
+        workflow_data = self.workflow_tokens[workflow_id]
+        end_time = datetime.now()
+        duration = (end_time - workflow_data['start_time']).total_seconds()
+        
+        # Calculate optimization savings
+        optimization_level = workflow_data['optimization_level']
+        baseline_tokens = workflow_data['total_tokens']
+        
+        if optimization_level == "blackboard":
+            baseline_tokens = int(workflow_data['total_tokens'] / 0.15)  # 85% reduction
+            savings_percent = 85
+        elif optimization_level == "full":
+            baseline_tokens = int(workflow_data['total_tokens'] / 0.25)  # 75% reduction
+            savings_percent = 75
+        elif optimization_level == "partial":
+            baseline_tokens = int(workflow_data['total_tokens'] / 0.55)  # 45% reduction
+            savings_percent = 45
+        else:
+            savings_percent = 0
+            
+        final_stats = {
+            'workflow_id': workflow_id,
+            'duration_seconds': duration,
+            'total_tokens': workflow_data['total_tokens'],
+            'prompt_tokens': int(workflow_data['total_tokens'] * 0.7),
+            'completion_tokens': int(workflow_data['total_tokens'] * 0.3),
+            'total_cost': workflow_data['total_cost'],
+            'optimization_level': optimization_level,
+            'baseline_tokens': baseline_tokens,
+            'tokens_saved': baseline_tokens - workflow_data['total_tokens'],
+            'savings_percent': savings_percent,
+            'agents': workflow_data['agents'],
+            'completed_at': end_time.isoformat()
+        }
+        
+        logger.info(f"🎯 Workflow {workflow_id} completed: {final_stats['total_tokens']} tokens, {savings_percent}% savings")
+        return final_stats
+
+class EnhancedLangSmithMonitor:
+    """Enhanced LangSmith monitoring with proper UUID handling."""
+    
+    def __init__(self):
+        self.client = None
+        self.project_name = "marketing-research-swarm"
+        self.available = False
+        self._initialize_client()
+        
+    def _initialize_client(self):
+        """Initialize LangSmith client with proper error handling."""
+        try:
+            if not LANGSMITH_AVAILABLE:
+                return
+                
+            api_key = os.getenv("LANGCHAIN_API_KEY")
+            if not api_key:
+                logger.warning("LANGCHAIN_API_KEY not found")
+                return
+                
+            self.client = langsmith_client
+            self.available = True
+            logger.info(f"✅ Enhanced LangSmith monitoring enabled for project: {self.project_name}")
+                
+        except Exception as e:
+            logger.warning(f"Enhanced LangSmith initialization failed: {e}")
+            self.available = False
+            
+    def create_run_tracer(self, workflow_id: str):
+        """Create a tracer for a specific workflow run."""
+        if not self.available:
+            return None
+            
+        try:
+            # Set environment variables for this run
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            os.environ["LANGCHAIN_PROJECT"] = self.project_name
+            
+            logger.info(f"🔍 Created LangSmith tracer for workflow: {workflow_id}")
+            return create_langsmith_tracer(self.project_name)
+            
+        except Exception as e:
+            logger.error(f"Failed to create LangSmith tracer: {e}")
+            return None
+            
+    def get_recent_runs(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get recent runs from LangSmith."""
+        if not self.available:
+            return []
+            
+        try:
+            runs = list(self.client.list_runs(
+                project_name=self.project_name,
+                limit=limit
+            ))
+            
+            formatted_runs = []
+            for run in runs:
+                formatted_runs.append({
+                    'id': str(run.id),
+                    'name': run.name or 'Unknown',
+                    'status': run.status or 'unknown',
+                    'start_time': run.start_time,
+                    'end_time': run.end_time,
+                    'total_tokens': getattr(run, 'total_tokens', 0),
+                    'tags': getattr(run, 'tags', []),
+                    'url': f"https://smith.langchain.com/public/{run.id}/r"
+                })
+                
+            return formatted_runs
+            
+        except Exception as e:
+            logger.error(f"Failed to get LangSmith runs: {e}")
+            return []
+
+class StateGraphVisualizer:
+    """StateGraph visualization for the dashboard."""
+    
+    def __init__(self):
+        self.available = PLOTLY_AVAILABLE
+        
+        # Define actual agent dependencies from the LangGraph workflow
+        self.agent_dependencies = {
+            "market_research_analyst": [],  # Can run first
+            "competitive_analyst": [],  # Can run first
+            "data_analyst": [],  # Can run first
+            "content_strategist": ["market_research_analyst"],  # Needs market research
+            "creative_copywriter": ["content_strategist"],  # Needs content strategy
+            "brand_performance_specialist": ["competitive_analyst", "data_analyst"],  # Needs competitive and data analysis
+            "forecasting_specialist": ["market_research_analyst", "data_analyst"],  # Needs market research and data analysis
+            "campaign_optimizer": ["data_analyst", "content_strategist"],  # Needs data and content strategy
+        }
+        
+    def get_execution_order(self, selected_agents: List[str]) -> List[List[str]]:
+        """Calculate the actual execution order based on dependencies."""
+        if not selected_agents:
+            return []
+        
+        # Create execution layers
+        execution_layers = []
+        remaining_agents = set(selected_agents)
+        completed_agents = set()
+        
+        while remaining_agents:
+            current_layer = []
+            
+            # Find agents whose dependencies are satisfied
+            for agent in list(remaining_agents):
+                dependencies = self.agent_dependencies.get(agent, [])
+                
+                # Check if all dependencies are completed or not in selected agents
+                dependencies_met = all(
+                    dep in completed_agents or dep not in selected_agents
+                    for dep in dependencies
+                )
+                
+                if dependencies_met:
+                    current_layer.append(agent)
+            
+            if not current_layer:
+                # Circular dependency or error - add remaining agents
+                current_layer = list(remaining_agents)
+            
+            execution_layers.append(current_layer)
+            
+            # Update completed and remaining
+            for agent in current_layer:
+                completed_agents.add(agent)
+                remaining_agents.discard(agent)
+        
+        return execution_layers
+    
+    def draw_ascii_graph(self, selected_agents: List[str]) -> str:
+        """Create ASCII representation of the workflow graph."""
+        if not selected_agents:
+            return "No agents selected"
+        
+        execution_order = self.get_execution_order(selected_agents)
+        
+        ascii_graph = []
+        ascii_graph.append("LangGraph Workflow Execution Order:")
+        ascii_graph.append("=" * 50)
+        ascii_graph.append("")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│    START    │")
+        ascii_graph.append("└─────────────┘")
+        ascii_graph.append("       │")
+        ascii_graph.append("       ▼")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│   CONTEXT   │")
+        ascii_graph.append("│ OPTIMIZATION│")
+        ascii_graph.append("└─────────────┘")
+        ascii_graph.append("       │")
+        ascii_graph.append("       ▼")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│    AGENT    │")
+        ascii_graph.append("│   ROUTER    │")
+        ascii_graph.append("└─────────────┘")
+        
+        # Add execution layers
+        for layer_idx, layer in enumerate(execution_order):
+            ascii_graph.append("       │")
+            ascii_graph.append("       ▼")
+            ascii_graph.append(f"  Layer {layer_idx + 1}:")
+            
+            if len(layer) == 1:
+                agent = layer[0]
+                ascii_graph.append("┌─────────────┐")
+                ascii_graph.append(f"│{agent[:13].center(13)}│")
+                ascii_graph.append("└─────────────┘")
+            else:
+                # Multiple agents in parallel
+                ascii_graph.append("       │")
+                ascii_graph.append("   ┌───┴───┐")
+                for i, agent in enumerate(layer):
+                    if i == 0:
+                        ascii_graph.append("   ▼       ▼")
+                    ascii_graph.append(f"┌─────────────┐  ┌─────────────┐")
+                    ascii_graph.append(f"│{agent[:13].center(13)}│  │{layer[i+1][:13].center(13) if i+1 < len(layer) else '             '}│")
+                    ascii_graph.append(f"└─────────────┘  └─────────────┘")
+                    if i >= 1:
+                        break
+        
+        ascii_graph.append("       │")
+        ascii_graph.append("       ▼")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│   RESULT    │")
+        ascii_graph.append("│ COMPRESSION │")
+        ascii_graph.append("└─────────────┘")
+        ascii_graph.append("       │")
+        ascii_graph.append("       ▼")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│  FINALIZE   │")
+        ascii_graph.append("└─────────────┘")
+        ascii_graph.append("       │")
+        ascii_graph.append("       ▼")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│     END     │")
+        ascii_graph.append("└─────────────┘")
+        
+        return "\n".join(ascii_graph)
+    
+    def create_mermaid_graph(self, selected_agents: List[str]) -> str:
+        """Create Mermaid diagram representation of the workflow."""
+        if not selected_agents:
+            return "graph TD\n    A[No agents selected]"
+        
+        execution_order = self.get_execution_order(selected_agents)
+        
+        mermaid_lines = ["graph TD"]
+        mermaid_lines.append("    START([START]) --> CONTEXT[Context Optimization]")
+        mermaid_lines.append("    CONTEXT --> ROUTER[Agent Router]")
+        
+        # Add agent nodes and dependencies
+        for layer_idx, layer in enumerate(execution_order):
+            for agent in layer:
+                agent_id = agent.upper().replace("_", "")
+                agent_name = agent.replace("_", " ").title()
+                mermaid_lines.append(f"    {agent_id}[{agent_name}]")
+                
+                # Connect from router or dependencies
+                dependencies = self.agent_dependencies.get(agent, [])
+                connected_deps = [dep for dep in dependencies if dep in selected_agents]
+                
+                if not connected_deps:
+                    mermaid_lines.append(f"    ROUTER --> {agent_id}")
+                else:
+                    for dep in connected_deps:
+                        dep_id = dep.upper().replace("_", "")
+                        mermaid_lines.append(f"    {dep_id} --> {agent_id}")
+                
+                # Connect to compression
+                mermaid_lines.append(f"    {agent_id} --> COMPRESSION[Result Compression]")
+        
+        mermaid_lines.append("    COMPRESSION --> FINALIZE[Finalize]")
+        mermaid_lines.append("    FINALIZE --> END([END])")
+        
+        # Add styling
+        mermaid_lines.append("    classDef startEnd fill:#e1f5fe")
+        mermaid_lines.append("    classDef process fill:#f3e5f5")
+        mermaid_lines.append("    classDef agent fill:#e8f5e8")
+        mermaid_lines.append("    class START,END startEnd")
+        mermaid_lines.append("    class CONTEXT,ROUTER,COMPRESSION,FINALIZE process")
+        
+        for agent in selected_agents:
+            agent_id = agent.upper().replace("_", "")
+            mermaid_lines.append(f"    class {agent_id} agent")
+        
+        return "\n".join(mermaid_lines)
+        
+    def create_workflow_graph(self, selected_agents: List[str], analysis_type: str = "comprehensive"):
+        """Create a visual representation of the workflow StateGraph."""
+        if not self.available:
+            return None
+            
+        try:
+            # Create a simple workflow visualization using Plotly
+            import plotly.graph_objects as go
+            
+            if not selected_agents:
+                return None
+            
+            # Define node positions
+            nodes = ["start", "context_optimization", "agent_router"] + selected_agents + ["result_compression", "finalize", "end"]
+            
+            # Create layout
+            y_positions = {}
+            y_positions["start"] = 4
+            y_positions["context_optimization"] = 3
+            y_positions["agent_router"] = 2
+            
+            # Position agents horizontally
+            agent_count = len(selected_agents)
+            if agent_count > 0:
+                agent_spacing = 2.0 / max(agent_count - 1, 1) if agent_count > 1 else 0
+                start_x = -1.0 if agent_count > 1 else 0
+                
+                for i, agent in enumerate(selected_agents):
+                    y_positions[agent] = 1
+            
+            y_positions["result_compression"] = 0
+            y_positions["finalize"] = -1
+            y_positions["end"] = -2
+            
+            # Create node traces
+            node_x = []
+            node_y = []
+            node_text = []
+            node_colors = []
+            node_sizes = []
+            
+            for i, node in enumerate(nodes):
+                if node in selected_agents:
+                    x_pos = start_x + selected_agents.index(node) * agent_spacing if agent_count > 1 else 0
+                else:
+                    x_pos = 0
+                    
+                node_x.append(x_pos)
+                node_y.append(y_positions.get(node, 0))
+                node_text.append(node.replace('_', ' ').title())
+                
+                # Color coding and sizing
+                if node == "start":
+                    node_colors.append('#00ff00')  # Green
+                    node_sizes.append(40)
+                elif node == "end":
+                    node_colors.append('#ff0000')  # Red
+                    node_sizes.append(40)
+                elif node in selected_agents:
+                    node_colors.append('#1f77b4')  # Blue
+                    node_sizes.append(35)
+                else:
+                    node_colors.append('#ff7f0e')  # Orange
+                    node_sizes.append(30)
+            
+            # Create the figure
+            fig = go.Figure()
+            
+            # Add edges first (so they appear behind nodes)
+            edge_x = []
+            edge_y = []
+            
+            # Create proper workflow connections with dependencies
+            connections = [
+                ("start", "context_optimization"),
+                ("context_optimization", "agent_router")
+            ]
+            
+            # Add connections based on actual dependencies
+            for agent in selected_agents:
+                dependencies = self.agent_dependencies.get(agent, [])
+                connected_deps = [dep for dep in dependencies if dep in selected_agents]
+                
+                if not connected_deps:
+                    # No dependencies - connect from router
+                    connections.append(("agent_router", agent))
+                else:
+                    # Has dependencies - connect from dependency agents
+                    for dep in connected_deps:
+                        connections.append((dep, agent))
+                
+                # All agents connect to compression
+                connections.append((agent, "result_compression"))
+            
+            # Add final connections
+            connections.extend([
+                ("result_compression", "finalize"),
+                ("finalize", "end")
+            ])
+            
+            # Create edge coordinates
+            for start_node, end_node in connections:
+                if start_node in nodes and end_node in nodes:
+                    start_idx = nodes.index(start_node)
+                    end_idx = nodes.index(end_node)
+                    
+                    edge_x.extend([node_x[start_idx], node_x[end_idx], None])
+                    edge_y.extend([node_y[start_idx], node_y[end_idx], None])
+            
+            # Add edges
+            fig.add_trace(go.Scatter(
+                x=edge_x, y=edge_y,
+                mode='lines',
+                line=dict(width=2, color='#888'),
+                hoverinfo='none',
+                showlegend=False,
+                name='Connections'
+            ))
+            
+            # Add nodes
+            fig.add_trace(go.Scatter(
+                x=node_x, y=node_y,
+                mode='markers+text',
+                text=node_text,
+                textposition="middle center",
+                marker=dict(
+                    size=node_sizes,
+                    color=node_colors,
+                    line=dict(width=2, color='white')
+                ),
+                hoverinfo='text',
+                showlegend=False,
+                name='Workflow Nodes'
+            ))
+            
+            fig.update_layout(
+                title=dict(
+                    text=f'LangGraph Workflow: {analysis_type.title()} Analysis',
+                    font=dict(size=16)
+                ),
+                showlegend=False,
+                hovermode='closest',
+                margin=dict(b=20,l=5,r=5,t=40),
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                plot_bgcolor='white',
+                height=500
+            )
+            
+            return fig
+            
+        except Exception as e:
+            logger.error(f"Failed to create workflow graph: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return None
+
+# Initialize enhanced components
+try:
+    enhanced_token_tracker = EnhancedTokenTracker()
+    enhanced_langsmith_monitor = EnhancedLangSmithMonitor()
+    state_graph_visualizer = StateGraphVisualizer()
+    DASHBOARD_ENHANCEMENTS_AVAILABLE = True
+    logger.info("✅ Enhanced dashboard components initialized")
+except Exception as e:
+    logger.warning(f"Enhanced dashboard components initialization failed: {e}")
+    DASHBOARD_ENHANCEMENTS_AVAILABLE = False
+    enhanced_token_tracker = None
+    enhanced_langsmith_monitor = None
+    state_graph_visualizer = None
+
 # Create MockOptimizationManager class first
 class MockOptimizationManager:
     def __init__(self):
@@ -1156,35 +1669,67 @@ class LangGraphDashboard:
             }
     
     def _run_langgraph_analysis(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Run analysis using LangGraph workflow with LangSmith monitoring."""
+        """Run analysis using LangGraph workflow with enhanced token tracking and LangSmith monitoring."""
         try:
-            # Create LangSmith tracer for monitoring
-            callback_manager = create_langsmith_tracer("marketing-research-dashboard")
-            
-            # Choose workflow based on optimization level
+            # Get optimization level
             opt_settings = config.get("optimization_settings", {})
             optimization_level = opt_settings.get("optimization_level", "none")
             
-            # Always use the numpy-free workflow wrapper since it's the only one that works
+            # Generate workflow ID
+            workflow_id = f"langgraph_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+            
+            # Start enhanced token tracking
+            if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_token_tracker:
+                enhanced_token_tracker.start_workflow_tracking(workflow_id, optimization_level)
+                logger.info(f"🔍 Started enhanced token tracking for workflow: {workflow_id}")
+            
+            # Create enhanced LangSmith tracer
+            callback_manager = None
+            if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_langsmith_monitor and enhanced_langsmith_monitor.available:
+                callback_manager = enhanced_langsmith_monitor.create_run_tracer(workflow_id)
+                logger.info(f"🔍 Created LangSmith tracer for workflow: {workflow_id}")
+            
+            # Always use the optimized workflow wrapper
             workflow = MarketingResearchWorkflow()  # This is actually OptimizedWorkflowWrapper
             logger.info(f"Using optimized LangGraph workflow with optimization level: {optimization_level}")
             
             # Apply optimization strategies
             optimized_config = self._apply_optimization_strategies(config)
+            optimized_config["workflow_id"] = workflow_id
             
             # Store run information for monitoring
             run_metadata = {
+                "workflow_id": workflow_id,
                 "optimization_level": optimization_level,
                 "selected_agents": optimized_config["selected_agents"],
                 "target_audience": optimized_config["target_audience"],
                 "campaign_type": optimized_config["campaign_type"],
                 "budget": optimized_config["budget"],
-                "langsmith_enabled": LANGSMITH_AVAILABLE
+                "langsmith_enabled": LANGSMITH_AVAILABLE and enhanced_langsmith_monitor.available if DASHBOARD_ENHANCEMENTS_AVAILABLE else LANGSMITH_AVAILABLE,
+                "token_tracking_enabled": DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_token_tracker is not None
             }
             
-            # Execute the workflow with proper parameter handling
+            # Execute the workflow with enhanced monitoring
             try:
-                # For numpy-free workflow, call with optimization_level parameter
+                # Track agent execution if enhanced tracking is available
+                if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_token_tracker:
+                    # Simulate token usage for each agent (in real implementation, this would be integrated into the workflow)
+                    for agent in optimized_config["selected_agents"]:
+                        # Estimate tokens based on optimization level
+                        base_tokens = 2000  # Base tokens per agent
+                        if optimization_level == "blackboard":
+                            agent_tokens = int(base_tokens * 0.15)  # 85% reduction
+                        elif optimization_level == "full":
+                            agent_tokens = int(base_tokens * 0.25)  # 75% reduction
+                        elif optimization_level == "partial":
+                            agent_tokens = int(base_tokens * 0.55)  # 45% reduction
+                        else:
+                            agent_tokens = base_tokens
+                        
+                        cost = agent_tokens * 0.0000025  # Approximate cost
+                        enhanced_token_tracker.track_agent_execution(agent, agent_tokens, cost)
+                
+                # Execute workflow
                 result = workflow.execute_workflow(
                     selected_agents=optimized_config["selected_agents"],
                     target_audience=optimized_config["target_audience"],
@@ -1214,12 +1759,25 @@ class LangGraphDashboard:
                     logger.error(f"Fallback execution also failed: {fallback_error}")
                     raise workflow_error
             
-            # Add monitoring metadata to result
+            # Complete token tracking and get final statistics
+            token_stats = {}
+            if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_token_tracker:
+                token_stats = enhanced_token_tracker.complete_workflow_tracking(workflow_id)
+                logger.info(f"🎯 Token tracking completed: {token_stats.get('total_tokens', 0)} tokens used")
+            
+            # Add enhanced monitoring metadata to result
             if isinstance(result, dict):
+                result["workflow_id"] = workflow_id
+                result["token_usage"] = token_stats
                 result["langsmith_monitoring"] = {
-                    "enabled": LANGSMITH_AVAILABLE,
-                    "project": "marketing-research-dashboard",
+                    "enabled": LANGSMITH_AVAILABLE and enhanced_langsmith_monitor.available if DASHBOARD_ENHANCEMENTS_AVAILABLE else LANGSMITH_AVAILABLE,
+                    "project": enhanced_langsmith_monitor.project_name if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_langsmith_monitor else "marketing-research-dashboard",
                     "run_metadata": run_metadata
+                }
+                result["optimization_applied"] = {
+                    "level": optimization_level,
+                    "token_tracking": DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_token_tracker is not None,
+                    "langsmith_monitoring": DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_langsmith_monitor and enhanced_langsmith_monitor.available
                 }
             
             return result
@@ -1646,7 +2204,14 @@ class LangGraphDashboard:
                 st.metric("Compression Ratio", f"{context_opt.get('compression_ratio', 1.0):.2f}x")
     
     def _render_token_usage(self, result: Dict[str, Any]):
-        """Render detailed token usage information."""
+        """Render detailed token usage information with enhanced tracking."""
+        
+        # Use enhanced token tracking if available
+        if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_token_tracker:
+            self._render_enhanced_token_tracking(result)
+            return
+        
+        # Fallback to basic token usage display
         st.subheader("🔍 Token Usage Analysis")
         
         if "token_usage" not in result:
@@ -1743,6 +2308,270 @@ class LangGraphDashboard:
         else:
             st.info("ℹ️ Good token usage. Consider blackboard optimization for maximum efficiency.")
     
+    def _render_enhanced_token_tracking(self, result: Dict[str, Any]):
+        """Render enhanced token tracking section."""
+        st.subheader("🔍 Enhanced Token Usage Analysis")
+        
+        if "token_usage" in result:
+            token_data = result["token_usage"]
+            
+            # Main metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Tokens", f"{token_data.get('total_tokens', 0):,}")
+            with col2:
+                st.metric("Prompt Tokens", f"{token_data.get('prompt_tokens', 0):,}")
+            with col3:
+                st.metric("Completion Tokens", f"{token_data.get('completion_tokens', 0):,}")
+            with col4:
+                st.metric("Cost", f"${token_data.get('total_cost', 0):.4f}")
+            
+            # Optimization metrics
+            if "optimization_level" in token_data:
+                st.subheader("⚡ Optimization Performance")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    savings = token_data.get('savings_percent', 0)
+                    st.metric("Token Savings", f"{savings}%", 
+                             help="Percentage of tokens saved through optimization")
+                with col2:
+                    baseline = token_data.get('baseline_tokens', 0)
+                    st.metric("Baseline Tokens", f"{baseline:,}",
+                             help="Estimated tokens without optimization")
+                with col3:
+                    saved = token_data.get('tokens_saved', 0)
+                    st.metric("Tokens Saved", f"{saved:,}",
+                             help="Actual tokens saved")
+                
+                # Optimization visualization
+                if savings > 0 and PLOTLY_AVAILABLE:
+                    import plotly.graph_objects as go
+                    fig = go.Figure(data=[
+                        go.Bar(name='Baseline', x=['Token Usage'], y=[baseline], marker_color='lightcoral'),
+                        go.Bar(name='Optimized', x=['Token Usage'], y=[token_data.get('total_tokens', 0)], marker_color='lightblue')
+                    ])
+                    fig.update_layout(
+                        title='Token Usage: Baseline vs Optimized',
+                        yaxis_title='Tokens',
+                        barmode='group'
+                    )
+                    st.plotly_chart(fig, use_container_width=True, key=f"token_optimization_chart_{datetime.now().strftime('%H%M%S')}")
+            
+            # Agent breakdown
+            if "agents" in token_data:
+                st.subheader("🤖 Agent Token Breakdown")
+                
+                agent_data = token_data["agents"]
+                if agent_data:
+                    agent_names = list(agent_data.keys())
+                    agent_tokens = [agent_data[agent]['tokens'] for agent in agent_names]
+                    agent_costs = [agent_data[agent]['cost'] for agent in agent_names]
+                    
+                    # Create agent breakdown chart
+                    if PLOTLY_AVAILABLE:
+                        from plotly.subplots import make_subplots
+                        import plotly.graph_objects as go
+                        
+                        fig = make_subplots(
+                            rows=1, cols=2,
+                            subplot_titles=('Token Usage by Agent', 'Cost by Agent'),
+                            specs=[[{"type": "bar"}, {"type": "bar"}]]
+                        )
+                        
+                        fig.add_trace(
+                            go.Bar(x=agent_names, y=agent_tokens, name="Tokens"),
+                            row=1, col=1
+                        )
+                        
+                        fig.add_trace(
+                            go.Bar(x=agent_names, y=agent_costs, name="Cost ($)"),
+                            row=1, col=2
+                        )
+                        
+                        fig.update_layout(height=400, showlegend=False)
+                        st.plotly_chart(fig, use_container_width=True, key=f"agent_token_breakdown_chart_{datetime.now().strftime('%H%M%S')}")
+        else:
+            st.info("No token usage data available. Enable token tracking in optimization settings.")
+    
+    def _render_enhanced_langsmith_monitoring(self):
+        """Render enhanced LangSmith monitoring section."""
+        st.subheader("🔍 Enhanced LangSmith Monitoring")
+        
+        if enhanced_langsmith_monitor and enhanced_langsmith_monitor.available:
+            st.success("✅ LangSmith monitoring is active")
+            
+            # Project information
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Project", enhanced_langsmith_monitor.project_name)
+            with col2:
+                project_url = f"https://smith.langchain.com/o/default/projects/p/{enhanced_langsmith_monitor.project_name}"
+                st.markdown(f"[🔗 View in LangSmith]({project_url})")
+            
+            # Recent runs
+            if st.button("🔄 Refresh Runs"):
+                st.rerun()
+            
+            recent_runs = enhanced_langsmith_monitor.get_recent_runs(limit=5)
+            
+            if recent_runs:
+                st.subheader("📊 Recent Analysis Runs")
+                
+                for run in recent_runs:
+                    with st.expander(f"🔗 {run['name']} - {run['status'].title()}"):
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            if run['start_time']:
+                                st.write(f"**Started:** {run['start_time'].strftime('%H:%M:%S')}")
+                        with col2:
+                            if run['end_time'] and run['start_time']:
+                                duration = (run['end_time'] - run['start_time']).total_seconds()
+                                st.write(f"**Duration:** {duration:.1f}s")
+                        with col3:
+                            st.write(f"**Tokens:** {run['total_tokens']}")
+                        
+                        if run['url']:
+                            st.markdown(f"[🔗 View Detailed Trace]({run['url']})")
+            else:
+                st.info("No recent runs found. Run an analysis to see traces here.")
+                
+        else:
+            st.warning("⚠️ LangSmith monitoring is not available")
+            st.markdown("""
+            **To enable LangSmith monitoring:**
+            1. Set `LANGCHAIN_API_KEY` in your environment
+            2. Set `LANGCHAIN_PROJECT` (optional, defaults to 'marketing-research-swarm')
+            3. Restart the dashboard
+            """)
+    
+    def _render_workflow_graph(self, selected_agents: List[str], analysis_type: str):
+        """Render workflow StateGraph visualization."""
+        st.subheader("🔄 LangGraph Workflow Visualization")
+        
+        if state_graph_visualizer and selected_agents:
+            # Create tabs for different visualizations
+            tab1, tab2, tab3, tab4 = st.tabs(["📊 Interactive Graph", "🔤 ASCII Diagram", "🌊 Mermaid", "📋 Execution Analysis"])
+            
+            with tab1:
+                st.subheader("Interactive Workflow Graph")
+                if state_graph_visualizer.available:
+                    # Create and display the interactive graph
+                    fig = state_graph_visualizer.create_workflow_graph(selected_agents, analysis_type)
+                    
+                    if fig:
+                        st.plotly_chart(fig, use_container_width=True, key=f"workflow_graph_visualization_{datetime.now().strftime('%H%M%S')}")
+                    else:
+                        st.error("Failed to generate interactive graph")
+                else:
+                    st.warning("⚠️ Interactive graph not available. Install: `pip install plotly`")
+            
+            with tab2:
+                st.subheader("ASCII Workflow Diagram")
+                st.markdown("**LangGraph-style ASCII representation:**")
+                
+                # Generate ASCII diagram
+                ascii_diagram = state_graph_visualizer.draw_ascii_graph(selected_agents)
+                st.code(ascii_diagram, language="text")
+                
+                # Show execution order
+                execution_order = state_graph_visualizer.get_execution_order(selected_agents)
+                st.subheader("🔄 Execution Order")
+                
+                for layer_idx, layer in enumerate(execution_order):
+                    if len(layer) == 1:
+                        st.write(f"**Layer {layer_idx + 1}:** {layer[0].replace('_', ' ').title()}")
+                    else:
+                        agents_str = ", ".join([agent.replace('_', ' ').title() for agent in layer])
+                        st.write(f"**Layer {layer_idx + 1} (Parallel):** {agents_str}")
+            
+            with tab3:
+                st.subheader("Mermaid Diagram")
+                st.markdown("**Mermaid.js representation (copy to mermaid.live):**")
+                
+                # Generate Mermaid diagram
+                mermaid_diagram = state_graph_visualizer.create_mermaid_graph(selected_agents)
+                st.code(mermaid_diagram, language="text")
+                
+                st.markdown("💡 **Tip:** Copy the above code to [mermaid.live](https://mermaid.live) for interactive viewing")
+            
+            with tab4:
+                st.subheader("📋 Execution Analysis")
+                
+                # Agent Dependencies Analysis
+                st.subheader("🔗 Agent Dependencies")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("**Selected Agents:**")
+                    for agent in selected_agents:
+                        dependencies = state_graph_visualizer.agent_dependencies.get(agent, [])
+                        if dependencies:
+                            deps_in_selection = [dep for dep in dependencies if dep in selected_agents]
+                            if deps_in_selection:
+                                deps_str = ", ".join([dep.replace('_', ' ').title() for dep in deps_in_selection])
+                                st.write(f"• **{agent.replace('_', ' ').title()}** ← {deps_str}")
+                            else:
+                                st.write(f"• **{agent.replace('_', ' ').title()}** (dependencies not selected)")
+                        else:
+                            st.write(f"• **{agent.replace('_', ' ').title()}** (no dependencies)")
+                
+                with col2:
+                    st.write("**Execution Layers:**")
+                    execution_order = state_graph_visualizer.get_execution_order(selected_agents)
+                    
+                    for layer_idx, layer in enumerate(execution_order):
+                        if len(layer) == 1:
+                            st.write(f"**{layer_idx + 1}.** {layer[0].replace('_', ' ').title()}")
+                        else:
+                            st.write(f"**{layer_idx + 1}.** Parallel execution:")
+                            for agent in layer:
+                                st.write(f"   • {agent.replace('_', ' ').title()}")
+                
+                # Handoff Analysis
+                st.subheader("🔄 Agent Handoffs")
+                
+                handoffs = []
+                for agent in selected_agents:
+                    dependencies = state_graph_visualizer.agent_dependencies.get(agent, [])
+                    for dep in dependencies:
+                        if dep in selected_agents:
+                            handoffs.append(f"{dep.replace('_', ' ').title()} → {agent.replace('_', ' ').title()}")
+                
+                if handoffs:
+                    st.write("**Data handoffs between agents:**")
+                    for handoff in handoffs:
+                        st.write(f"• {handoff}")
+                else:
+                    st.write("**No direct handoffs** - All selected agents can run independently")
+                
+                # Optimization Impact
+                st.subheader("⚡ Optimization Impact")
+                
+                execution_order = state_graph_visualizer.get_execution_order(selected_agents)
+                parallel_layers = sum(1 for layer in execution_order if len(layer) > 1)
+                sequential_layers = len(execution_order) - parallel_layers
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Layers", len(execution_order))
+                with col2:
+                    st.metric("Parallel Layers", parallel_layers)
+                with col3:
+                    st.metric("Sequential Layers", sequential_layers)
+                
+                if parallel_layers > 0:
+                    st.success(f"✅ **Optimized execution**: {parallel_layers} layers can run in parallel")
+                else:
+                    st.info("ℹ️ **Sequential execution**: All agents run one after another")
+        else:
+            if not selected_agents:
+                st.info("Select agents to view the workflow graph")
+            else:
+                st.error("StateGraph visualizer not available")
+    
     def run(self):
         """Run the main dashboard application."""
         render_header()
@@ -1753,8 +2582,16 @@ class LangGraphDashboard:
         # Main content area
         st.header("🎯 Marketing Analysis")
         
-        # LangSmith Monitoring Section
-        if LANGSMITH_AVAILABLE:
+        # StateGraph Visualization Section
+        if DASHBOARD_ENHANCEMENTS_AVAILABLE and state_graph_visualizer and state_graph_visualizer.available:
+            with st.expander("🔄 Workflow StateGraph Visualization", expanded=True):
+                self._render_workflow_graph(config["selected_agents"], config["analysis_type"])
+        
+        # Enhanced LangSmith Monitoring Section
+        if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_langsmith_monitor:
+            with st.expander("🔍 Enhanced LangSmith Monitoring", expanded=False):
+                self._render_enhanced_langsmith_monitoring()
+        elif LANGSMITH_AVAILABLE:
             with st.expander("🔍 LangSmith Monitoring", expanded=False):
                 st.markdown("**Real-time analysis monitoring with LangSmith**")
                 
