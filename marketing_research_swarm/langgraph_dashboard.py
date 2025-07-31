@@ -1513,11 +1513,12 @@ class LangGraphDashboard:
         """Optimize agent selection for token efficiency."""
         # Define minimal agent sets for different analysis types
         minimal_sets = {
+            "comprehensive": ["market_research_analyst", "competitive_analyst", "data_analyst", "content_strategist"],
             "roi_focused": ["data_analyst", "forecasting_specialist"],
-            "content_strategy": ["content_strategist", "creative_copywriter"],
+            "content_strategy": ["market_research_analyst", "content_strategist", "creative_copywriter"],
             "brand_performance": ["competitive_analyst", "brand_performance_specialist"],
-            "sales_forecast": ["forecasting_specialist"],
-            "quick_insights": ["market_research_analyst"]
+            "sales_forecast": ["data_analyst", "forecasting_specialist"],
+            "quick_insights": ["market_research_analyst", "data_analyst"]
         }
         
         # Use minimal set if available, otherwise use first 3 agents
