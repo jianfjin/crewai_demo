@@ -24,6 +24,7 @@ from ..performance.context_optimizer import ContextOptimizer
 from ..context.context_manager import AdvancedContextManager
 from ..cache.smart_cache import SmartCache
 from ..memory.mem0_integration import MarketingMemoryManager
+from ..context.enhanced_context_engineering import get_enhanced_context_engineering
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,9 @@ class OptimizedMarketingWorkflow:
         self.context_manager = AdvancedContextManager()
         self.smart_cache = SmartCache()
         self.memory_manager = MarketingMemoryManager()
+        
+        # Initialize enhanced context engineering
+        self.enhanced_context = get_enhanced_context_engineering()
         
         # Enable context isolation
         self.context_isolation_enabled = True
@@ -113,6 +117,33 @@ class OptimizedMarketingWorkflow:
             workflow_id=workflow_id,
             optimization_level=self.optimization_level
         )
+        
+        # Initialize enhanced context engineering for this workflow
+        workflow_context = {
+            "workflow_id": workflow_id,
+            "selected_agents": state.get("selected_agents", []),
+            "target_audience": state.get("target_audience", ""),
+            "campaign_type": state.get("campaign_type", ""),
+            "analysis_focus": state.get("analysis_focus", ""),
+            "optimization_level": self.optimization_level,
+            "started_at": datetime.now().isoformat()
+        }
+        
+        # Store workflow context in long-term memory
+        self.enhanced_context.store_long_term_memory(
+            key=f"workflow_{workflow_id}",
+            value=workflow_context,
+            namespace="workflows"
+        )
+        
+        # Initialize scratchpads for all selected agents
+        for agent in state.get("selected_agents", []):
+            self.enhanced_context.create_scratchpad_entry(
+                agent_role=agent,
+                step=0,
+                content={"status": "initialized", "workflow_id": workflow_id, "optimization_level": self.optimization_level},
+                reasoning=f"Initialized scratchpad for {agent} in optimized workflow {workflow_id}"
+            )
         
         # Apply agent selection optimization
         if self.optimization_level in ["full", "blackboard"]:
@@ -302,6 +333,14 @@ class OptimizedMarketingWorkflow:
                 if state.get("tokens_used", 0) >= state.get("token_budget", 10000):
                     logger.warning(f"Token budget exceeded, skipping {agent_name}")
                     state["agent_status"][agent_name] = AgentStatus.FAILED
+                    
+                    # Create scratchpad entry for budget exceeded
+                    self.enhanced_context.create_scratchpad_entry(
+                        agent_role=agent_name,
+                        step=state.get("current_step", 0),
+                        content={"action": "budget_exceeded", "tokens_used": state.get("tokens_used", 0), "budget": state.get("token_budget", 10000)},
+                        reasoning=f"Token budget exceeded for {agent_name}, skipping execution"
+                    )
                     return state
                 
                 # Get cached result if available
@@ -314,11 +353,37 @@ class OptimizedMarketingWorkflow:
                     state["agent_status"][agent_name] = AgentStatus.COMPLETED
                     return state
                 
+                # Create scratchpad entry for starting execution
+                current_step = state.get("current_step", 0)
+                self.enhanced_context.create_scratchpad_entry(
+                    agent_role=agent_name,
+                    step=current_step,
+                    content={
+                        "action": "starting_execution",
+                        "optimization_level": self.optimization_level,
+                        "cache_miss": True
+                    },
+                    reasoning=f"Starting execution of {agent_name} with {self.optimization_level} optimization"
+                )
+                
                 # Execute agent with optimization
                 agent_node = AGENT_NODES[agent_name]
                 
-                # Apply context compression for this agent
+                # Apply enhanced context compression for this agent
                 compressed_state = self._compress_state_for_agent(state, agent_name)
+                
+                # Add enhanced context from scratchpad and long-term memory
+                compressed_state["scratchpad_context"] = self.enhanced_context.get_scratchpad_context(agent_name)
+                
+                # Get optimized context using enhanced context engineering
+                enhanced_context = self.enhanced_context.get_context_for_agent(
+                    agent_role=agent_name,
+                    thread_id=state["workflow_id"],
+                    step=current_step,
+                    full_context=compressed_state,
+                    strategy="smart"
+                )
+                compressed_state["enhanced_context"] = enhanced_context
                 
                 # Track tokens before execution
                 tokens_before = self.token_tracker.get_current_usage()
@@ -345,6 +410,54 @@ class OptimizedMarketingWorkflow:
                     if "agent_results" not in state:
                         state["agent_results"] = {}
                     state["agent_results"][agent_name] = compressed_result
+                    
+                    # Create scratchpad entry for successful completion
+                    self.enhanced_context.create_scratchpad_entry(
+                        agent_role=agent_name,
+                        step=current_step,
+                        content={
+                            "action": "completed_execution",
+                            "result_size": len(str(compressed_result)),
+                            "tokens_used": agent_tokens,
+                            "compression_applied": True
+                        },
+                        reasoning=f"Successfully completed {agent_name} execution with {agent_tokens} tokens used"
+                    )
+                    
+                    # Update agent's long-term memory with insights
+                    if isinstance(compressed_result, dict):
+                        insights = {}
+                        if "insights" in compressed_result:
+                            insights["latest_insights"] = compressed_result["insights"]
+                        if "analysis" in compressed_result:
+                            insights["latest_analysis"] = compressed_result["analysis"][:200] + "..." if len(str(compressed_result["analysis"])) > 200 else compressed_result["analysis"]
+                        
+                        if insights:
+                            self.enhanced_context.update_agent_memory(
+                                agent_role=agent_name,
+                                new_insights={
+                                    **insights,
+                                    "execution_step": current_step,
+                                    "tokens_used": agent_tokens,
+                                    "optimization_level": self.optimization_level,
+                                    "timestamp": datetime.now().isoformat()
+                                }
+                            )
+                    
+                    # Create checkpoint after successful execution
+                    token_usage_summary = self.token_tracker.get_usage_summary()
+                    checkpoint = self.enhanced_context.create_checkpoint(
+                        thread_id=state["workflow_id"],
+                        agent_role=agent_name,
+                        step=current_step,
+                        state=state,
+                        token_usage=token_usage_summary
+                    )
+                    
+                    # Store checkpoint reference in state
+                    if "checkpoints" not in state:
+                        state["checkpoints"] = []
+                    state["checkpoints"].append(checkpoint.checkpoint_id)
                 
                 state["agent_status"][agent_name] = AgentStatus.COMPLETED
                 state["agent_execution_order"].append(agent_name)
@@ -354,6 +467,37 @@ class OptimizedMarketingWorkflow:
             except Exception as e:
                 logger.error(f"Agent {agent_name} failed: {e}")
                 state["agent_status"][agent_name] = AgentStatus.FAILED
+                
+                # Create scratchpad entry for failure
+                current_step = state.get("current_step", 0)
+                self.enhanced_context.create_scratchpad_entry(
+                    agent_role=agent_name,
+                    step=current_step,
+                    content={
+                        "action": "execution_failed",
+                        "error": str(e),
+                        "error_type": type(e).__name__
+                    },
+                    reasoning=f"Execution of {agent_name} failed: {str(e)}"
+                )
+                
+                # Create checkpoint for failed state (for debugging)
+                try:
+                    token_usage_summary = self.token_tracker.get_usage_summary()
+                    error_checkpoint = self.enhanced_context.create_checkpoint(
+                        thread_id=state["workflow_id"],
+                        agent_role=agent_name,
+                        step=current_step,
+                        state={**state, "error": str(e)},
+                        token_usage=token_usage_summary
+                    )
+                    
+                    if "error_checkpoints" not in state:
+                        state["error_checkpoints"] = []
+                    state["error_checkpoints"].append(error_checkpoint.checkpoint_id)
+                except Exception as checkpoint_error:
+                    logger.error(f"Failed to create error checkpoint: {checkpoint_error}")
+                
                 if "agent_errors" not in state:
                     state["agent_errors"] = {}
                 state["agent_errors"][agent_name] = str(e)
@@ -669,8 +813,29 @@ class OptimizedMarketingWorkflow:
             state, self.optimization_level
         )
         
-        # Generate final summary with optimization data
-        state["final_summary"] = self._generate_optimized_summary(state, final_token_usage, optimization_metrics)
+        # Get enhanced context engineering statistics
+        enhanced_context_stats = self.enhanced_context.get_system_stats()
+        
+        # Store final workflow state in long-term memory
+        workflow_id = state["workflow_id"]
+        final_workflow_data = {
+            "workflow_id": workflow_id,
+            "final_state": {k: v for k, v in state.items() if k not in ["agent_results"]},  # Exclude large results
+            "optimization_metrics": optimization_metrics,
+            "enhanced_context_stats": enhanced_context_stats,
+            "token_usage": final_token_usage,
+            "completed_at": datetime.now().isoformat(),
+            "success": state["status"] == WorkflowStatus.COMPLETED
+        }
+        
+        self.enhanced_context.store_long_term_memory(
+            key=f"completed_workflow_{workflow_id}",
+            value=final_workflow_data,
+            namespace="completed_workflows"
+        )
+        
+        # Generate final summary with enhanced optimization data
+        state["final_summary"] = self._generate_optimized_summary(state, final_token_usage, optimization_metrics, enhanced_context_stats)
         
         # Store final state in blackboard
         self.blackboard.store_workflow_state(state["workflow_id"], state)
@@ -681,7 +846,7 @@ class OptimizedMarketingWorkflow:
         
         return state
     
-    def _generate_optimized_summary(self, state: MarketingResearchState, token_usage: Dict, optimization_metrics: Dict) -> Dict[str, Any]:
+    def _generate_optimized_summary(self, state: MarketingResearchState, token_usage: Dict, optimization_metrics: Dict, enhanced_context_stats: Dict = None) -> Dict[str, Any]:
         """Generate summary with optimization metrics."""
         
         completed_agents = [
@@ -702,7 +867,22 @@ class OptimizedMarketingWorkflow:
             "tokens_saved_percent": optimization_metrics.get("token_optimization", {}).get("token_savings_percent", 0),
             "cache_hit_rate": optimization_metrics.get("cache_performance", {}).get("hit_rate", 0),
             "key_insights": self._extract_key_insights(state),
-            "recommendations": self._extract_recommendations(state)
+            "recommendations": self._extract_recommendations(state),
+            
+            # Enhanced context engineering metrics
+            "enhanced_context_engineering": {
+                "enabled": True,
+                "stats": enhanced_context_stats or {},
+                "scratchpad_entries": sum(
+                    len(self.enhanced_context.scratchpads.get(agent, []))
+                    for agent in state["selected_agents"]
+                ),
+                "checkpoints_created": len(state.get("checkpoints", [])),
+                "error_checkpoints": len(state.get("error_checkpoints", [])),
+                "long_term_memory_updates": len(state["selected_agents"]),  # One update per agent
+                "context_isolation_applied": True,
+                "inmemory_store_used": True
+            }
         }
         
         return summary
@@ -746,6 +926,77 @@ class OptimizedMarketingWorkflow:
                 recommendations.append(f"{agent}: {result['recommendations'][:100]}...")
         
         return recommendations
+    
+    def get_enhanced_context_stats(self, workflow_id: str = None) -> Dict[str, Any]:
+        """Get enhanced context engineering statistics."""
+        stats = self.enhanced_context.get_system_stats()
+        
+        if workflow_id:
+            # Get workflow-specific stats
+            workflow_context = self.enhanced_context.retrieve_long_term_memory(
+                key=f"workflow_{workflow_id}",
+                namespace="workflows"
+            )
+            
+            if workflow_context:
+                workflow_agents = workflow_context.get("selected_agents", [])
+                workflow_scratchpad_stats = {
+                    agent: len(self.enhanced_context.scratchpads.get(agent, []))
+                    for agent in workflow_agents
+                }
+                
+                stats["workflow_specific"] = {
+                    "workflow_id": workflow_id,
+                    "workflow_context": workflow_context,
+                    "scratchpad_stats": workflow_scratchpad_stats
+                }
+        
+        return stats
+    
+    def restore_workflow_from_checkpoint(self, thread_id: str, checkpoint_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Restore workflow from a checkpoint."""
+        checkpoint = self.enhanced_context.restore_from_checkpoint(thread_id, checkpoint_id)
+        
+        if checkpoint:
+            logger.info(f"🔄 Restored workflow from checkpoint: {checkpoint.checkpoint_id}")
+            return {
+                "checkpoint_id": checkpoint.checkpoint_id,
+                "thread_id": checkpoint.thread_id,
+                "agent_role": checkpoint.agent_role,
+                "step": checkpoint.step,
+                "state": checkpoint.state,
+                "scratchpad": [entry.to_dict() for entry in checkpoint.scratchpad],
+                "timestamp": checkpoint.timestamp.isoformat(),
+                "token_usage": checkpoint.token_usage
+            }
+        
+        return None
+    
+    def get_agent_scratchpad(self, agent_role: str, max_entries: int = 10) -> Dict[str, Any]:
+        """Get scratchpad entries for a specific agent."""
+        return self.enhanced_context.get_scratchpad_context(agent_role, max_entries)
+    
+    def get_workflow_memory(self, workflow_id: str) -> Dict[str, Any]:
+        """Get long-term memory for a specific workflow."""
+        workflow_context = self.enhanced_context.retrieve_long_term_memory(
+            key=f"workflow_{workflow_id}",
+            namespace="workflows"
+        )
+        
+        completed_workflow = self.enhanced_context.retrieve_long_term_memory(
+            key=f"completed_workflow_{workflow_id}",
+            namespace="completed_workflows"
+        )
+        
+        return {
+            "workflow_context": workflow_context,
+            "completed_workflow": completed_workflow,
+            "available": workflow_context is not None or completed_workflow is not None
+        }
+    
+    def cleanup_old_context_data(self, max_age_hours: int = 24) -> Dict[str, int]:
+        """Clean up old context engineering data."""
+        return self.enhanced_context.cleanup_old_data(max_age_hours)
     
     def execute_optimized_workflow(
         self,
