@@ -2519,13 +2519,61 @@ class LangGraphDashboard:
             
             with tab3:
                 st.subheader("Mermaid Diagram")
-                st.markdown("**Mermaid.js representation (copy to mermaid.live):**")
                 
                 # Generate Mermaid diagram
                 mermaid_diagram = state_graph_visualizer.create_mermaid_graph(selected_agents)
-                st.code(mermaid_diagram, language="text")
                 
-                st.markdown("💡 **Tip:** Copy the above code to [mermaid.live](https://mermaid.live) for interactive viewing")
+                # Create sub-tabs for PNG and code
+                mermaid_tab1, mermaid_tab2 = st.tabs(["🖼️ PNG Image", "📝 Mermaid Code"])
+                
+                with mermaid_tab1:
+                    st.markdown("**Visual PNG representation (like LangGraph's draw_mermaid_png()):**")
+                    
+                    try:
+                        # Generate PNG URL using mermaid.ink service
+                        import urllib.parse
+                        encoded_diagram = urllib.parse.quote(mermaid_diagram)
+                        png_url = f"https://mermaid.ink/img/{encoded_diagram}"
+                        
+                        # Display the image
+                        st.image(png_url, caption="Workflow StateGraph", use_column_width=True)
+                        
+                        # Try to download PNG data for download button
+                        try:
+                            import requests
+                            response = requests.get(png_url, timeout=10)
+                            if response.status_code == 200:
+                                png_data = response.content
+                                st.download_button(
+                                    label="📥 Download PNG",
+                                    data=png_data,
+                                    file_name=f"workflow_graph_{analysis_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+                                    mime="image/png"
+                                )
+                            else:
+                                st.markdown(f"**Direct PNG URL:** [Download PNG]({png_url})")
+                        except Exception:
+                            st.markdown(f"**Direct PNG URL:** [Download PNG]({png_url})")
+                        
+                        # Show URL for manual access
+                        with st.expander("🔗 Direct PNG URL"):
+                            st.code(png_url)
+                            
+                    except Exception as e:
+                        st.error(f"❌ PNG generation failed: {e}")
+                        st.markdown("**Please use the Mermaid Code tab below**")
+                
+                with mermaid_tab2:
+                    st.markdown("**Mermaid.js code:**")
+                    st.code(mermaid_diagram, language="text")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("[🔗 Open in Mermaid Live](https://mermaid.live)")
+                    with col2:
+                        st.markdown("[🖼️ View PNG](https://mermaid.ink)")
+                    
+                    st.markdown("💡 **Tip:** Copy the above code to [mermaid.live](https://mermaid.live) for interactive editing")
             
             with tab4:
                 st.subheader("📋 Execution Analysis")
