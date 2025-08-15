@@ -152,7 +152,7 @@ Format your response as a structured analysis with clear sections and actionable
                 data_file = context.get('data_file_path', 'data/beverage_sales_data.csv')
                 if os.path.exists(data_file):
                     result = profitability_analysis.invoke({
-                        'data_file_path': data_file,
+                        'data_path': data_file,
                         'analysis_dimension': 'brand'
                     })
                     tool_results['profitability_analysis'] = result
@@ -162,7 +162,7 @@ Format your response as a structured analysis with clear sections and actionable
                 data_file = context.get('data_file_path', 'data/beverage_sales_data.csv')
                 if os.path.exists(data_file):
                     result = beverage_market_analysis.invoke({
-                        'data_file_path': data_file
+                        'data_path': data_file
                     })
                     tool_results['beverage_market_analysis'] = result
             
@@ -171,8 +171,8 @@ Format your response as a structured analysis with clear sections and actionable
                 data_file = context.get('data_file_path', 'data/beverage_sales_data.csv')
                 if os.path.exists(data_file):
                     result = forecast_sales.invoke({
-                        'data_file_path': data_file,
-                        'forecast_periods': context.get('forecast_periods', 30)
+                        'data_path': data_file,
+                        'periods': context.get('forecast_periods', 30)
                     })
                     tool_results['forecast_sales'] = result
             

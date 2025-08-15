@@ -6,6 +6,8 @@ This is an optimized Streamlit dashboard that uses **LangGraph workflow** instea
 
 ## ✨ Key Features
 
+- **🧠 Context Quality Panel**: Visualizes per-agent context quality (poisoning, distraction, confusion, clash, size) before and after compression
+
 - **🤖 LangGraph Workflow**: Advanced state-managed workflow orchestration
 - **⚡ Token Optimization**: 75-85% token reduction through multiple strategies
 - **💾 Smart Caching**: Intelligent caching to reduce redundant API calls
@@ -107,6 +109,11 @@ The dashboard will be available at: **http://localhost:8502**
 
 ## 🎮 Using the Dashboard
 
+### New: Context Quality Panel
+- After a successful optimized run, open the "🧠 Context Quality" tab to inspect per-agent quality metrics (pre vs post)
+- Metrics include poisoning, distraction, confusion, clash, and size estimates
+- A compact Context Quality summary appears in the header with the average total risk pre vs post (lower is better)
+
 ### 1. **Configure Analysis**
 - Select analysis type (comprehensive, ROI-focused, etc.)
 - Choose agents to include
@@ -128,6 +135,7 @@ The dashboard will be available at: **http://localhost:8502**
 - **⚡ Optimization**: Token savings and performance
 - **🔍 Token Usage**: Detailed usage breakdown
 - **📈 Performance**: Execution metrics and recommendations
+- **🧠 Context Quality**: Per-agent context quality (pre/post) with charts
 
 ## 🧪 Testing & Validation
 

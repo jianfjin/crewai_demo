@@ -25,6 +25,10 @@ from .state import MarketingResearchState, WorkflowStatus, AgentStatus
 from .agents import AGENT_NODES
 from ..blackboard.integrated_blackboard import get_integrated_blackboard
 from ..context.enhanced_context_engineering import get_enhanced_context_engineering
+from ..context.persistent_context_storage import get_persistent_storage
+from ..context.intelligent_context_filter import get_intelligent_filter
+from ..context.compression_strategies import get_context_compressor, CompressionLevel
+from ..context.context_quality import ContextQualityMonitor, TokenBudgetManager
 from ..utils.token_tracker import TokenTracker
 
 logger = logging.getLogger(__name__)
@@ -63,6 +67,11 @@ class EnhancedMarketingWorkflow:
         # Initialize other components
         self.blackboard = get_integrated_blackboard()
         self.token_tracker = TokenTracker()
+        self.persistent_storage = get_persistent_storage()
+        self.context_filter = get_intelligent_filter()
+        self.compressor = get_context_compressor()
+        self.context_quality = ContextQualityMonitor()
+        self.budget_manager: Optional[TokenBudgetManager] = None
         
         # Available agent types
         self.available_agents = list(AGENT_NODES.keys())
@@ -138,6 +147,13 @@ class EnhancedMarketingWorkflow:
         
         # Initialize token tracking
         self.token_tracker.start_tracking(workflow_id=workflow_id)
+
+        # Initialize token budget manager if budget provided in state
+        token_budget = state.get("token_budget")
+        if token_budget:
+            self.budget_manager = TokenBudgetManager(total_budget=int(token_budget))
+        else:
+            self.budget_manager = None
         
         # Store initial long-term memory context
         workflow_context = {
@@ -319,26 +335,94 @@ class EnhancedMarketingWorkflow:
                     namespace="contexts"
                 ) if global_context_key else {}
                 
-                # Get optimized context for this agent
-                optimized_context = self.context_engine.get_context_for_agent(
+                # Get optimized context for this agent (includes isolation)
+                base_context = self.context_engine.get_context_for_agent(
                     agent_role=agent_name,
                     thread_id=workflow_id,
                     step=current_step,
                     full_context={**state, **global_context},
                     strategy=self.context_strategy
                 )
-                
+
+                # Apply intelligent filtering within token budget; if budget manager exists, pass budget
+                token_budget = state.get("token_budget")
+                if not token_budget and self.budget_manager:
+                    # Use knowledge bucket as primary budget for context
+                    allocations = self.budget_manager.allocate_budget().allocations
+                    token_budget = allocations.get("knowledge", token_budget)
+                filtered_context = self.context_filter.filter_context(
+                    context=base_context,
+                    agent_id=agent_name,
+                    task_description=state.get("analysis_focus", ""),
+                    required_keys=[],
+                    token_budget=token_budget
+                )
+
+                # Choose compression level based on strategy
+                strategy_to_level = {
+                    "smart": CompressionLevel.MEDIUM,
+                    "isolated": CompressionLevel.LIGHT,
+                    "compressed": CompressionLevel.AGGRESSIVE,
+                    "minimal": CompressionLevel.EXTREME,
+                }
+                compression_level = strategy_to_level.get(self.context_strategy, CompressionLevel.MEDIUM)
+
+                # Apply compression
+                compressed_context, compression_result = self.compressor.compress_context(
+                    context=filtered_context,
+                    level=compression_level,
+                    preserve_keys=["agent_role", "scratchpad"],
+                    target_reduction=0.5
+                )
+
+                # Evaluate context quality and record
+                quality_report = self.context_quality.evaluate_quality(compressed_context)
+
+                # Record preparation details in state for observability and persistence
+                state.setdefault("last_optimized_context", {})[agent_name] = compressed_context
+                state["last_context_compression"] = {
+                    "agent": agent_name,
+                    "method": compression_result.method_used,
+                    "compression_ratio": compression_result.compression_ratio,
+                    "original_size": compression_result.original_size,
+                    "compressed_size": compression_result.compressed_size,
+                }
+                state.setdefault("context_quality", {})[agent_name] = {
+                    "poisoning": quality_report.poisoning_score,
+                    "distraction": quality_report.distraction_score,
+                    "confusion": quality_report.confusion_score,
+                    "clash": quality_report.clash_score,
+                    "size_estimate": quality_report.size_estimate,
+                    "timestamp": quality_report.timestamp,
+                }
+
                 # Create scratchpad entry for this execution step
                 self.context_engine.create_scratchpad_entry(
                     agent_role=agent_name,
                     step=current_step,
                     content={
                         "action": "starting_execution",
-                        "context_size": len(str(optimized_context)),
-                        "strategy": self.context_strategy
+                        "context_size": len(str(compressed_context)),
+                        "strategy": self.context_strategy,
+                        "compression": state["last_context_compression"],
                     },
                     reasoning=f"Starting execution of {agent_name} with {self.context_strategy} context strategy"
                 )
+
+                # If quality is poor (e.g., high clash or poisoning), annotate scratchpad
+                if quality_report.poisoning_score > 0.7 or quality_report.clash_score > 0.7:
+                    self.context_engine.create_scratchpad_entry(
+                        agent_role=agent_name,
+                        step=current_step,
+                        content={
+                            "action": "quality_warning",
+                            "quality": {
+                                "poisoning": quality_report.poisoning_score,
+                                "clash": quality_report.clash_score
+                            }
+                        },
+                        reasoning=f"Context quality warning for {agent_name}: potential poisoning/clash"
+                    )
                 
                 # Track tokens before execution
                 tokens_before = self.token_tracker.get_current_usage()
@@ -348,7 +432,7 @@ class EnhancedMarketingWorkflow:
                 
                 # Create a modified state with optimized context
                 enhanced_state = state.copy()
-                enhanced_state["optimized_context"] = optimized_context
+                enhanced_state["optimized_context"] = compressed_context
                 enhanced_state["scratchpad"] = self.context_engine.get_scratchpad_context(agent_name)
                 
                 # Execute the agent
@@ -439,6 +523,29 @@ class EnhancedMarketingWorkflow:
                 state=state,
                 token_usage=token_usage
             )
+
+            # Persist to durable storage as well
+            try:
+                self.persistent_storage.save_checkpoint(
+                    workflow_id=workflow_id,
+                    agent_id=current_agent,
+                    context_data={
+                        "state_snapshot": state,
+                        "optimized_context": state.get("last_optimized_context", {}).get(current_agent),
+                        "compression": state.get("last_context_compression"),
+                    },
+                    token_count=token_usage.get("total_tokens", 0),
+                    priority_level="normal",
+                    dependencies=state.get("agent_execution_order", [])[-3:],
+                    compression_level=state.get("last_context_compression", {}).get("method", "none"),
+                    metadata={
+                        "step": state["agent_steps"][current_agent],
+                        "status": state["agent_status"].get(current_agent),
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Persistent checkpoint save failed: {e}")
             
             # Store checkpoint reference in state
             if "checkpoints" not in state:
@@ -602,7 +709,9 @@ class EnhancedMarketingWorkflow:
             }
     
     def restore_workflow_from_checkpoint(self, thread_id: str, checkpoint_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Restore workflow from a checkpoint."""
+        """Restore workflow from a checkpoint.
+        First tries in-memory EnhancedContextEngineering history; if not found, tries persistent storage.
+        """
         
         checkpoint = self.context_engine.restore_from_checkpoint(thread_id, checkpoint_id)
         if checkpoint:
@@ -616,6 +725,24 @@ class EnhancedMarketingWorkflow:
                 "timestamp": checkpoint.timestamp.isoformat(),
                 "token_usage": checkpoint.token_usage
             }
+        
+        # Fallback to persistent storage (latest checkpoint)
+        try:
+            persistent_checkpoints = self.persistent_storage.get_workflow_checkpoints(thread_id, limit=1)
+            if persistent_checkpoints:
+                cp = persistent_checkpoints[0]
+                logger.info(f"🔄 Restored from persistent checkpoint: {cp.checkpoint_id}")
+                return {
+                    "checkpoint_id": cp.checkpoint_id,
+                    "thread_id": cp.workflow_id,
+                    "agent_role": cp.agent_id,
+                    "step": cp.metadata.get("step") if isinstance(cp.metadata, dict) else None,
+                    "state": cp.context_data.get("state_snapshot", {}),
+                    "timestamp": cp.timestamp.isoformat(),
+                    "token_usage": {"total_tokens": cp.token_count},
+                }
+        except Exception as e:
+            logger.warning(f"Persistent restore failed: {e}")
         
         return None
     

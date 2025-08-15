@@ -1288,13 +1288,45 @@ def monitor_langsmith_runs(project_name: str = "marketing-research-dashboard"):
     except Exception as e:
         st.warning(f"Could not fetch LangSmith runs: {e}")
 
+def _compute_context_quality_summary(metrics: List[str] = None):
+    """Compute compact summary metrics from the last run's context quality.
+    Returns None if not available.
+    """
+    try:
+        result = st.session_state.get("last_result")
+        if not isinstance(result, dict):
+            return None
+        cq = result.get("final_state", {}).get("context_quality") or result.get("context_quality")
+        if not isinstance(cq, dict) or not cq:
+            return None
+        pre_totals = []
+        post_totals = []
+        for agent, phases in cq.items():
+            pre = phases.get("pre", {}) if isinstance(phases, dict) else {}
+            post = phases.get("post", {}) if isinstance(phases, dict) else {}
+            selected = tuple(metrics) if metrics else ("poisoning","distraction","confusion","clash")
+            pre_total = sum(float(pre.get(k, 0.0)) for k in selected)
+            post_total = sum(float(post.get(k, 0.0)) for k in selected)
+            pre_totals.append(pre_total)
+            post_totals.append(post_total)
+        if not pre_totals or not post_totals:
+            return None
+        return {
+            "avg_pre_total": sum(pre_totals)/len(pre_totals),
+            "avg_post_total": sum(post_totals)/len(post_totals),
+            "agents_count": len(pre_totals)
+        }
+    except Exception:
+        return None
+
+
 def render_header():
     """Render the dashboard header."""
     st.title("🚀 LangGraph Marketing Research Dashboard")
     st.markdown("**Advanced workflow orchestration with intelligent token optimization**")
     
     # System status with fallback indicators
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1:
         if LANGGRAPH_AVAILABLE:
             status = "🟢 Ready"
@@ -1318,8 +1350,431 @@ def render_header():
     with col5:
         langsmith_status = "🟢 Monitoring" if LANGSMITH_AVAILABLE else "🔴 Disabled"
         st.metric("LangSmith", langsmith_status)
+    with col6:
+        # Compact Context Quality summary (averages across agents)
+        cq_summary = _compute_context_quality_summary(LangGraphDashboard._get_selected_cq_metrics())
+        if cq_summary:
+            delta = cq_summary["avg_pre_total"] - cq_summary["avg_post_total"]
+            selected_labels = {
+                "poisoning": "Poisoning",
+                "distraction": "Distraction",
+                "confusion": "Confusion",
+                "clash": "Clash",
+            }
+            chosen = LangGraphDashboard._get_selected_cq_metrics()
+            chosen_display = ", ".join(selected_labels.get(m, m).lower() for m in chosen) or "all metrics"
+            st.metric(
+                label="Context Quality Δ",
+                value=f"{cq_summary['avg_post_total']:.2f}",
+                delta=f"↓ {delta:.2f}" if delta > 0 else f"↑ {abs(delta):.2f}",
+                help=f"Average total quality risk across agents using: {chosen_display}. Lower is better."
+            )
+        else:
+            st.metric("Context Quality", "N/A", help="Will populate after an optimized run with context-quality tracking.")
     
 class LangGraphDashboard:
+    """LangGraph Marketing Research Dashboard class."""
+    
+    # ---------- Tool Execution & Rendering ----------
+    def _invoke_dashboard_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
+        """Invoke a known tool directly from dashboard without modifying backend.
+        Returns the tool's raw return (usually JSON string).
+        """
+        try:
+            from marketing_research_swarm.tools.advanced_tools import (
+                profitability_analysis,
+                beverage_market_analysis,
+                cross_sectional_analysis,
+                time_series_analysis,
+                analyze_kpis,
+                forecast_sales,
+                calculate_roi,
+                plan_budget,
+                calculate_market_share,
+            )
+            tools_map = {
+                "profitability_analysis": profitability_analysis,
+                "beverage_market_analysis": beverage_market_analysis,
+                "cross_sectional_analysis": cross_sectional_analysis,
+                "time_series_analysis": time_series_analysis,
+                "analyze_kpis": analyze_kpis,
+                "forecast_sales": forecast_sales,
+                "calculate_roi": calculate_roi,
+                "plan_budget": plan_budget,
+                "calculate_market_share": calculate_market_share,
+            }
+            tool = tools_map.get(tool_name)
+            if not tool:
+                raise ValueError(f"Unknown tool: {tool_name}")
+            # Ensure params use correct keys
+            safe_params = dict(params or {})
+            # Map common aliases
+            if "data_file_path" in safe_params and "data_path" not in safe_params:
+                safe_params["data_path"] = safe_params.pop("data_file_path")
+            # Forecast periods alias
+            if "forecast_periods" in safe_params and "periods" not in safe_params:
+                safe_params["periods"] = safe_params.pop("forecast_periods")
+            return tool.invoke(safe_params)
+        except Exception as e:
+            return json.dumps({"error": f"Tool invocation failed: {str(e)}"})
+    
+    def _enrich_with_tool_results(self, result: Dict[str, Any], config: Dict[str, Any]):
+        """If agent did not execute tools, invoke a minimal set here to populate UI.
+        This does not change backend; it's purely for rendering completeness.
+        """
+        agent_results = result.get("agent_results")
+        if not isinstance(agent_results, dict):
+            return
+        # Choose a data path: prefer workflow final_state data_file_path, else config, else default
+        final_state = result.get("final_state", {}) if isinstance(result, dict) else {}
+        default_data = final_state.get("data_file_path") or config.get("data_file_path") or "data/beverage_sales.csv"
+        for agent, ares in agent_results.items():
+            if not isinstance(ares, dict):
+                continue
+            # Skip if already has tool_results
+            if ares.get("tool_results"):
+                continue
+            available = ares.get("tools_available", []) or []
+            # Prepare tool parameter basis
+            base_params = {
+                "data_path": config.get("data_file_path", default_data),
+                "forecast_periods": config.get("forecast_periods", 30),
+            }
+            # Agent-specific minimal set
+            desired_tools = []
+            if agent == "data_analyst":
+                desired_tools = [
+                    ("profitability_analysis", {"analysis_dimension": "brand"}),
+                    ("cross_sectional_analysis", {}),
+                    ("time_series_analysis", {}),
+                    ("analyze_kpis", {}),
+                ]
+            elif agent == "market_research_analyst":
+                desired_tools = [("beverage_market_analysis", {})]
+            elif agent == "forecasting_specialist":
+                desired_tools = [("forecast_sales", {})]
+            # Filter by availability, but if none advertised, still run a safe subset for data_analyst
+            tools_to_run = [(t, p) for (t, p) in desired_tools if (not available) or (t in available)]
+            if not tools_to_run and agent == "data_analyst":
+                tools_to_run = [("profitability_analysis", {"analysis_dimension": "brand"})]
+            # Execute and attach
+            if tools_to_run:
+                tool_results = {}
+                for tname, extra in tools_to_run:
+                    params = {**base_params, **extra}
+                    output = self._invoke_dashboard_tool(tname, params)
+                    tool_results[tname] = output
+                ares["tool_results"] = tool_results
+    
+    # ---------- Tool Results Rendering Helpers ----------
+    @staticmethod
+    def _try_parse_json(payload: Any) -> Any:
+        try:
+            if isinstance(payload, dict):
+                return payload
+            if hasattr(payload, "raw"):
+                import json as _json
+                try:
+                    return _json.loads(payload.raw)
+                except Exception:
+                    return {"_text": str(payload.raw)}
+            if isinstance(payload, str):
+                import json as _json
+                try:
+                    return _json.loads(payload)
+                except Exception:
+                    return {"_text": payload}
+        except Exception:
+            pass
+        return {"_text": str(payload)}
+    
+    @staticmethod
+    def _df_from_dict_of_dicts(obj: Dict[str, Any]):
+        try:
+            import pandas as _pd
+            if not isinstance(obj, dict) or not obj:
+                return None
+            # If values are scalars, make single-row DF
+            if all(not isinstance(v, dict) for v in obj.values()):
+                return _pd.DataFrame([obj])
+            # Try as columns->rows orientation (common from pandas .to_dict())
+            df = _pd.DataFrame(obj)
+            # If index looks like labels (strings) and columns are metric names, keep as is and expose index
+            if df.index.dtype == 'object':
+                df = df.reset_index().rename(columns={"index": "key"})
+                return df
+            # Otherwise try transposed orientation (rows->columns)
+            df_t = _pd.DataFrame(obj).T
+            if df_t.index.dtype == 'object':
+                df_t = df_t.reset_index().rename(columns={"index": "key"})
+                return df_t
+            return df
+        except Exception:
+            return None
+    
+    def _render_specific_tool(self, tool_name: str, data: Dict[str, Any]):
+        import math
+        is_plotly = PLOTLY_AVAILABLE
+        is_pandas = PANDAS_AVAILABLE
+        # Normalize tool name
+        tname = tool_name.lower()
+        # Generic error display
+        if isinstance(data, dict) and data.get("error"):
+            st.error(f"{tool_name}: {data.get('error')}")
+            st.json(data)
+            return
+        try:
+            # Beverage Market Analysis
+            if "beverage_market_analysis" in tname:
+                cols = st.columns(4)
+                with cols[0]:
+                    st.metric("Brands", data.get("total_brands", 0))
+                with cols[1]:
+                    st.metric("Categories", data.get("total_categories", 0))
+                with cols[2]:
+                    st.metric("Regions", data.get("total_regions", 0))
+                with cols[3]:
+                    st.metric("Market Value", f"${data.get('total_market_value', 0):,.0f}")
+                # Top bars
+                for title, key in [("Top Brands", "top_brands"), ("Top Categories", "top_categories"), ("Top Regions", "top_regions")]:
+                    stats = data.get(key, {}) or {}
+                    if stats and is_plotly and is_pandas:
+                        sdf = pd.DataFrame({"name": list(stats.keys()), "value": list(stats.values())})
+                        fig = px.bar(sdf, x="name", y="value", title=title)
+                        fig.update_layout(xaxis_tickangle=-30)
+                        st.plotly_chart(fig, use_container_width=True)
+                    elif stats:
+                        st.write(f"**{title}**")
+                        st.table(pd.DataFrame({"value": stats}).T if is_pandas else stats)
+                if data.get("market_overview"):
+                    st.info(data["market_overview"])
+                return
+            
+            # Profitability Analysis
+            if "profitability_analysis" in tname:
+                cols = st.columns(5)
+                with cols[0]: st.metric("Total Revenue", f"${data.get('total_revenue', 0):,.0f}")
+                with cols[1]: st.metric("Total Cost", f"${data.get('total_cost', 0):,.0f}")
+                with cols[2]: st.metric("Total Profit", f"${data.get('total_profit', data.get('profit', 0)):,.0f}")
+                with cols[3]: st.metric("Avg Margin", f"{data.get('average_profit_margin', data.get('profit_margin', 0)):.2f}%")
+                with cols[4]: st.metric("Avg ROI", f"{data.get('average_roi', data.get('roi', 0)):.2f}%")
+                tp = data.get("top_performers") or {}
+                df = None
+                if tp:
+                    # top_performers likely dict of dicts
+                    df = self._df_from_dict_of_dicts(tp)
+                    if df is not None and is_plotly:
+                        # Try common columns
+                        cand_cols = [c for c in df.columns if c.lower().endswith("profit") or c.lower() == "profit"]
+                        ycol = cand_cols[0] if cand_cols else df.columns[1] if len(df.columns) > 1 else None
+                        if ycol:
+                            fig = px.bar(df, x="key", y=ycol, title="Top Performers")
+                            fig.update_layout(xaxis_title=data.get("analysis_dimension", "segment"))
+                            st.plotly_chart(fig, use_container_width=True)
+                    if df is not None:
+                        st.dataframe(df, use_container_width=True)
+                return
+            
+            # Cross-Sectional Analysis
+            if "cross_sectional_analysis" in tname:
+                seg = data.get("segment_performance") or {}
+                df = self._df_from_dict_of_dicts(seg)
+                if df is not None:
+                    st.dataframe(df, use_container_width=True)
+                    if is_plotly:
+                        # plot sum column if exists
+                        ycol = "sum" if "sum" in df.columns else None
+                        if ycol:
+                            fig = px.bar(df, x="key", y=ycol, title=f"Performance by {data.get('segment_column', 'segment')}")
+                            fig.update_layout(xaxis_tickangle=-30)
+                            st.plotly_chart(fig, use_container_width=True)
+                if data.get("performance_gaps"):
+                    gaps = data["performance_gaps"]
+                    st.info(f"Gap: {gaps.get('performance_gap', 0):,.2f} ({gaps.get('gap_percentage', 0):.2f}%)")
+                return
+            
+            # Time Series Analysis
+            if "time_series_analysis" in tname:
+                trend = data.get("trend_analysis", {})
+                cols = st.columns(4)
+                with cols[0]: st.metric("Avg Value", f"{trend.get('average_value', 0):,.2f}")
+                with cols[1]: st.metric("Total", f"{trend.get('total_value', 0):,.2f}")
+                with cols[2]: st.metric("Volatility", f"{trend.get('volatility', 0):,.2f}")
+                with cols[3]: st.metric("Trend", trend.get('overall_trend', 'n/a').title() if isinstance(trend.get('overall_trend'), str) else str(trend.get('overall_trend')))
+                # Seasonal patterns line
+                sp = data.get("seasonal_patterns") or {}
+                if sp and is_plotly and is_pandas:
+                    sdf = pd.DataFrame({"period": list(sp.keys()), "value": list(sp.values())})
+                    try:
+                        # sort by period if YYYY-MM format
+                        sdf = sdf.sort_values("period")
+                    except Exception:
+                        pass
+                    fig = px.line(sdf, x="period", y="value", title="Seasonal Pattern")
+                    fig.update_layout(xaxis_tickangle=-30)
+                    st.plotly_chart(fig, use_container_width=True)
+                elif sp:
+                    st.table(pd.DataFrame([sp]).T if is_pandas else sp)
+                return
+            
+            # Forecast Sales
+            if "forecast_sales" in tname:
+                fvals = data.get("forecast_values") or []
+                periods = list(range(1, len(fvals) + 1))
+                if fvals and is_plotly and is_pandas:
+                    sdf = pd.DataFrame({"period": periods, "forecast": fvals})
+                    fig = px.line(sdf, x="period", y="forecast", title=f"Forecast ({data.get('forecast_periods', len(fvals))} periods)")
+                    st.plotly_chart(fig, use_container_width=True)
+                elif fvals:
+                    st.table(pd.DataFrame({"period": periods, "forecast": fvals}) if is_pandas else {"forecast": fvals})
+                if data.get("forecast_summary"):
+                    st.json(data["forecast_summary"])
+                return
+            
+            # Analyze KPIs
+            if "analyze_kpis" in tname or ("kpis" in data and isinstance(data["kpis"], dict)):
+                kpis = data.get("kpis", {})
+                if kpis:
+                    if is_pandas:
+                        df = pd.DataFrame([kpis])
+                        st.dataframe(df, use_container_width=True)
+                    else:
+                        st.json(kpis)
+                return
+            
+            # Calculate ROI
+            if "calculate_roi" in tname:
+                cols = st.columns(4)
+                with cols[0]: st.metric("Investment", f"${data.get('investment', 0):,.2f}")
+                with cols[1]: st.metric("Revenue", f"${data.get('revenue', 0):,.2f}")
+                with cols[2]: st.metric("Profit", f"${data.get('profit', 0):,.2f}")
+                with cols[3]: st.metric("ROI %", f"{data.get('roi_percentage', 0):.2f}%")
+                if data.get("roi_insights"): st.info(data["roi_insights"])
+                return
+            
+            # Plan Budget
+            if "plan_budget" in tname:
+                alloc = data.get("budget_allocation", {})
+                if alloc and is_plotly and is_pandas:
+                    sdf = pd.DataFrame({"channel": list(alloc.keys()), "amount": list(alloc.values())})
+                    fig = px.pie(sdf, names="channel", values="amount", title="Budget Allocation")
+                    st.plotly_chart(fig, use_container_width=True)
+                elif alloc:
+                    st.table(pd.DataFrame([alloc]).T if is_pandas else alloc)
+                if data.get("percentage_allocation"):
+                    st.json({"percentages": data["percentage_allocation"]})
+                return
+            
+            # Market Share
+            if "market_share" in tname:
+                cols = st.columns(3)
+                with cols[0]: st.metric("Company Revenue", f"${data.get('company_revenue', 0):,.0f}")
+                with cols[1]: st.metric("Total Market", f"${data.get('total_market_revenue', 0):,.0f}")
+                with cols[2]: st.metric("Share %", f"{data.get('market_share_percentage', 0):.2f}%")
+                if data.get("competitive_position"): st.info(f"Position: {data['competitive_position']}")
+                return
+            
+            # Fallback generic rendering
+            df = self._df_from_dict_of_dicts(data)
+            if df is not None:
+                if is_plotly:
+                    fig = px.bar(df, x="key", y=df.columns[1] if len(df.columns) > 1 else None, title=tool_name)
+                    st.plotly_chart(fig, use_container_width=True)
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.json(data)
+        except Exception:
+            # If anything fails, show raw JSON
+            st.json(data)
+    
+    def _render_tool_results(self, agent: str, tool_results: Dict[str, Any]):
+        """Render all tool results for a given agent with tables/plots."""
+        if not tool_results:
+            st.info("No tool results available for this agent.")
+            return
+        for tool_name, payload in tool_results.items():
+            with st.expander(f"🔧 {tool_name.replace('_',' ').title()}", expanded=False):
+                data = self._try_parse_json(payload)
+                self._render_specific_tool(tool_name, data)
+    
+    @staticmethod
+    def _get_selected_cq_metrics() -> List[str]:
+        # Stored in session_state by sidebar toggle
+        default = ["poisoning","distraction","confusion","clash"]
+        selected = st.session_state.get("cq_metrics_selected", default)
+        # Validate
+        valid = {"poisoning","distraction","confusion","clash"}
+        return [m for m in selected if m in valid] or default
+    """LangGraph Marketing Research Dashboard class."""
+    
+    def _render_context_quality(self, result: Dict[str, Any]):
+        """Render per-agent context quality metrics (pre/post)."""
+        st.subheader("🧠 Context Quality by Agent")
+        cq = result.get("final_state", {}).get("context_quality") or result.get("context_quality")
+        if not isinstance(cq, dict) or not cq:
+            st.info("No context quality data available. Run the optimized workflow to collect per-agent quality metrics.")
+            return
+        
+        # Flatten metrics for a table/chart
+        rows = []
+        for agent, phases in cq.items():
+            pre = phases.get("pre", {}) if isinstance(phases, dict) else {}
+            post = phases.get("post", {}) if isinstance(phases, dict) else {}
+            rows.append({
+                "Agent": agent.replace('_',' ').title(),
+                "Pre Poisoning": round(pre.get("poisoning", 0.0), 2),
+                "Pre Distraction": round(pre.get("distraction", 0.0), 2),
+                "Pre Confusion": round(pre.get("confusion", 0.0), 2),
+                "Pre Clash": round(pre.get("clash", 0.0), 2),
+                "Pre Size": pre.get("size_estimate", 0),
+                "Post Poisoning": round(post.get("poisoning", 0.0), 2),
+                "Post Distraction": round(post.get("distraction", 0.0), 2),
+                "Post Confusion": round(post.get("confusion", 0.0), 2),
+                "Post Clash": round(post.get("clash", 0.0), 2),
+                "Post Size": post.get("size_estimate", 0),
+            })
+        
+        if rows:
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True)
+            
+            # Visual comparisons
+            if PLOTLY_AVAILABLE and len(rows) > 0:
+                import plotly.express as px
+                # Bar chart for pre vs post clash/poisoning by agent
+                long_rows = []
+                for r in rows:
+                    for metric_key, label in [("Pre Poisoning","Poisoning"),("Pre Distraction","Distraction"),("Pre Confusion","Confusion"),("Pre Clash","Clash")]:
+                        long_rows.append({"Agent": r["Agent"], "Phase": "Pre", "Metric": label, "Score": r[metric_key]})
+                    for metric_key, label in [("Post Poisoning","Poisoning"),("Post Distraction","Distraction"),("Post Confusion","Confusion"),("Post Clash","Clash")]:
+                        long_rows.append({"Agent": r["Agent"], "Phase": "Post", "Metric": label, "Score": r[metric_key]})
+                dfl = pd.DataFrame(long_rows)
+                st.plotly_chart(px.bar(dfl, x="Agent", y="Score", color="Phase", facet_col="Metric", barmode="group", title="Context Quality (Pre vs Post)"), use_container_width=True)
+        
+        # Per-agent details
+        for agent, phases in cq.items():
+            with st.expander(f"Details: {agent.replace('_',' ').title()}"):
+                pre = phases.get("pre", {}) if isinstance(phases, dict) else {}
+                post = phases.get("post", {}) if isinstance(phases, dict) else {}
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Pre-Compression**")
+                    st.metric("Poisoning", f"{pre.get('poisoning', 0):.2f}")
+                    st.metric("Distraction", f"{pre.get('distraction', 0):.2f}")
+                    st.metric("Confusion", f"{pre.get('confusion', 0):.2f}")
+                    st.metric("Clash", f"{pre.get('clash', 0):.2f}")
+                    st.metric("Size Estimate", pre.get('size_estimate', 0))
+                with col2:
+                    st.markdown("**Post-Compression**")
+                    st.metric("Poisoning", f"{post.get('poisoning', 0):.2f}")
+                    st.metric("Distraction", f"{post.get('distraction', 0):.2f}")
+                    st.metric("Confusion", f"{post.get('confusion', 0):.2f}")
+                    st.metric("Clash", f"{post.get('clash', 0):.2f}")
+                    st.metric("Size Estimate", post.get('size_estimate', 0))
+    
+    """
+    LangGraph Marketing Research Dashboard class.
+    """
     """LangGraph Marketing Research Dashboard class."""
     
     def __init__(self):
@@ -1546,6 +2001,23 @@ class LangGraphDashboard:
             value=True,
             help="Enable result caching for faster subsequent runs"
         )
+        
+        # Context Quality Summary
+        st.sidebar.subheader("Context Quality Summary")
+        cq_options = [
+            ("poisoning", "Poisoning"),
+            ("distraction", "Distraction"),
+            ("confusion", "Confusion"),
+            ("clash", "Clash")
+        ]
+        default_cq = [o[0] for o in cq_options]
+        selected_cq = st.sidebar.multiselect(
+            "Include in header summary",
+            options=[o[0] for o in cq_options],
+            default=st.session_state.get("cq_metrics_selected", default_cq),
+            format_func=lambda x: dict(cq_options)[x]
+        )
+        st.session_state["cq_metrics_selected"] = selected_cq
         
         # Memory & Tracking
         st.sidebar.subheader("Memory & Tracking")
@@ -1811,6 +2283,12 @@ class LangGraphDashboard:
                     "langsmith_monitoring": DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_langsmith_monitor and enhanced_langsmith_monitor.available
                 }
             
+            # Enrich with tool results based on available tools and structured params
+            try:
+                self._enrich_with_tool_results(result, config)
+            except Exception as enrich_err:
+                logger.warning(f"Tool enrichment failed: {enrich_err}")
+            
             return result
             
         except Exception as e:
@@ -2046,6 +2524,12 @@ class LangGraphDashboard:
             logger.info(f"   - Cost: ${metrics.get('total_cost', 0):.4f}")
             logger.info(f"   - Duration: {analysis_result.get('duration_seconds', 0):.1f}s")
             
+            # Enrich with tool results so UI can render tables/plots even if agents didn't call tools
+            try:
+                self._enrich_with_tool_results(result, config)
+            except Exception as enrich_err:
+                logger.warning(f"Tool enrichment (fallback) failed: {enrich_err}")
+            
             return result
             
         except Exception as e:
@@ -2125,10 +2609,13 @@ class LangGraphDashboard:
         st.success("✅ Analysis completed successfully!")
         
         # Create tabs for different result views
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 Results", "⚡ Optimization", "🔍 Token Usage", "📈 Performance"])
+        tab1, tab_tools, tab2, tab3, tab4, tab5 = st.tabs(["📊 Results", "🧰 Tools", "⚡ Optimization", "🔍 Token Usage", "📈 Performance", "🧠 Context Quality"])
         
         with tab1:
             self._render_analysis_results(result)
+        
+        with tab_tools:
+            self._render_all_tool_results(result)
         
         with tab2:
             self._render_optimization_metrics(result)
@@ -2138,6 +2625,9 @@ class LangGraphDashboard:
         
         with tab4:
             self._render_performance_metrics(result)
+        
+        with tab5:
+            self._render_context_quality(result)
     
     def _render_analysis_results(self, result: Dict[str, Any]):
         """Render the main analysis results."""
@@ -2173,6 +2663,16 @@ class LangGraphDashboard:
                         if "metrics" in agent_result:
                             st.write("**Metrics:**")
                             st.json(agent_result["metrics"])
+                        # Suggested structured parameters (if any)
+                        for sugg_key in ["tool_param_suggestions", "structured_params", "tool_parameters"]:
+                            if sugg_key in agent_result and agent_result[sugg_key]:
+                                st.write("**Suggested Tool Parameters:**")
+                                st.json(agent_result[sugg_key])
+                                break
+                        # Render tool results if present
+                        if "tool_results" in agent_result and agent_result["tool_results"]:
+                            st.write("**Tool Results:**")
+                            self._render_tool_results(agent, agent_result["tool_results"]) 
                     else:
                         st.write(str(agent_result))
     
@@ -2297,6 +2797,23 @@ class LangGraphDashboard:
                     title="Token Usage by Agent"
                 )
                 st.plotly_chart(fig, use_container_width=True)
+    
+    def _render_all_tool_results(self, result: Dict[str, Any]):
+        """Render a consolidated Tools tab across all agents."""
+        st.subheader("🧰 Consolidated Tool Results")
+        agent_results = result.get("agent_results", {}) or {}
+        if not agent_results:
+            st.info("No agent tool results available.")
+            return
+        # Tabs per agent with any tool_results
+        agents_with_tools = [(a, r.get("tool_results")) for a, r in agent_results.items() if isinstance(r, dict) and r.get("tool_results")]
+        if not agents_with_tools:
+            st.info("No tool results captured from agents.")
+            return
+        agent_tabs = st.tabs([a.replace('_',' ').title() for a, _ in agents_with_tools])
+        for (agent, tool_results), tab in zip(agents_with_tools, agent_tabs):
+            with tab:
+                self._render_tool_results(agent, tool_results)
     
     def _render_performance_metrics(self, result: Dict[str, Any]):
         """Render performance and execution metrics."""

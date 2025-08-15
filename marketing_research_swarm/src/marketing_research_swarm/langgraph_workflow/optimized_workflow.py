@@ -25,6 +25,7 @@ from ..context.context_manager import AdvancedContextManager
 from ..cache.smart_cache import SmartCache
 from ..memory.mem0_integration import MarketingMemoryManager
 from ..context.enhanced_context_engineering import get_enhanced_context_engineering
+from ..context.context_quality import ContextQualityMonitor, TokenBudgetManager
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,10 @@ class OptimizedMarketingWorkflow:
         
         # Initialize enhanced context engineering
         self.enhanced_context = get_enhanced_context_engineering()
+        
+        # Context quality and budget management
+        self.context_quality = ContextQualityMonitor()
+        self.budget_manager: Optional[TokenBudgetManager] = None
         
         # Enable context isolation
         self.context_isolation_enabled = True
@@ -162,6 +167,9 @@ class OptimizedMarketingWorkflow:
         }
         state["token_budget"] = token_budgets.get(self.optimization_level, 10000)
         state["tokens_used"] = 0
+
+        # Initialize TokenBudgetManager for downstream filtering/compression phases
+        self.budget_manager = TokenBudgetManager(total_budget=int(state["token_budget"]))
         
         # Initialize optimization tracking
         state["optimization_applied"] = {
@@ -371,19 +379,83 @@ class OptimizedMarketingWorkflow:
                 
                 # Apply enhanced context compression for this agent
                 compressed_state = self._compress_state_for_agent(state, agent_name)
-                
+
                 # Add enhanced context from scratchpad and long-term memory
                 compressed_state["scratchpad_context"] = self.enhanced_context.get_scratchpad_context(agent_name)
-                
-                # Get optimized context using enhanced context engineering
-                enhanced_context = self.enhanced_context.get_context_for_agent(
+
+                # Get optimized (isolated) context using enhanced context engineering
+                base_context = self.enhanced_context.get_context_for_agent(
                     agent_role=agent_name,
                     thread_id=state["workflow_id"],
                     step=current_step,
                     full_context=compressed_state,
                     strategy="smart"
                 )
-                compressed_state["enhanced_context"] = enhanced_context
+
+                # Apply token budget allocations (knowledge bucket) if available
+                knowledge_budget = None
+                if self.budget_manager:
+                    knowledge_budget = self.budget_manager.allocate_budget().allocations.get("knowledge")
+
+                # Apply quality monitoring and attach to state
+                quality_report_pre = self.context_quality.evaluate_quality(base_context)
+                state.setdefault("context_quality", {}).setdefault(agent_name, {})["pre"] = {
+                    "poisoning": quality_report_pre.poisoning_score,
+                    "distraction": quality_report_pre.distraction_score,
+                    "confusion": quality_report_pre.confusion_score,
+                    "clash": quality_report_pre.clash_score,
+                    "size_estimate": quality_report_pre.size_estimate,
+                    "timestamp": quality_report_pre.timestamp,
+                }
+
+                # We don't have the IntelligentContextFilter here; use ContextOptimizer to reduce size by budget heuristically
+                # If knowledge_budget exists, cap certain text fields lengths proportionally
+                if knowledge_budget is not None:
+                    # Simple heuristic: ensure analysis_focus and target_audience are within budgeted lengths
+                    def trim_text(val: Any, max_tokens: int) -> Any:
+                        try:
+                            s = str(val)
+                            # Approx tokens ~ words, keep 1.3 factor margin
+                            max_words = max(10, int(max_tokens / 1.3))
+                            words = s.split()
+                            if len(words) > max_words:
+                                return " ".join(words[:max_words]) + " ... [budget_trim]"
+                            return s
+                        except Exception:
+                            return val
+                    if "analysis_focus" in compressed_state:
+                        compressed_state["analysis_focus"] = trim_text(compressed_state["analysis_focus"], max(100, int(knowledge_budget * 0.05)))
+                    if "target_audience" in compressed_state:
+                        compressed_state["target_audience"] = trim_text(compressed_state["target_audience"], max(60, int(knowledge_budget * 0.03)))
+
+                # After trims, attach the context for agent
+                compressed_state["enhanced_context"] = base_context
+
+                # Post-quality monitoring
+                quality_report_post = self.context_quality.evaluate_quality(compressed_state["enhanced_context"])
+                state["context_quality"][agent_name]["post"] = {
+                    "poisoning": quality_report_post.poisoning_score,
+                    "distraction": quality_report_post.distraction_score,
+                    "confusion": quality_report_post.confusion_score,
+                    "clash": quality_report_post.clash_score,
+                    "size_estimate": quality_report_post.size_estimate,
+                    "timestamp": quality_report_post.timestamp,
+                }
+
+                # Add a scratchpad warning if quality issues are severe
+                if quality_report_post.poisoning_score > 0.7 or quality_report_post.clash_score > 0.7:
+                    self.enhanced_context.create_scratchpad_entry(
+                        agent_role=agent_name,
+                        step=current_step,
+                        content={
+                            "action": "quality_warning",
+                            "quality": {
+                                "poisoning": quality_report_post.poisoning_score,
+                                "clash": quality_report_post.clash_score
+                            }
+                        },
+                        reasoning=f"Context quality warning for {agent_name}: potential poisoning/clash"
+                    )
                 
                 # Track tokens before execution
                 tokens_before = self.token_tracker.get_current_usage()
