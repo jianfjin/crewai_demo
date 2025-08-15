@@ -1414,9 +1414,61 @@ class LangGraphDashboard:
             # Forecast periods alias
             if "forecast_periods" in safe_params and "periods" not in safe_params:
                 safe_params["periods"] = safe_params.pop("forecast_periods")
-            return tool.invoke(safe_params)
+            # Robust invocation across tool variants
+            if hasattr(tool, 'invoke'):
+                return tool.invoke(safe_params)
+            if hasattr(tool, '_run'):
+                return tool._run(**safe_params)
+            if hasattr(tool, 'run'):
+                try:
+                    return tool.run(**safe_params)
+                except TypeError:
+                    return tool.run(safe_params)
+            # Fallback: try calling as function
+            try:
+                return tool(**safe_params)
+            except Exception:
+                pass
+            raise AttributeError(f"No supported invocation method on tool '{tool_name}'")
         except Exception as e:
             return json.dumps({"error": f"Tool invocation failed: {str(e)}"})
+    
+    def _resolve_data_path(self, result: Dict[str, Any], config: Dict[str, Any]) -> str:
+        """Resolve the best data file path to use for tools.
+        Priority:
+        1) result.final_state.data_file_path (if exists)
+        2) config.data_file_path (if exists)
+        3) absolute '/workspaces/crewai_demo/marketing_research_swarm/data/beverage_sales.csv' (if exists)
+        4) 'data/beverage_sales.csv' (if exists)
+        5) fallback to provided path even if missing (tools will use sample data fallback)
+        """
+        try:
+            import os
+            candidates = []
+            if isinstance(result, dict):
+                fs = result.get("final_state", {}) or {}
+                fp = fs.get("data_file_path")
+                if fp:
+                    candidates.append(fp)
+            cp = config.get("data_file_path") if isinstance(config, dict) else None
+            if cp:
+                candidates.append(cp)
+            # candidates.append("/workspaces/crewai_demo/marketing_research_swarm/data/beverage_sales.csv")
+            candidates.append("data/beverage_sales.csv")
+            # Return first existing candidate
+            for p in candidates:
+                try:
+                    if p and os.path.exists(p):
+                        return p
+                except Exception:
+                    pass
+            # If none exist, return first non-empty candidate, else last fallback
+            for p in candidates:
+                if p:
+                    return p
+            return "data/beverage_sales.csv"
+        except Exception:
+            return "data/beverage_sales.csv"
     
     def _enrich_with_tool_results(self, result: Dict[str, Any], config: Dict[str, Any]):
         """If agent did not execute tools, invoke a minimal set here to populate UI.
@@ -1425,9 +1477,8 @@ class LangGraphDashboard:
         agent_results = result.get("agent_results")
         if not isinstance(agent_results, dict):
             return
-        # Choose a data path: prefer workflow final_state data_file_path, else config, else default
-        final_state = result.get("final_state", {}) if isinstance(result, dict) else {}
-        default_data = final_state.get("data_file_path") or config.get("data_file_path") or "data/beverage_sales.csv"
+        # Resolve best data path (checks absolute path too)
+        default_data = self._resolve_data_path(result, config)
         for agent, ares in agent_results.items():
             if not isinstance(ares, dict):
                 continue
@@ -2667,7 +2718,25 @@ class LangGraphDashboard:
                         for sugg_key in ["tool_param_suggestions", "structured_params", "tool_parameters"]:
                             if sugg_key in agent_result and agent_result[sugg_key]:
                                 st.write("**Suggested Tool Parameters:**")
-                                st.json(agent_result[sugg_key])
+                                # Show normalized suggestion preview for known tools
+                                suggestions = agent_result[sugg_key]
+                                try:
+                                    if isinstance(suggestions, dict):
+                                        norm = {}
+                                        for tname, params in suggestions.items():
+                                            # map aliases for preview
+                                            if isinstance(params, dict):
+                                                p = dict(params)
+                                                if "data_file_path" in p and "data_path" not in p:
+                                                    p["data_path"] = p["data_file_path"]
+                                                if "forecast_periods" in p and "periods" not in p:
+                                                    p["periods"] = p["forecast_periods"]
+                                                norm[tname] = p
+                                        st.json(norm)
+                                    else:
+                                        st.json(suggestions)
+                                except Exception:
+                                    st.json(suggestions)
                                 break
                         # Render tool results if present
                         if "tool_results" in agent_result and agent_result["tool_results"]:

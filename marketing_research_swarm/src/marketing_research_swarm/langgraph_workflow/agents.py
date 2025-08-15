@@ -117,6 +117,11 @@ Format your response as a structured analysis with clear sections and actionable
                 'tools_available': self.tools
             }
             
+            # Attach structured tool parameter suggestions based on role and context
+            suggestions = self._build_tool_param_suggestions(context)
+            if suggestions:
+                result['tool_param_suggestions'] = suggestions
+            
             # Try to execute relevant tools if mentioned in the response
             tool_results = self._execute_relevant_tools(context, response.content)
             if tool_results:
@@ -140,6 +145,69 @@ Format your response as a structured analysis with clear sections and actionable
             return "No previous results available."
         
         return "\n".join(previous_results)
+    
+    def _build_tool_param_suggestions(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Create structured tool parameter suggestions per agent role consistent with tool signatures."""
+        suggestions = {}
+        data_file = context.get('data_file_path', 'data/beverage_sales.csv')
+        # Resolve to an existing path if possible (prefer absolute workspace path)
+        data_path = data_file
+        try:
+            import os
+            candidates = [
+                data_file,
+                '/workspaces/crewai_demo/marketing_research_swarm/data/beverage_sales.csv',
+                'data/beverage_sales.csv'
+            ]
+            for p in candidates:
+                if p and os.path.exists(p):
+                    data_path = p
+                    break
+        except Exception:
+            pass
+        if self.role == 'data_analyst':
+            if 'profitability_analysis' in self.tools:
+                suggestions['profitability_analysis'] = {
+                    'data_path': data_path,
+                    'analysis_dimension': 'brand'
+                }
+            if 'cross_sectional_analysis' in self.tools:
+                suggestions['cross_sectional_analysis'] = {
+                    'data_path': data_path,
+                    'segment_column': 'brand',
+                    'value_column': 'total_revenue'
+                }
+            if 'time_series_analysis' in self.tools:
+                suggestions['time_series_analysis'] = {
+                    'data_path': data_path,
+                    'date_column': 'sale_date',
+                    'value_column': 'total_revenue'
+                }
+            if 'analyze_kpis' in self.tools:
+                suggestions['analyze_kpis'] = {
+                    'data_path': data_path
+                }
+        elif self.role == 'market_research_analyst' and 'beverage_market_analysis' in self.tools:
+            suggestions['beverage_market_analysis'] = {
+                'data_path': data_path
+            }
+        elif self.role == 'forecasting_specialist' and 'forecast_sales' in self.tools:
+            suggestions['forecast_sales'] = {
+                'data_path': data_path,
+                'periods': context.get('forecast_periods', 30)
+            }
+        elif self.role == 'campaign_optimizer' and 'calculate_roi' in self.tools:
+            suggestions['calculate_roi'] = {
+                'investment': context.get('budget', 250000),
+                'revenue': context.get('expected_revenue', 25000)
+            }
+        elif self.role == 'brand_performance_specialist' and 'calculate_market_share' in self.tools:
+            suggestions['calculate_market_share'] = {
+                'company_revenue': None,
+                'total_market_revenue': None
+            }
+        # Only return if non-empty
+        return suggestions
     
     def _execute_relevant_tools(self, context: Dict[str, Any], response_content: str) -> Dict[str, Any]:
         """Execute tools that are relevant to the agent's analysis."""
