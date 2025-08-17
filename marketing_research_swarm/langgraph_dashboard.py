@@ -3365,7 +3365,7 @@ class LangGraphDashboard:
         )
         
         if mode == "🤖 Chat Mode":
-            self._render_chat_mode()
+            self._render_integrated_chat_mode()
         else:
             self._render_manual_mode()
     
