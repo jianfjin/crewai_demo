@@ -614,3 +614,19 @@ profitability_analysis = ProfitabilityAnalysisTool()
 cross_sectional_analysis = CrossSectionalAnalysisTool()
 time_series_analysis = TimeSeriesAnalysisTool()
 forecast_sales = ForecastSalesTool()
+
+def get_tools():
+    """
+    Get all available tools for the marketing research workflow.
+    
+    Returns:
+        List of tool instances that can be used by agents
+    """
+    return [
+        beverage_market_analysis,
+        analyze_brand_performance,
+        profitability_analysis,
+        cross_sectional_analysis,
+        time_series_analysis,
+        forecast_sales
+    ]

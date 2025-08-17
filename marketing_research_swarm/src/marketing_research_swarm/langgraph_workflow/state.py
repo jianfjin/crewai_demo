@@ -200,7 +200,7 @@ def create_initial_state(
         
         # Geographic and temporal data
         regions=inputs.get('regions', ['North', 'South', 'East', 'West']),
-        data_file_path=inputs.get('data_file_path', 'data/beverage_sales_data.csv'),
+        data_file_path=inputs.get('data_file_path', 'data/beverage_sales.csv'),
         forecast_periods=inputs.get('forecast_periods', 30),
         
         # Analysis results (all start as None)
@@ -316,7 +316,8 @@ def get_agent_context(state: MarketingResearchState, agent_role: str) -> Dict[st
         'brands': state['brands'],
         'campaign_goals': state['campaign_goals'],
         'shared_data': state.get('shared_data', {}),
-        'cached_results': state['cached_results']
+        'cached_results': state['cached_results'],
+        'data_file_path': state.get('data_file_path', 'data/beverage_sales.csv')
     }
     
     # Add results from completed agents
