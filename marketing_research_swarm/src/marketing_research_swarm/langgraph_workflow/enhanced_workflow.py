@@ -664,21 +664,65 @@ class EnhancedMarketingWorkflow:
         """Execute the enhanced workflow with context engineering."""
         
         try:
-            # Create initial state
-            initial_state = {
-                "workflow_id": str(uuid.uuid4()),
-                "workflow_type": "enhanced_marketing_research",
-                "status": WorkflowStatus.PENDING,
-                "selected_agents": selected_agents,
-                "target_audience": target_audience,
-                "campaign_type": campaign_type,
-                "budget": budget,
-                "duration": duration,
-                "analysis_focus": analysis_focus,
-                "created_at": datetime.now(),
-                "updated_at": datetime.now(),
-                **kwargs
-            }
+            # Create initial state as MarketingResearchState object
+            workflow_id = str(uuid.uuid4())
+            current_time = datetime.now()
+            
+            initial_state = MarketingResearchState(
+                workflow_id=workflow_id,
+                workflow_type="enhanced_marketing_research",
+                status=WorkflowStatus.PENDING,
+                selected_agents=selected_agents,
+                target_audience=target_audience,
+                campaign_type=campaign_type,
+                budget=budget,
+                duration=duration,
+                analysis_focus=analysis_focus,
+                created_at=current_time,
+                updated_at=current_time,
+                # Add required fields with defaults from kwargs or sensible defaults
+                initial_inputs=kwargs,
+                business_objective=kwargs.get("business_objective", ""),
+                competitive_landscape=kwargs.get("competitive_landscape", ""),
+                market_segments=kwargs.get("market_segments", ["premium", "mass_market"]),
+                product_categories=kwargs.get("product_categories", ["soft_drinks", "energy_drinks"]),
+                key_metrics=kwargs.get("key_metrics", ["revenue", "market_share"]),
+                brands=kwargs.get("brands", ["Brand_A", "Brand_B"]),
+                campaign_goals=kwargs.get("campaign_goals", ["increase_awareness"]),
+                agent_configs={},
+                optimization_level=kwargs.get("optimization_level", "partial"),
+                agent_execution_order=[],
+                current_agent=None,
+                agent_status={agent: AgentStatus.PENDING for agent in selected_agents},
+                agent_results={},
+                agent_errors={},
+                agent_token_usage={},
+                shared_data={},
+                shared_context={},
+                cached_results={},
+                completed_at=None,
+                final_summary=None,
+                regions=kwargs.get("regions", ["North", "South"]),
+                data_file_path=kwargs.get("data_file_path", "data/beverage_sales.csv"),
+                forecast_periods=kwargs.get("forecast_periods", 30),
+                market_research_results=None,
+                competitive_analysis_results=None,
+                data_analysis_results=None,
+                content_strategy_results=None,
+                copywriting_results=None,
+                campaign_optimization_results=None,
+                brand_performance_results=None,
+                forecasting_results=None,
+                final_report=None,
+                recommendations=None,
+                next_steps=None,
+                errors=[],
+                warnings=[],
+                total_token_usage={'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
+                execution_time=None,
+                cache_hits=0,
+                cache_misses=0
+            )
             
             logger.info(f"🚀 Starting enhanced workflow: {initial_state['workflow_id']}")
             

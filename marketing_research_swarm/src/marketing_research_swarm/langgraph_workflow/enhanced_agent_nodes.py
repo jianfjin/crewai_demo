@@ -491,6 +491,7 @@ def enhanced_forecasting_specialist_node(state: MarketingResearchState) -> Marke
 
 # Enhanced Agent Node Mapping
 ENHANCED_AGENT_NODES = {
+    # Lowercase with underscores (original format)
     'market_research_analyst': enhanced_market_research_analyst_node,
     'competitive_analyst': enhanced_competitive_analyst_node,
     'data_analyst': enhanced_data_analyst_node,
@@ -499,4 +500,15 @@ ENHANCED_AGENT_NODES = {
     'campaign_optimizer': enhanced_campaign_optimizer_node,
     'brand_performance_specialist': enhanced_brand_performance_specialist_node,
     'forecasting_specialist': enhanced_forecasting_specialist_node,
+    
+    # Title case with spaces (dashboard format) - CRITICAL FIX
+    'Market Research Analyst': enhanced_market_research_analyst_node,
+    'Competitive Analyst': enhanced_competitive_analyst_node,
+    'Data Analyst': enhanced_data_analyst_node,
+    'Content Strategist': enhanced_content_strategist_node,
+    'Creative Copywriter': enhanced_creative_copywriter_node,
+    'Campaign Optimizer': enhanced_campaign_optimizer_node,
+    'Brand Performance Analyst': enhanced_brand_performance_specialist_node,
+    'Sales Forecast Analyst': enhanced_forecasting_specialist_node,
+    'ROI Analysis Expert': enhanced_forecasting_specialist_node,  # Using forecasting for ROI as well
 }

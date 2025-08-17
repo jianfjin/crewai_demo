@@ -1414,23 +1414,29 @@ class LangGraphDashboard:
             # Forecast periods alias
             if "forecast_periods" in safe_params and "periods" not in safe_params:
                 safe_params["periods"] = safe_params.pop("forecast_periods")
-            # Robust invocation across tool variants
-            if hasattr(tool, 'invoke'):
-                return tool.invoke(safe_params)
+            
+            # FIXED: Use correct tool invocation method
+            # Try _run method first (most common for our tools)
             if hasattr(tool, '_run'):
                 return tool._run(**safe_params)
-            if hasattr(tool, 'run'):
+            # Try invoke method (LangChain tools)
+            elif hasattr(tool, 'invoke'):
+                return tool.invoke(safe_params)
+            # Try run method
+            elif hasattr(tool, 'run'):
                 try:
                     return tool.run(**safe_params)
                 except TypeError:
                     return tool.run(safe_params)
             # Fallback: try calling as function
-            try:
-                return tool(**safe_params)
-            except Exception:
-                pass
-            raise AttributeError(f"No supported invocation method on tool '{tool_name}'")
+            else:
+                try:
+                    return tool(**safe_params)
+                except Exception:
+                    pass
+                raise AttributeError(f"No supported invocation method on tool '{tool_name}'")
         except Exception as e:
+            logger.error(f"Tool invocation failed for {tool_name}: {e}")
             return json.dumps({"error": f"Tool invocation failed: {str(e)}"})
     
     def _resolve_data_path(self, result: Dict[str, Any], config: Dict[str, Any]) -> str:
@@ -1471,51 +1477,95 @@ class LangGraphDashboard:
             return "data/beverage_sales.csv"
     
     def _enrich_with_tool_results(self, result: Dict[str, Any], config: Dict[str, Any]):
-        """If agent did not execute tools, invoke a minimal set here to populate UI.
-        This does not change backend; it's purely for rendering completeness.
+        """If agent did not execute tools, invoke a comprehensive set here to populate UI.
+        This ensures all agents show tool results even when using mock workflows.
         """
         agent_results = result.get("agent_results")
         if not isinstance(agent_results, dict):
             return
         # Resolve best data path (checks absolute path too)
         default_data = self._resolve_data_path(result, config)
+        
+        logger.info(f"🔧 Enriching tool results for {len(agent_results)} agents")
+        
         for agent, ares in agent_results.items():
             if not isinstance(ares, dict):
                 continue
-            # Skip if already has tool_results
-            if ares.get("tool_results"):
+            # Skip if already has comprehensive tool_results
+            existing_tools = ares.get("tool_results", {})
+            if existing_tools and len(existing_tools) > 1:  # More than just metadata
+                logger.info(f"✅ {agent} already has {len(existing_tools)} tools")
                 continue
+            
             available = ares.get("tools_available", []) or []
             # Prepare tool parameter basis
             base_params = {
                 "data_path": config.get("data_file_path", default_data),
                 "forecast_periods": config.get("forecast_periods", 30),
             }
-            # Agent-specific minimal set
+            
+            # ENHANCED: Agent-specific comprehensive tool sets
             desired_tools = []
             if agent == "data_analyst":
                 desired_tools = [
                     ("profitability_analysis", {"analysis_dimension": "brand"}),
-                    ("cross_sectional_analysis", {}),
-                    ("time_series_analysis", {}),
+                    ("cross_sectional_analysis", {"segment_column": "category", "value_column": "total_revenue"}),
+                    ("time_series_analysis", {"date_column": "sale_date", "value_column": "total_revenue"}),
                     ("analyze_kpis", {}),
                 ]
             elif agent == "market_research_analyst":
                 desired_tools = [("beverage_market_analysis", {})]
             elif agent == "forecasting_specialist":
-                desired_tools = [("forecast_sales", {})]
-            # Filter by availability, but if none advertised, still run a safe subset for data_analyst
+                desired_tools = [("forecast_sales", {"periods": config.get("forecast_periods", 30)})]
+            elif agent == "campaign_optimizer":
+                desired_tools = [
+                    ("calculate_roi", {"investment": config.get("budget", 250000), "revenue": config.get("expected_revenue", 25000)}),
+                    ("plan_budget", {"total_budget": config.get("budget", 250000)}),
+                ]
+            elif agent == "brand_performance_specialist":
+                desired_tools = [
+                    ("calculate_market_share", {}),
+                    ("beverage_market_analysis", {}),  # For brand context
+                ]
+            elif agent == "competitive_analyst":
+                desired_tools = [
+                    ("beverage_market_analysis", {}),
+                    ("cross_sectional_analysis", {"segment_column": "brand", "value_column": "total_revenue"}),
+                ]
+            elif agent == "content_strategist":
+                desired_tools = [
+                    ("beverage_market_analysis", {}),  # For market context
+                ]
+            elif agent == "creative_copywriter":
+                desired_tools = [
+                    ("beverage_market_analysis", {}),  # For brand context
+                ]
+            
+            # Filter by availability, but if none advertised, run all desired tools
             tools_to_run = [(t, p) for (t, p) in desired_tools if (not available) or (t in available)]
-            if not tools_to_run and agent == "data_analyst":
-                tools_to_run = [("profitability_analysis", {"analysis_dimension": "brand"})]
+            if not tools_to_run and desired_tools:
+                tools_to_run = desired_tools  # Run all if no restrictions
+            
             # Execute and attach
             if tools_to_run:
-                tool_results = {}
+                tool_results = existing_tools.copy() if existing_tools else {}
+                executed_count = 0
+                
                 for tname, extra in tools_to_run:
-                    params = {**base_params, **extra}
-                    output = self._invoke_dashboard_tool(tname, params)
-                    tool_results[tname] = output
+                    try:
+                        params = {**base_params, **extra}
+                        logger.info(f"🔧 Executing {tname} for {agent}")
+                        output = self._invoke_dashboard_tool(tname, params)
+                        tool_results[tname] = output
+                        executed_count += 1
+                    except Exception as e:
+                        logger.warning(f"⚠️  Tool {tname} failed for {agent}: {e}")
+                        tool_results[tname] = {"error": str(e)}
+                
                 ares["tool_results"] = tool_results
+                logger.info(f"✅ {agent} enriched with {executed_count} tools")
+            else:
+                logger.info(f"ℹ️  No tools to enrich for {agent}")
     
     # ---------- Tool Results Rendering Helpers ----------
     @staticmethod
@@ -2224,7 +2274,7 @@ class LangGraphDashboard:
                 logger.info(f"🔍 Created LangSmith tracer for workflow: {workflow_id}")
             
             # Always use the optimized workflow wrapper with smart tools enabled
-            workflow = MarketingResearchWorkflow(enable_smart_tools=True)  # This is actually OptimizedWorkflowWrapper
+            workflow = MarketingResearchWorkflow()  # This is actually OptimizedWorkflowWrapper
             logger.info(f"Using optimized LangGraph workflow with smart tool selection and optimization level: {optimization_level}")
             
             # Apply optimization strategies
@@ -2283,7 +2333,7 @@ class LangGraphDashboard:
                         cost = (agent_tokens * 0.000000150) + (agent_tokens * 0.0000006)  # Input + output cost
                         enhanced_token_tracker.track_agent_execution(agent, agent_tokens, cost)
                 
-                # Execute workflow
+                # Execute workflow with ALL parameters
                 result = workflow.execute_workflow(
                     selected_agents=optimized_config["selected_agents"],
                     target_audience=optimized_config["target_audience"],
@@ -2291,6 +2341,18 @@ class LangGraphDashboard:
                     budget=optimized_config["budget"],
                     duration=optimized_config["duration"],
                     analysis_focus=optimized_config["analysis_focus"],
+                    business_objective=optimized_config.get("business_objective", ""),
+                    competitive_landscape=optimized_config.get("competitive_landscape", ""),
+                    market_segments=optimized_config.get("market_segments", []),
+                    product_categories=optimized_config.get("product_categories", []),
+                    key_metrics=optimized_config.get("key_metrics", []),
+                    brands=optimized_config.get("brands", []),
+                    campaign_goals=optimized_config.get("campaign_goals", []),
+                    forecast_periods=optimized_config.get("forecast_periods", 30),
+                    expected_revenue=optimized_config.get("expected_revenue", 25000),
+                    brand_metrics=optimized_config.get("brand_metrics", {}),
+                    competitive_analysis=optimized_config.get("competitive_analysis", True),
+                    market_share_analysis=optimized_config.get("market_share_analysis", True),
                     optimization_level=optimization_level
                 )
                 logger.info(f"✅ Workflow executed successfully with optimization level: {optimization_level}")
@@ -2305,7 +2367,19 @@ class LangGraphDashboard:
                         'campaign_type': optimized_config["campaign_type"],
                         'budget': optimized_config["budget"],
                         'duration': optimized_config["duration"],
-                        'analysis_focus': optimized_config["analysis_focus"]
+                        'analysis_focus': optimized_config["analysis_focus"],
+                        'business_objective': optimized_config.get("business_objective", ""),
+                        'competitive_landscape': optimized_config.get("competitive_landscape", ""),
+                        'market_segments': optimized_config.get("market_segments", []),
+                        'product_categories': optimized_config.get("product_categories", []),
+                        'key_metrics': optimized_config.get("key_metrics", []),
+                        'brands': optimized_config.get("brands", []),
+                        'campaign_goals': optimized_config.get("campaign_goals", []),
+                        'forecast_periods': optimized_config.get("forecast_periods", 30),
+                        'expected_revenue': optimized_config.get("expected_revenue", 25000),
+                        'brand_metrics': optimized_config.get("brand_metrics", {}),
+                        'competitive_analysis': optimized_config.get("competitive_analysis", True),
+                        'market_share_analysis': optimized_config.get("market_share_analysis", True)
                     }
                     result = workflow.run(inputs_dict, optimization_level)
                     logger.info("✅ Workflow executed successfully using fallback method")
@@ -2710,7 +2784,31 @@ class LangGraphDashboard:
                             st.write(agent_result["analysis"])
                         if "recommendations" in agent_result:
                             st.write("**Recommendations:**")
-                            st.write(agent_result["recommendations"])
+                            recommendations = agent_result["recommendations"]
+                            
+                            # Fix: Handle different recommendation formats properly
+                            if isinstance(recommendations, list):
+                                # If it's a list, display each item properly
+                                for i, rec in enumerate(recommendations, 1):
+                                    if isinstance(rec, str):
+                                        # Clean up any truncated text
+                                        cleaned_rec = rec.strip()
+                                        # Fix truncated "ations" back to "Recommendations"
+                                        if cleaned_rec.startswith("ations"):
+                                            cleaned_rec = "Recommend" + cleaned_rec
+                                        st.write(f"{i}. {cleaned_rec}")
+                                    else:
+                                        st.write(f"{i}. {rec}")
+                            elif isinstance(recommendations, str):
+                                # If it's a string, display it properly
+                                cleaned_recommendations = recommendations.strip()
+                                # Fix truncated "ations" back to "Recommendations"
+                                if cleaned_recommendations.startswith("ations"):
+                                    cleaned_recommendations = "Recommend" + cleaned_recommendations
+                                st.write(cleaned_recommendations)
+                            else:
+                                # Fallback for other formats
+                                st.write(recommendations)
                         if "metrics" in agent_result:
                             st.write("**Metrics:**")
                             st.json(agent_result["metrics"])
@@ -3139,8 +3237,8 @@ class LangGraphDashboard:
                             encoded_diagram = encoded_bytes.decode('utf-8')
                             png_url = f"https://mermaid.ink/img/{encoded_diagram}"
                         
-                        # Display the image
-                        st.image(png_url, caption="Workflow StateGraph", use_column_width=True)
+                        # Display the image at 50% size
+                        st.image(png_url, caption="Workflow StateGraph", width=400)
                         
                         # Try to download PNG data for download button
                         try:

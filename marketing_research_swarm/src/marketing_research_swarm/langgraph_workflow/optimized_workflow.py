@@ -118,7 +118,40 @@ class OptimizedMarketingWorkflow:
         workflow.add_edge("result_compression", "agent_router")
         workflow.add_edge("finalize", END)
         
-        return workflow.compile(checkpointer=self.checkpointer)
+        return workflow
+    
+    def _validate_workflow_parameters(self, kwargs: Dict[str, Any]) -> None:
+        """Validate workflow parameters to prevent runtime errors."""
+        required_params = ['selected_agents', 'target_audience', 'campaign_type', 'budget']
+        
+        for param in required_params:
+            if param not in kwargs or not kwargs[param]:
+                raise ValueError(f"Required parameter '{param}' is missing or empty")
+        
+        # Type validation
+        if not isinstance(kwargs.get('budget', 0), (int, float)) or kwargs.get('budget', 0) <= 0:
+            raise ValueError("Budget must be a positive number")
+        
+        if not isinstance(kwargs.get('selected_agents', []), list) or not kwargs.get('selected_agents', []):
+            raise ValueError("Selected agents must be a non-empty list")
+        
+        # Validate agent names
+        valid_agents = ["Market Research Analyst", "Data Analyst", "Brand Performance Analyst", 
+                       "Sales Forecast Analyst", "ROI Analysis Expert"]
+        invalid_agents = [agent for agent in kwargs.get('selected_agents', []) if agent not in valid_agents]
+        if invalid_agents:
+            raise ValueError(f"Invalid agent names: {invalid_agents}")
+        
+        logger.info("Workflow parameters validated successfully")
+    
+    def compile_workflow(self):
+        """Compile the workflow with error handling."""
+        try:
+            workflow = self.get_workflow_graph()
+            return workflow.compile(checkpointer=self.checkpointer)
+        except Exception as e:
+            logger.error(f"Workflow compilation failed: {e}")
+            raise
     
     def _optimized_start_node(self, state: MarketingResearchState) -> MarketingResearchState:
         """Optimized start node with token budget management."""
@@ -1350,30 +1383,70 @@ class OptimizedMarketingWorkflow:
         """Execute the optimized workflow with comprehensive token reduction."""
         
         try:
-            # Create initial state
-            initial_state = {
-                "workflow_id": str(uuid.uuid4()),
-                "workflow_type": "optimized_marketing_research",
-                "status": WorkflowStatus.RUNNING,
-                "selected_agents": selected_agents,
-                "target_audience": target_audience,
-                "campaign_type": campaign_type,
-                "budget": budget,
-                "duration": duration,
-                "analysis_focus": analysis_focus,
-                "agent_status": {agent: AgentStatus.PENDING for agent in selected_agents},
-                "agent_results": {},
-                "agent_execution_order": [],
-                "created_at": datetime.now(),
-                "updated_at": datetime.now(),
-                **kwargs
-            }
+            # Create initial state as MarketingResearchState object
+            workflow_id = str(uuid.uuid4())
+            current_time = datetime.now()
+            
+            initial_state = MarketingResearchState(
+                workflow_id=workflow_id,
+                workflow_type="optimized_marketing_research",
+                status=WorkflowStatus.RUNNING,
+                selected_agents=selected_agents,
+                target_audience=target_audience,
+                campaign_type=campaign_type,
+                budget=budget,
+                duration=duration,
+                analysis_focus=analysis_focus,
+                agent_status={agent: AgentStatus.PENDING for agent in selected_agents},
+                agent_results={},
+                agent_execution_order=[],
+                created_at=current_time,
+                updated_at=current_time,
+                # Add required fields with defaults from kwargs or sensible defaults
+                initial_inputs=kwargs,
+                business_objective=kwargs.get("business_objective", ""),
+                competitive_landscape=kwargs.get("competitive_landscape", ""),
+                market_segments=kwargs.get("market_segments", ["premium", "mass_market"]),
+                product_categories=kwargs.get("product_categories", ["soft_drinks", "energy_drinks"]),
+                key_metrics=kwargs.get("key_metrics", ["revenue", "market_share"]),
+                brands=kwargs.get("brands", ["Brand_A", "Brand_B"]),
+                campaign_goals=kwargs.get("campaign_goals", ["increase_awareness"]),
+                agent_configs={},
+                optimization_level=kwargs.get("optimization_level", "partial"),
+                agent_token_usage={},
+                shared_data={},
+                shared_context={},
+                cached_results={},
+                completed_at=None,
+                final_summary=None,
+                regions=kwargs.get("regions", ["North", "South"]),
+                data_file_path=kwargs.get("data_file_path", "data/beverage_sales.csv"),
+                forecast_periods=kwargs.get("forecast_periods", 30),
+                market_research_results=None,
+                competitive_analysis_results=None,
+                data_analysis_results=None,
+                content_strategy_results=None,
+                copywriting_results=None,
+                campaign_optimization_results=None,
+                brand_performance_results=None,
+                forecasting_results=None,
+                final_report=None,
+                recommendations=None,
+                next_steps=None,
+                errors=[],
+                warnings=[],
+                total_token_usage={'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
+                execution_time=None,
+                cache_hits=0,
+                cache_misses=0
+            )
             
             logger.info(f"Starting optimized workflow: {initial_state['workflow_id']}")
             
-            # Execute the workflow
+            # Compile and execute the workflow
+            compiled_workflow = self.workflow.compile(checkpointer=self.checkpointer)
             config = {"configurable": {"thread_id": initial_state["workflow_id"]}}
-            final_state = self.workflow.invoke(initial_state, config=config)
+            final_state = compiled_workflow.invoke(initial_state, config=config)
             
             # Stop token tracking
             final_stats = self.token_tracker.stop_tracking(initial_state["workflow_id"])

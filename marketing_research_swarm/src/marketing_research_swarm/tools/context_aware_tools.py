@@ -181,10 +181,9 @@ reference_retriever = ReferenceRetrieverTool()
 # Context-aware versions of the main tools
 def create_context_aware_tools():
     """Create context-aware versions of all tools with smart caching."""
-    from .advanced_tools import (
+    from .advanced_tools_fixed import (
         beverage_market_analysis, time_series_analysis, cross_sectional_analysis,
-        profitability_analysis, calculate_roi, analyze_kpis, forecast_sales,
-        plan_budget, analyze_brand_performance, calculate_market_share
+        profitability_analysis, forecast_sales, analyze_brand_performance
     )
     
     return {
@@ -200,22 +199,23 @@ def create_context_aware_tools():
         "profitability_analysis": wrap_tool_for_context_isolation(
             profitability_analysis, "profitability_analysis"
         ),
-        "calculate_roi": wrap_tool_for_context_isolation(
-            calculate_roi, "calculate_roi"
-        ),
-        "analyze_kpis": wrap_tool_for_context_isolation(
-            analyze_kpis, "analyze_kpis"
-        ),
         "forecast_sales": wrap_tool_for_context_isolation(
             forecast_sales, "forecast_sales"
         ),
-        "plan_budget": wrap_tool_for_context_isolation(
-            plan_budget, "plan_budget"
-        ),
         "analyze_brand_performance": wrap_tool_for_context_isolation(
             analyze_brand_performance, "analyze_brand_performance"
-        ),
-        "calculate_market_share": wrap_tool_for_context_isolation(
-            calculate_market_share, "calculate_market_share"
         )
     }
+
+def get_context_aware_tools():
+    """
+    Get all context-aware tools for the marketing research workflow.
+    
+    Returns:
+        List of context-aware tool instances that can be used by agents
+    """
+    # Get the context-aware tools dictionary
+    tools_dict = create_context_aware_tools()
+    
+    # Return as a list of tool instances
+    return list(tools_dict.values())

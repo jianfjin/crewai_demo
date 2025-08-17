@@ -13,6 +13,9 @@ from datetime import datetime
 from .agents import LangGraphAgent
 from .smart_tool_selector import SmartToolSelector
 from .state import MarketingResearchState
+from ..tools.advanced_tools_fixed import get_tools
+# Temporarily disable context_aware_tools due to circular import
+# from ..tools.context_aware_tools import get_context_aware_tools
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +38,33 @@ class EnhancedLangGraphAgent(LangGraphAgent):
         # Initialize smart tool selector
         self.tool_selector = SmartToolSelector()
         
+        # Initialize available tools - CRITICAL FIX for tool retrieval
+        self.available_tools = {}
+        self._initialize_available_tools()
+        
         # Performance tracking
         self.execution_history = []
         self.tool_performance = {}
         
-        logger.info(f"Enhanced agent {role} initialized with {len(tools)} tools")
+        logger.info(f"Enhanced agent {role} initialized with {len(tools)} tools and {len(self.available_tools)} available tools")
+    
+    def _initialize_available_tools(self):
+        """Initialize all available tools for fallback access."""
+        try:
+            # Get standard tools
+            standard_tools = get_tools()
+            for tool in standard_tools:
+                self.available_tools[tool.name] = tool
+            
+            # TODO: Re-enable context-aware tools once circular import is resolved
+            # context_tools = get_context_aware_tools()
+            # for tool in context_tools:
+            #     self.available_tools[tool.name] = tool
+                
+            logger.info(f"Initialized {len(self.available_tools)} available tools for enhanced agent")
+        except Exception as e:
+            logger.error(f"Failed to initialize available tools: {e}")
+            self.available_tools = {}
     
     def execute_task_with_smart_tools(self, state: MarketingResearchState, task_description: str) -> Dict[str, Any]:
         """
@@ -124,27 +149,66 @@ class EnhancedLangGraphAgent(LangGraphAgent):
     
     def _smart_tool_selection(self, task_description: str, context: Dict[str, Any]) -> Dict[str, List[str]]:
         """
-        Perform smart tool selection using the tiered approach.
+        Perform smart tool selection using the tiered approach with fallback.
         
         Returns:
             Dict with 'essential', 'contextual', 'supplementary' tool lists
         """
         
-        # Use smart tool selector to determine optimal tools
-        tool_selection = self.tool_selector.select_tools_for_execution(
-            agent_role=self.role,
-            query_text=task_description,
-            available_tools=self.tools,
-            context=context,
-            max_tools=4  # Limit for performance
-        )
+        try:
+            # Use smart tool selector to determine optimal tools
+            tool_selection = self.tool_selector.select_tools_for_execution(
+                agent_role=self.role,
+                query_text=task_description,
+                available_tools=self.tools,
+                context=context,
+                max_tools=4  # Limit for performance
+            )
+            
+            logger.info(f"Smart tool selection for {self.role}:")
+            logger.info(f"  Essential: {tool_selection['essential']}")
+            logger.info(f"  Contextual: {tool_selection['contextual']}")
+            logger.info(f"  Supplementary: {tool_selection['supplementary']}")
+            
+            return tool_selection
+            
+        except Exception as e:
+            logger.warning(f"Smart tool selector failed for {self.role}: {e}")
+            logger.info("Falling back to default tool selection based on agent role")
+            
+            # FALLBACK: Use role-based tool selection
+            return self._fallback_tool_selection(task_description, context)
+    
+    def _fallback_tool_selection(self, task_description: str, context: Dict[str, Any]) -> Dict[str, List[str]]:
+        """
+        Fallback tool selection based on agent role when smart selector fails.
+        """
+        # Role-based tool mapping
+        role_tools = {
+            'Market Research Analyst': ['web_search_tool', 'data_analysis_tool', 'market_data_processor'],
+            'Data Analyst': ['data_analysis_tool', 'statistical_analysis_tool', 'visualization_tool'],
+            'Brand Performance Analyst': ['brand_analysis_tool', 'competitive_analysis_tool', 'performance_metrics_tool'],
+            'Sales Forecast Analyst': ['forecasting_tool', 'trend_analysis_tool', 'sales_data_processor'],
+            'ROI Analysis Expert': ['roi_calculator', 'financial_analysis_tool', 'cost_benefit_analyzer']
+        }
         
-        logger.info(f"Smart tool selection for {self.role}:")
-        logger.info(f"  Essential: {tool_selection['essential']}")
-        logger.info(f"  Contextual: {tool_selection['contextual']}")
-        logger.info(f"  Supplementary: {tool_selection['supplementary']}")
+        # Get tools for this agent's role
+        essential_tools = role_tools.get(self.role, ['web_search_tool', 'data_analysis_tool'])
         
-        return tool_selection
+        # Ensure tools exist in available tools
+        available_essential = [tool for tool in essential_tools if tool in self.available_tools]
+        
+        if not available_essential:
+            # Last resort: use any available tools
+            available_essential = list(self.available_tools.keys())[:2]
+        
+        logger.info(f"Fallback tool selection for {self.role}: {available_essential}")
+        
+        return {
+            'essential': available_essential,
+            'contextual': [],
+            'supplementary': []
+        }
     
     def _execute_selected_tools(self, tool_selection: Dict[str, List[str]], context: Dict[str, Any]) -> Dict[str, Any]:
         """
