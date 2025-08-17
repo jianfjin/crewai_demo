@@ -17,6 +17,7 @@ from langgraph.graph import StateGraph, END
 
 from .state import MarketingResearchState, WorkflowStatus, AgentStatus
 from .agents import AGENT_NODES
+from .enhanced_agent_nodes import ENHANCED_AGENT_NODES
 from ..blackboard.integrated_blackboard import get_integrated_blackboard
 from ..optimization_manager import OptimizationManager
 from ..utils.token_tracker import TokenTracker
@@ -36,13 +37,14 @@ class OptimizedMarketingWorkflow:
     strategies to reduce token usage by 75-85% while maintaining quality.
     """
     
-    def __init__(self, checkpoint_path: Optional[str] = None, optimization_level: str = "full"):
+    def __init__(self, checkpoint_path: Optional[str] = None, optimization_level: str = "full", enable_smart_tools: bool = True):
         """Initialize the optimized workflow."""
         self.checkpoint_path = checkpoint_path or "cache/workflow_checkpoints.db"
         # self.checkpointer = SqliteSaver.from_conn_string(self.checkpoint_path)
         self.checkpointer = None
         self.blackboard = get_integrated_blackboard()
         self.optimization_level = optimization_level
+        self.enable_smart_tools = enable_smart_tools
         
         # Initialize optimization components
         self.optimization_manager = OptimizationManager()
@@ -84,7 +86,14 @@ class OptimizedMarketingWorkflow:
         
         # Add optimized agent nodes with token tracking
         for agent_name in self.available_agents:
-            workflow.add_node(agent_name, self._create_optimized_agent_node(agent_name))
+            if self.enable_smart_tools and agent_name in ENHANCED_AGENT_NODES:
+                # Use enhanced agent with smart tool selection
+                workflow.add_node(agent_name, self._create_enhanced_optimized_agent_node(agent_name))
+                logger.info(f"Added enhanced agent node: {agent_name}")
+            else:
+                # Use standard optimized agent
+                workflow.add_node(agent_name, self._create_optimized_agent_node(agent_name))
+                logger.info(f"Added standard agent node: {agent_name}")
         
         # Define optimized edges
         workflow.set_entry_point("start")
@@ -577,6 +586,264 @@ class OptimizedMarketingWorkflow:
             return state
         
         return optimized_agent_node
+    
+    def _create_enhanced_optimized_agent_node(self, agent_name: str):
+        """Create an enhanced optimized agent node with smart tool selection and token tracking."""
+        
+        def enhanced_optimized_agent_node(state: MarketingResearchState) -> MarketingResearchState:
+            """Enhanced optimized agent execution with smart tool selection and token management."""
+            
+            try:
+                # Check token budget before execution
+                if state.get("tokens_used", 0) >= state.get("token_budget", 10000):
+                    logger.warning(f"Token budget exceeded, skipping {agent_name}")
+                    state["agent_status"][agent_name] = AgentStatus.FAILED
+                    
+                    # Create scratchpad entry for budget exceeded
+                    self.enhanced_context.create_scratchpad_entry(
+                        agent_role=agent_name,
+                        step=state.get("current_step", 0),
+                        content={"action": "budget_exceeded", "tokens_used": state.get("tokens_used", 0), "budget": state.get("token_budget", 10000)},
+                        reasoning=f"Token budget exceeded for {agent_name}, skipping execution"
+                    )
+                    return state
+                
+                # Get cached result if available
+                cache_key = self._generate_cache_key(agent_name, state)
+                cached_result = self.smart_cache.get(cache_key)
+                
+                if cached_result:
+                    logger.info(f"Using cached result for enhanced {agent_name}")
+                    state["agent_results"][agent_name] = cached_result
+                    state["agent_status"][agent_name] = AgentStatus.COMPLETED
+                    return state
+                
+                # Create scratchpad entry for starting execution
+                current_step = state.get("current_step", 0)
+                self.enhanced_context.create_scratchpad_entry(
+                    agent_role=agent_name,
+                    step=current_step,
+                    content={
+                        "action": "starting_enhanced_execution",
+                        "optimization_level": self.optimization_level,
+                        "smart_tools_enabled": True,
+                        "cache_miss": True
+                    },
+                    reasoning=f"Starting enhanced execution of {agent_name} with smart tool selection and {self.optimization_level} optimization"
+                )
+                
+                # Execute enhanced agent with smart tool selection
+                enhanced_agent_node = ENHANCED_AGENT_NODES[agent_name]
+                
+                # Apply enhanced context compression for this agent
+                compressed_state = self._compress_state_for_agent(state, agent_name)
+
+                # Add enhanced context from scratchpad and long-term memory
+                compressed_state["scratchpad_context"] = self.enhanced_context.get_scratchpad_context(agent_name)
+
+                # Get optimized (isolated) context using enhanced context engineering
+                base_context = self.enhanced_context.get_context_for_agent(
+                    agent_role=agent_name,
+                    thread_id=state["workflow_id"],
+                    step=current_step,
+                    full_context=compressed_state,
+                    strategy="smart"
+                )
+
+                # Apply token budget allocations (knowledge bucket) if available
+                knowledge_budget = None
+                if self.budget_manager:
+                    knowledge_budget = self.budget_manager.allocate_budget().allocations.get("knowledge")
+
+                # Apply quality monitoring and attach to state
+                quality_report_pre = self.context_quality.evaluate_quality(base_context)
+                state.setdefault("context_quality", {}).setdefault(agent_name, {})["pre"] = {
+                    "poisoning": quality_report_pre.poisoning_score,
+                    "distraction": quality_report_pre.distraction_score,
+                    "confusion": quality_report_pre.confusion_score,
+                    "clash": quality_report_pre.clash_score,
+                    "size_estimate": quality_report_pre.size_estimate,
+                    "timestamp": quality_report_pre.timestamp,
+                }
+
+                # Apply budget-based context trimming if needed
+                if knowledge_budget is not None:
+                    def trim_text(val: Any, max_tokens: int) -> Any:
+                        try:
+                            s = str(val)
+                            max_words = max(10, int(max_tokens / 1.3))
+                            words = s.split()
+                            if len(words) > max_words:
+                                return " ".join(words[:max_words]) + " ... [budget_trim]"
+                            return s
+                        except Exception:
+                            return val
+                    if "analysis_focus" in compressed_state:
+                        compressed_state["analysis_focus"] = trim_text(compressed_state["analysis_focus"], max(100, int(knowledge_budget * 0.05)))
+                    if "target_audience" in compressed_state:
+                        compressed_state["target_audience"] = trim_text(compressed_state["target_audience"], max(60, int(knowledge_budget * 0.03)))
+
+                # Attach the context for agent
+                compressed_state["enhanced_context"] = base_context
+
+                # Post-quality monitoring
+                quality_report_post = self.context_quality.evaluate_quality(compressed_state["enhanced_context"])
+                state["context_quality"][agent_name]["post"] = {
+                    "poisoning": quality_report_post.poisoning_score,
+                    "distraction": quality_report_post.distraction_score,
+                    "confusion": quality_report_post.confusion_score,
+                    "clash": quality_report_post.clash_score,
+                    "size_estimate": quality_report_post.size_estimate,
+                    "timestamp": quality_report_post.timestamp,
+                }
+
+                # Add a scratchpad warning if quality issues are severe
+                if quality_report_post.poisoning_score > 0.7 or quality_report_post.clash_score > 0.7:
+                    self.enhanced_context.create_scratchpad_entry(
+                        agent_role=agent_name,
+                        step=current_step,
+                        content={
+                            "action": "quality_warning",
+                            "quality": {
+                                "poisoning": quality_report_post.poisoning_score,
+                                "clash": quality_report_post.clash_score
+                            }
+                        },
+                        reasoning=f"Context quality warning for {agent_name}: potential poisoning/clash"
+                    )
+                
+                # Track tokens before execution
+                tokens_before = self.token_tracker.get_current_usage()
+                
+                # Execute the enhanced agent with smart tool selection
+                result_state = enhanced_agent_node(compressed_state)
+                
+                # Track tokens after execution
+                tokens_after = self.token_tracker.get_current_usage()
+                agent_tokens = tokens_after - tokens_before
+                
+                # Update token usage
+                state["tokens_used"] = state.get("tokens_used", 0) + agent_tokens
+                
+                # Compress and store result
+                if agent_name in result_state.get("agent_results", {}):
+                    agent_result = result_state["agent_results"][agent_name]
+                    compressed_result = self._compress_agent_result(agent_result)
+                    
+                    # Cache the result
+                    self.smart_cache.set(cache_key, compressed_result)
+                    
+                    # Store in state
+                    if "agent_results" not in state:
+                        state["agent_results"] = {}
+                    state["agent_results"][agent_name] = compressed_result
+                    
+                    # Create scratchpad entry for successful completion
+                    tool_execution_info = compressed_result.get('tool_results', {}).get('_execution_metadata', {})
+                    tools_executed = tool_execution_info.get('total_tools_executed', 0)
+                    
+                    self.enhanced_context.create_scratchpad_entry(
+                        agent_role=agent_name,
+                        step=current_step,
+                        content={
+                            "action": "completed_enhanced_execution",
+                            "result_size": len(str(compressed_result)),
+                            "tokens_used": agent_tokens,
+                            "tools_executed": tools_executed,
+                            "smart_tool_selection": True,
+                            "compression_applied": True
+                        },
+                        reasoning=f"Successfully completed enhanced {agent_name} execution with {tools_executed} smart-selected tools using {agent_tokens} tokens"
+                    )
+                    
+                    # Update agent's long-term memory with insights
+                    if isinstance(compressed_result, dict):
+                        insights = {}
+                        if "insights" in compressed_result:
+                            insights["latest_insights"] = compressed_result["insights"]
+                        if "analysis" in compressed_result:
+                            insights["latest_analysis"] = compressed_result["analysis"][:200] + "..." if len(str(compressed_result["analysis"])) > 200 else compressed_result["analysis"]
+                        
+                        # Add smart tool execution summary
+                        if "tool_results" in compressed_result:
+                            insights["smart_tools_used"] = list(compressed_result["tool_results"].keys())
+                            insights["tool_execution_metadata"] = tool_execution_info
+                        
+                        if insights:
+                            self.enhanced_context.update_agent_memory(
+                                agent_role=agent_name,
+                                new_insights={
+                                    **insights,
+                                    "execution_step": current_step,
+                                    "tokens_used": agent_tokens,
+                                    "optimization_level": self.optimization_level,
+                                    "smart_tools_enabled": True,
+                                    "timestamp": datetime.now().isoformat()
+                                }
+                            )
+                    
+                    # Create checkpoint after successful execution
+                    token_usage_summary = self.token_tracker.get_usage_summary()
+                    checkpoint = self.enhanced_context.create_checkpoint(
+                        thread_id=state["workflow_id"],
+                        agent_role=agent_name,
+                        step=current_step,
+                        state=state,
+                        token_usage=token_usage_summary
+                    )
+                    
+                    # Store checkpoint reference in state
+                    if "checkpoints" not in state:
+                        state["checkpoints"] = []
+                    state["checkpoints"].append(checkpoint.checkpoint_id)
+                
+                state["agent_status"][agent_name] = AgentStatus.COMPLETED
+                state["agent_execution_order"].append(agent_name)
+                
+                logger.info(f"Enhanced agent {agent_name} completed with smart tool selection, tokens used: {agent_tokens}")
+                
+            except Exception as e:
+                logger.error(f"Enhanced agent {agent_name} failed: {e}")
+                state["agent_status"][agent_name] = AgentStatus.FAILED
+                
+                # Create scratchpad entry for failure
+                current_step = state.get("current_step", 0)
+                self.enhanced_context.create_scratchpad_entry(
+                    agent_role=agent_name,
+                    step=current_step,
+                    content={
+                        "action": "enhanced_execution_failed",
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "smart_tools_enabled": True
+                    },
+                    reasoning=f"Enhanced execution of {agent_name} with smart tools failed: {str(e)}"
+                )
+                
+                # Create checkpoint for failed state (for debugging)
+                try:
+                    token_usage_summary = self.token_tracker.get_usage_summary()
+                    error_checkpoint = self.enhanced_context.create_checkpoint(
+                        thread_id=state["workflow_id"],
+                        agent_role=agent_name,
+                        step=current_step,
+                        state={**state, "error": str(e)},
+                        token_usage=token_usage_summary
+                    )
+                    
+                    if "error_checkpoints" not in state:
+                        state["error_checkpoints"] = []
+                    state["error_checkpoints"].append(error_checkpoint.checkpoint_id)
+                except Exception as checkpoint_error:
+                    logger.error(f"Failed to create error checkpoint: {checkpoint_error}")
+                
+                if "agent_errors" not in state:
+                    state["agent_errors"] = {}
+                state["agent_errors"][agent_name] = str(e)
+            
+            return state
+        
+        return enhanced_optimized_agent_node
     
     def _compress_state_for_agent(self, state: MarketingResearchState, agent_name: str) -> MarketingResearchState:
         """Compress state context for specific agent with context isolation."""

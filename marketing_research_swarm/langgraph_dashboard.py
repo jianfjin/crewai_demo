@@ -2223,9 +2223,9 @@ class LangGraphDashboard:
                 callback_manager = enhanced_langsmith_monitor.create_run_tracer(workflow_id)
                 logger.info(f"🔍 Created LangSmith tracer for workflow: {workflow_id}")
             
-            # Always use the optimized workflow wrapper
-            workflow = MarketingResearchWorkflow()  # This is actually OptimizedWorkflowWrapper
-            logger.info(f"Using optimized LangGraph workflow with optimization level: {optimization_level}")
+            # Always use the optimized workflow wrapper with smart tools enabled
+            workflow = MarketingResearchWorkflow(enable_smart_tools=True)  # This is actually OptimizedWorkflowWrapper
+            logger.info(f"Using optimized LangGraph workflow with smart tool selection and optimization level: {optimization_level}")
             
             # Apply optimization strategies
             optimized_config = self._apply_optimization_strategies(config)
