@@ -2607,11 +2607,270 @@ class LangGraphDashboard:
         """Run the main dashboard application."""
         render_header()
         
+        # Mode selection
+        mode = st.sidebar.radio(
+            "🎯 Select Mode",
+            ["🤖 Chat Mode", "⚙️ Manual Configuration"],
+            help="Choose between conversational chat mode or manual parameter configuration"
+        )
+        
+        if mode == "🤖 Chat Mode":
+            self._render_chat_mode()
+        else:
+            self._render_manual_mode()
+    
+    def _render_chat_mode(self):
+        """Render the chat mode interface."""
+        st.header("🤖 Chat Mode - Conversational Analysis Setup")
+        
+        # Initialize chat agent
+        if "chat_agent" not in st.session_state:
+            try:
+                from src.marketing_research_swarm.chat.chat_agent import ChatAgent
+                st.session_state.chat_agent = ChatAgent()
+                st.session_state.chat_messages = []
+            except ImportError as e:
+                st.error(f"Chat agent not available: {e}")
+                st.info("Falling back to manual configuration mode...")
+                self._render_manual_mode()
+                return
+        
+        chat_agent = st.session_state.chat_agent
+        
+        # Chat interface
+        st.markdown("### 💬 Chat with AI Assistant")
+        st.markdown("Tell me about your marketing research needs, and I'll help you build the perfect analysis workflow!")
+        
+        # Add helpful query templates
+        with st.expander("💡 Example Queries - Click to see sample questions", expanded=False):
+            st.markdown("**🎯 Brand Performance Analysis:**")
+            st.markdown("• *I want to analyze Coca-Cola's performance against Pepsi in North America*")
+            st.markdown("• *How is Red Bull performing in the Energy drink category?*")
+            st.markdown("• *Compare Gatorade vs Powerade market share in Sports drinks*")
+            
+            st.markdown("**📊 Regional & Market Analysis:**")
+            st.markdown("• *Analyze beverage market trends in Europe and Asia Pacific*")
+            st.markdown("• *What are the top performing brands in Latin America?*")
+            st.markdown("• *Show me Cola category performance across all regions*")
+            
+            st.markdown("**💰 ROI & Profitability:**")
+            st.markdown("• *Calculate ROI for our Energy drink campaigns*")
+            st.markdown("• *Which product categories have the highest profit margins?*")
+            st.markdown("• *Analyze profitability by region and brand*")
+            
+            st.markdown("**📈 Forecasting & Trends:**")
+            st.markdown("• *Forecast sales for Juice category next quarter*")
+            st.markdown("• *Predict revenue trends for premium water brands*")
+            st.markdown("• *What are the seasonal patterns for Sports drinks?*")
+            
+            st.markdown("**🎨 Content & Campaign Strategy:**")
+            st.markdown("• *Create a marketing strategy for launching in new markets*")
+            st.markdown("• *Develop content strategy for millennial beverage consumers*")
+            st.markdown("• *Plan a campaign to increase market share in Energy drinks*")
+            
+            st.markdown("**📋 Quick Analysis:**")
+            st.markdown("• *Give me a comprehensive overview of the beverage market*")
+            st.markdown("• *What insights can you provide about our sales data?*")
+            st.markdown("• *Help me understand market opportunities*")
+        
+        # Add data context hint
+        if "chat_agent" in st.session_state and hasattr(st.session_state.chat_agent, 'metadata_cache') and st.session_state.chat_agent.metadata_cache:
+            metadata = st.session_state.chat_agent.metadata_cache
+            distinct_values = metadata.get("distinct_values", {})
+            
+            with st.expander("📊 Available Data Context", expanded=False):
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if "region" in distinct_values:
+                        st.markdown("**🌍 Regions:**")
+                        for region in distinct_values["region"][:5]:
+                            st.markdown(f"• {region}")
+                        if len(distinct_values["region"]) > 5:
+                            st.markdown(f"• *...and {len(distinct_values['region']) - 5} more*")
+                
+                with col2:
+                    if "brand" in distinct_values:
+                        st.markdown("**🏷️ Brands:**")
+                        for brand in distinct_values["brand"][:5]:
+                            st.markdown(f"• {brand}")
+                        if len(distinct_values["brand"]) > 5:
+                            st.markdown(f"• *...and {len(distinct_values['brand']) - 5} more*")
+                
+                with col3:
+                    if "category" in distinct_values:
+                        st.markdown("**📦 Categories:**")
+                        for category in distinct_values["category"]:
+                            st.markdown(f"• {category}")
+        
+        # Add quick start buttons
+        st.markdown("**🚀 Quick Start:**")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("🥤 Brand Analysis", help="Analyze brand performance"):
+                quick_query = "I want to analyze brand performance in the beverage market"
+                st.session_state.quick_query = quick_query
+        
+        with col2:
+            if st.button("🌍 Regional Analysis", help="Analyze regional markets"):
+                quick_query = "Show me regional market analysis for beverage sales"
+                st.session_state.quick_query = quick_query
+        
+        with col3:
+            if st.button("💰 ROI Analysis", help="Analyze return on investment"):
+                quick_query = "Calculate ROI and profitability for beverage campaigns"
+                st.session_state.quick_query = quick_query
+        
+        # Display chat history
+        chat_container = st.container()
+        with chat_container:
+            for message in st.session_state.chat_messages:
+                if message["role"] == "user":
+                    st.markdown(f"**You:** {message['content']}")
+                else:
+                    st.markdown(f"**Assistant:** {message['content']}")
+        
+        # Handle quick start queries
+        if "quick_query" in st.session_state:
+            user_input = st.session_state.quick_query
+            del st.session_state.quick_query
+        else:
+            # Chat input
+            user_input = st.chat_input("Type your message here... (or use the examples above)")
+        
+        if user_input:
+            # Add user message to history
+            st.session_state.chat_messages.append({"role": "user", "content": user_input})
+            
+            # Get response from chat agent
+            response = chat_agent.chat(user_input)
+            
+            # Add assistant response to history
+            st.session_state.chat_messages.append({"role": "assistant", "content": response["response"]})
+            
+            # Handle parameter selection if needed
+            if response.get("needs_parameters", False):
+                st.markdown("### 🎯 Parameter Selection")
+                self._render_parameter_selection(response["parameter_options"], chat_agent)
+            
+            # Show workflow status
+            if response.get("workflow_ready", False):
+                st.success("✅ Workflow is ready!")
+                
+                # Show recommended configuration
+                with st.expander("📋 View Recommended Configuration", expanded=True):
+                    config = chat_agent.get_workflow_config()
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**Selected Agents:**")
+                        for agent in config.get("selected_agents", []):
+                            st.markdown(f"• {agent}")
+                    
+                    with col2:
+                        st.markdown("**Key Parameters:**")
+                        st.markdown(f"• Target Markets: {', '.join(config.get('market_segments', []))}")
+                        st.markdown(f"• Product Categories: {', '.join(config.get('product_categories', []))}")
+                        st.markdown(f"• Budget: ${config.get('budget', 0):,}")
+                
+                # Run analysis button
+                if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
+                    self._run_chat_analysis(config)
+            
+            st.rerun()
+        
+        # Reset chat button
+        if st.button("🔄 Reset Chat"):
+            chat_agent.reset()
+            st.session_state.chat_messages = []
+            st.rerun()
+        
+        # Show previous results if available
+        self._render_previous_results()
+    
+    def _render_parameter_selection(self, parameter_options: Dict[str, List[str]], chat_agent):
+        """Render parameter selection interface."""
+        
+        selected_params = {}
+        
+        for param_name, options in parameter_options.items():
+            display_name = param_name.replace('_', ' ').title()
+            
+            if param_name in ["target_markets", "product_categories", "key_metrics", "brands", "campaign_goals"]:
+                selected = st.multiselect(
+                    f"Select {display_name}",
+                    options,
+                    key=f"chat_{param_name}"
+                )
+                if selected:
+                    selected_params[param_name] = selected
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("✅ Use Selected Parameters"):
+                if selected_params:
+                    response = chat_agent.set_parameters(selected_params)
+                    st.session_state.chat_messages.append({
+                        "role": "assistant", 
+                        "content": response["response"]
+                    })
+                    st.rerun()
+                else:
+                    st.warning("Please select at least one option for each parameter.")
+        
+        with col2:
+            if st.button("🎯 Use Default Values"):
+                response = chat_agent.set_parameters(chat_agent.default_parameters)
+                st.session_state.chat_messages.append({
+                    "role": "assistant", 
+                    "content": response["response"]
+                })
+                st.rerun()
+    
+    def _run_chat_analysis(self, config: Dict[str, Any]):
+        """Run analysis with chat-generated configuration."""
+        
+        # Show progress
+        with st.spinner("Running chat-configured analysis..."):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # Update progress
+            for i in range(100):
+                progress_bar.progress(i + 1)
+                if i < 20:
+                    status_text.text("🔧 Initializing chat workflow...")
+                elif i < 40:
+                    status_text.text("⚡ Applying chat configuration...")
+                elif i < 60:
+                    status_text.text("🤖 Executing selected agents...")
+                elif i < 80:
+                    status_text.text("📊 Processing results...")
+                else:
+                    status_text.text("✅ Finalizing analysis...")
+            
+            # Run the actual analysis
+            result = self.run_optimized_analysis(config)
+            
+            progress_bar.empty()
+            status_text.empty()
+        
+        # Store result in session state
+        st.session_state["last_result"] = result
+        
+        # Render results
+        self.render_results(result)
+    
+    def _render_manual_mode(self):
+        """Render the manual configuration mode (original interface)."""
+        
         # Get configuration from sidebar
         config = self.render_sidebar()
         
         # Main content area
-        st.header("🎯 Marketing Analysis")
+        st.header("⚙️ Manual Configuration - Marketing Analysis")
         
         # StateGraph Visualization Section
         if DASHBOARD_ENHANCEMENTS_AVAILABLE and state_graph_visualizer and state_graph_visualizer.available:
@@ -2728,7 +2987,11 @@ class LangGraphDashboard:
             # Render results
             self.render_results(result)
         
-        # Show previous results if available
+        # Show previous results if available (for both modes)
+        self._render_previous_results()
+    
+    def _render_previous_results(self):
+        """Render previous results section."""
         if "last_result" in st.session_state:
             st.header("📋 Previous Results")
             with st.expander("View Last Analysis"):
