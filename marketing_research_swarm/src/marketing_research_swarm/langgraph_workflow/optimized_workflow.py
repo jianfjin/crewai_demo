@@ -1083,7 +1083,7 @@ class OptimizedMarketingWorkflow:
         """Execute the optimized workflow with comprehensive token reduction."""
         
         try:
-            # Create initial state
+            # Create initial state with all configuration parameters
             initial_state = {
                 "workflow_id": str(uuid.uuid4()),
                 "workflow_type": "optimized_marketing_research",
@@ -1099,6 +1099,20 @@ class OptimizedMarketingWorkflow:
                 "agent_execution_order": [],
                 "created_at": datetime.now(),
                 "updated_at": datetime.now(),
+                # Add all the specific parameters that were missing from LangSmith traces
+                "brands": kwargs.get("brands", []),
+                "market_segments": kwargs.get("market_segments", []),
+                "product_categories": kwargs.get("product_categories", []),
+                "key_metrics": kwargs.get("key_metrics", []),
+                "campaign_goals": kwargs.get("campaign_goals", []),
+                "business_objective": kwargs.get("business_objective", ""),
+                "competitive_landscape": kwargs.get("competitive_landscape", ""),
+                "forecast_periods": kwargs.get("forecast_periods", 30),
+                "expected_revenue": kwargs.get("expected_revenue", 25000),
+                "brand_metrics": kwargs.get("brand_metrics", {}),
+                "competitive_analysis": kwargs.get("competitive_analysis", True),
+                "market_share_analysis": kwargs.get("market_share_analysis", True),
+                "data_file_path": kwargs.get("data_file_path", "data/beverage_sales.csv"),
                 **kwargs
             }
             

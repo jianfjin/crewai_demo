@@ -2283,7 +2283,7 @@ class LangGraphDashboard:
                         cost = (agent_tokens * 0.000000150) + (agent_tokens * 0.0000006)  # Input + output cost
                         enhanced_token_tracker.track_agent_execution(agent, agent_tokens, cost)
                 
-                # Execute workflow
+                # Execute workflow with all configuration parameters
                 result = workflow.execute_workflow(
                     selected_agents=optimized_config["selected_agents"],
                     target_audience=optimized_config["target_audience"],
@@ -2291,7 +2291,21 @@ class LangGraphDashboard:
                     budget=optimized_config["budget"],
                     duration=optimized_config["duration"],
                     analysis_focus=optimized_config["analysis_focus"],
-                    optimization_level=optimization_level
+                    optimization_level=optimization_level,
+                    # Pass all the specific parameters that were missing from LangSmith
+                    brands=optimized_config.get("brands", []),
+                    market_segments=optimized_config.get("market_segments", []),
+                    product_categories=optimized_config.get("product_categories", []),
+                    key_metrics=optimized_config.get("key_metrics", []),
+                    campaign_goals=optimized_config.get("campaign_goals", []),
+                    business_objective=optimized_config.get("business_objective", ""),
+                    competitive_landscape=optimized_config.get("competitive_landscape", ""),
+                    forecast_periods=optimized_config.get("forecast_periods", 30),
+                    expected_revenue=optimized_config.get("expected_revenue", 25000),
+                    brand_metrics=optimized_config.get("brand_metrics", {}),
+                    competitive_analysis=optimized_config.get("competitive_analysis", True),
+                    market_share_analysis=optimized_config.get("market_share_analysis", True),
+                    data_file_path="data/beverage_sales.csv"
                 )
                 logger.info(f"✅ Workflow executed successfully with optimization level: {optimization_level}")
                 
@@ -2305,7 +2319,21 @@ class LangGraphDashboard:
                         'campaign_type': optimized_config["campaign_type"],
                         'budget': optimized_config["budget"],
                         'duration': optimized_config["duration"],
-                        'analysis_focus': optimized_config["analysis_focus"]
+                        'analysis_focus': optimized_config["analysis_focus"],
+                        # Include all the specific parameters for fallback execution too
+                        'brands': optimized_config.get("brands", []),
+                        'market_segments': optimized_config.get("market_segments", []),
+                        'product_categories': optimized_config.get("product_categories", []),
+                        'key_metrics': optimized_config.get("key_metrics", []),
+                        'campaign_goals': optimized_config.get("campaign_goals", []),
+                        'business_objective': optimized_config.get("business_objective", ""),
+                        'competitive_landscape': optimized_config.get("competitive_landscape", ""),
+                        'forecast_periods': optimized_config.get("forecast_periods", 30),
+                        'expected_revenue': optimized_config.get("expected_revenue", 25000),
+                        'brand_metrics': optimized_config.get("brand_metrics", {}),
+                        'competitive_analysis': optimized_config.get("competitive_analysis", True),
+                        'market_share_analysis': optimized_config.get("market_share_analysis", True),
+                        'data_file_path': "data/beverage_sales.csv"
                     }
                     result = workflow.run(inputs_dict, optimization_level)
                     logger.info("✅ Workflow executed successfully using fallback method")
