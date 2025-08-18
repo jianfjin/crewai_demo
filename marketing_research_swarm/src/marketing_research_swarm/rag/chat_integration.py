@@ -162,6 +162,18 @@ class RAGChatAgent:
         task_lower = task_description.lower()
         recommendations = []
         
+        # Check for comparative analysis keywords
+        comparative_keywords = ["compare", "against", "vs", "versus", "competition", "competitive"]
+        is_comparative = any(keyword in task_lower for keyword in comparative_keywords)
+        
+        # Extract brands to check for multi-brand analysis
+        brand_patterns = [
+            r"\bcoca[- ]?cola\b", r"\bpepsi\b", r"\bred bull\b", r"\bmonster\b", 
+            r"\bgatorade\b", r"\bpowerade\b", r"\bsprite\b", r"\bfanta\b"
+        ]
+        brands_found = sum(1 for pattern in brand_patterns if re.search(pattern, task_lower))
+        is_multi_brand = brands_found > 1
+        
         for agent, specializations in self.agent_specializations.items():
             relevance_score = 0
             matching_specializations = []
@@ -170,6 +182,39 @@ class RAGChatAgent:
                 if any(word in task_lower for word in spec.split()):
                     relevance_score += 1
                     matching_specializations.append(spec)
+            
+            # Boost competitive analyst for comparative/multi-brand analysis
+            if agent == "competitive_analyst" and (is_comparative or is_multi_brand):
+                relevance_score += 3
+                matching_specializations.append("comparative brand analysis")
+            
+            # Boost brand performance specialist for brand-related queries
+            if agent == "brand_performance_specialist" and any(word in task_lower for word in ["brand", "performance"]):
+                relevance_score += 2
+                matching_specializations.append("brand performance analysis")
+            
+            # Boost market research analyst for general performance and regional queries
+            if agent == "market_research_analyst" and any(word in task_lower for word in ["performing", "best", "top", "region", "market"]):
+                relevance_score += 2
+                matching_specializations.append("market performance analysis")
+            
+            # Boost data analyst for analysis requests and financial queries
+            if agent == "data_analyst" and ("analyz" in task_lower or any(word in task_lower for word in ["profit", "margin", "revenue", "cost", "financial", "calculate"])):
+                relevance_score += 2
+                if any(word in task_lower for word in ["profit", "margin", "revenue", "cost"]):
+                    matching_specializations.append("profitability analysis")
+                else:
+                    matching_specializations.append("data analysis")
+            
+            # Boost forecasting specialist for revenue/financial projections
+            if agent == "forecasting_specialist" and any(word in task_lower for word in ["revenue", "profit", "forecast", "predict", "projection"]):
+                relevance_score += 1
+                matching_specializations.append("financial forecasting")
+            
+            # Boost campaign optimizer for ROI and profitability optimization
+            if agent == "campaign_optimizer" and any(word in task_lower for word in ["roi", "profit", "margin", "optimize", "efficiency"]):
+                relevance_score += 1
+                matching_specializations.append("profitability optimization")
             
             if relevance_score > 0:
                 # Get additional info from knowledge base
@@ -230,10 +275,18 @@ class RAGChatAgent:
             # Classify intent
             intent = self.classify_intent(query)
             
+            # Check if this looks like an analysis request
+            analysis_keywords = [
+                "analyze", "analysis", "compare", "performance", "forecast", "roi", "market share", "trends",
+                "profit", "profitability", "margin", "margins", "revenue", "cost", "which", "what", "show me",
+                "calculate", "identify", "find", "determine", "evaluate", "assess", "measure"
+            ]
+            is_analysis_request = any(keyword in query.lower() for keyword in analysis_keywords)
+            
             # Initialize response
             response = {
                 "query": query,
-                "intent": intent,
+                "intent": intent if not is_analysis_request else "analysis_request",
                 "recommendations": {},
                 "knowledge_results": [],
                 "suggested_actions": [],
@@ -241,7 +294,22 @@ class RAGChatAgent:
             }
             
             # Process based on intent
-            if intent == "agent_inquiry":
+            if response["intent"] == "analysis_request":
+                # For analysis requests, automatically recommend agents
+                agent_recommendations = self.recommend_agents(query)
+                response["recommendations"]["agents"] = agent_recommendations
+                
+                # Also search for relevant information
+                general_results = self.knowledge_base.search_knowledge(query, limit=5)
+                response["knowledge_results"] = general_results
+                
+                response["suggested_actions"] = [
+                    "Review the recommended agents for your analysis",
+                    "Confirm the analysis parameters",
+                    "Run the analysis with the selected configuration"
+                ]
+                
+            elif intent == "agent_inquiry":
                 # Search for agent information
                 agent_results = self.knowledge_base.search_knowledge(
                     query, limit=5, content_type="agent_documentation"

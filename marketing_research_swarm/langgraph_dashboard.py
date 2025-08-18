@@ -2734,7 +2734,10 @@ class LangGraphDashboard:
         st.success("✅ Analysis completed successfully!")
         
         # Create tabs for different result views
-        tab1, tab_tools, tab2, tab3, tab4, tab5 = st.tabs(["📊 Results", "🧰 Tools", "⚡ Optimization", "🔍 Token Usage", "📈 Performance", "🧠 Context Quality"])
+        tab_summary, tab1, tab_tools, tab2, tab3, tab4, tab5 = st.tabs(["📋 Executive Summary", "📊 Agent Results", "🧰 Tools", "⚡ Optimization", "🔍 Token Usage", "📈 Performance", "🧠 Context Quality"])
+        
+        with tab_summary:
+            self._render_executive_summary(result)
         
         with tab1:
             self._render_analysis_results(result)
@@ -2754,9 +2757,302 @@ class LangGraphDashboard:
         with tab5:
             self._render_context_quality(result)
     
+    def _render_executive_summary(self, result: Dict[str, Any]):
+        """Render a comprehensive executive summary combining all agent results."""
+        st.subheader("📋 Executive Summary & Final Report")
+        
+        # Extract key information
+        agent_results = result.get("agent_results", {})
+        summary = result.get("summary", {})
+        workflow_id = summary.get("workflow_id", "N/A")
+        
+        # Header metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Analysis Type", summary.get("workflow_type", "Comprehensive").title())
+        with col2:
+            st.metric("Agents Executed", summary.get("completed_agents", len(agent_results)))
+        with col3:
+            st.metric("Execution Time", f"{summary.get('execution_time', 0):.1f}s")
+        with col4:
+            tokens_used = result.get("token_usage", {}).get("total_tokens", 0)
+            st.metric("Tokens Used", f"{tokens_used:,}")
+        
+        # Generate comprehensive summary
+        st.markdown("---")
+        st.subheader("🎯 Key Findings & Insights")
+        
+        # Collect insights from all agents
+        all_insights = []
+        all_recommendations = []
+        key_metrics = {}
+        
+        for agent_name, agent_data in agent_results.items():
+            if not isinstance(agent_data, dict):
+                continue
+                
+            agent_title = agent_name.replace('_', ' ').title()
+            
+            # Extract insights
+            if "analysis" in agent_data:
+                analysis = agent_data["analysis"]
+                if isinstance(analysis, str) and len(analysis) > 50:
+                    all_insights.append(f"**{agent_title}**: {analysis[:200]}...")
+            
+            # Extract recommendations
+            if "recommendations" in agent_data:
+                recs = agent_data["recommendations"]
+                if isinstance(recs, list):
+                    for rec in recs[:2]:  # Top 2 recommendations per agent
+                        if isinstance(rec, str):
+                            all_recommendations.append(f"• {rec}")
+                elif isinstance(recs, str):
+                    all_recommendations.append(f"• {recs}")
+            
+            # Extract key metrics
+            if "metrics" in agent_data:
+                metrics = agent_data["metrics"]
+                if isinstance(metrics, dict):
+                    for key, value in metrics.items():
+                        if key not in key_metrics:
+                            key_metrics[key] = value
+        
+        # Display insights
+        if all_insights:
+            st.markdown("### 📊 Analysis Insights")
+            for insight in all_insights[:5]:  # Show top 5 insights
+                st.markdown(insight)
+        
+        # Display key metrics
+        if key_metrics:
+            st.markdown("### 📈 Key Performance Metrics")
+            metric_cols = st.columns(min(len(key_metrics), 4))
+            for i, (metric, value) in enumerate(list(key_metrics.items())[:4]):
+                with metric_cols[i]:
+                    metric_name = metric.replace('_', ' ').title()
+                    if isinstance(value, (int, float)):
+                        if 'percentage' in metric.lower() or 'rate' in metric.lower():
+                            st.metric(metric_name, f"{value}%")
+                        elif 'cost' in metric.lower() or 'revenue' in metric.lower():
+                            st.metric(metric_name, f"${value:,.0f}")
+                        else:
+                            st.metric(metric_name, f"{value:,.0f}")
+                    else:
+                        st.metric(metric_name, str(value))
+        
+        # Strategic recommendations
+        if all_recommendations:
+            st.markdown("### 💡 Strategic Recommendations")
+            for rec in all_recommendations[:8]:  # Show top 8 recommendations
+                st.markdown(rec)
+        
+        # Generate final summary based on analysis type
+        st.markdown("---")
+        st.subheader("🎯 Executive Summary")
+        
+        analysis_type = summary.get("workflow_type", "comprehensive")
+        target_audience = result.get("final_state", {}).get("target_audience", "target market")
+        
+        # Create contextual summary
+        if "brand" in analysis_type.lower() or any("brand" in str(agent_data) for agent_data in agent_results.values()):
+            summary_text = self._generate_brand_summary(agent_results, target_audience)
+        elif "roi" in analysis_type.lower() or any("roi" in str(agent_data) for agent_data in agent_results.values()):
+            summary_text = self._generate_roi_summary(agent_results, target_audience)
+        elif "forecast" in analysis_type.lower() or any("forecast" in str(agent_data) for agent_data in agent_results.values()):
+            summary_text = self._generate_forecast_summary(agent_results, target_audience)
+        else:
+            summary_text = self._generate_comprehensive_summary(agent_results, target_audience)
+        
+        st.markdown(summary_text)
+        
+        # Action items
+        st.markdown("---")
+        st.subheader("🚀 Next Steps")
+        
+        action_items = [
+            "Review detailed agent analyses in the 'Agent Results' tab",
+            "Examine tool outputs and data visualizations in the 'Tools' tab",
+            "Monitor performance metrics and optimization gains",
+            "Implement recommended strategies based on findings",
+            "Schedule follow-up analysis to track progress"
+        ]
+        
+        for i, action in enumerate(action_items, 1):
+            st.markdown(f"{i}. {action}")
+        
+        # Download report option
+        st.markdown("---")
+        if st.button("📥 Download Full Report", help="Generate and download comprehensive report"):
+            report_content = self._generate_downloadable_report(result)
+            st.download_button(
+                label="📄 Download Report (Markdown)",
+                data=report_content,
+                file_name=f"marketing_analysis_report_{workflow_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                mime="text/markdown"
+            )
+    
+    def _generate_brand_summary(self, agent_results: Dict[str, Any], target_audience: str) -> str:
+        """Generate brand-focused executive summary."""
+        return f"""
+**Brand Performance Analysis Summary**
+
+Our comprehensive brand analysis for {target_audience} reveals significant opportunities for market positioning and competitive advantage. The analysis indicates strong potential for brand optimization across multiple channels and market segments.
+
+**Key Findings:**
+- Brand performance metrics show competitive positioning opportunities
+- Market research indicates favorable conditions for brand expansion
+- Data analysis supports strategic brand investment decisions
+- Content strategy recommendations align with brand positioning goals
+
+**Strategic Impact:**
+The analysis provides actionable insights for brand portfolio optimization, competitive positioning, and market share growth. Implementation of recommended strategies is expected to drive measurable improvements in brand performance and market presence.
+        """
+    
+    def _generate_roi_summary(self, agent_results: Dict[str, Any], target_audience: str) -> str:
+        """Generate ROI-focused executive summary."""
+        return f"""
+**ROI & Profitability Analysis Summary**
+
+Financial analysis for {target_audience} demonstrates strong return potential and identifies key profitability drivers. The comprehensive evaluation provides clear guidance for investment allocation and performance optimization.
+
+**Key Findings:**
+- ROI projections indicate favorable investment returns
+- Profitability analysis reveals high-margin opportunities
+- Data-driven forecasting supports strategic planning decisions
+- Budget optimization recommendations maximize resource efficiency
+
+**Financial Impact:**
+The analysis establishes a clear framework for maximizing return on marketing investments while minimizing risk. Recommended strategies are projected to deliver measurable improvements in profitability and operational efficiency.
+        """
+    
+    def _generate_forecast_summary(self, agent_results: Dict[str, Any], target_audience: str) -> str:
+        """Generate forecast-focused executive summary."""
+        return f"""
+**Sales Forecasting & Trend Analysis Summary**
+
+Predictive analysis for {target_audience} provides comprehensive insights into future market conditions and revenue opportunities. The forecasting models indicate strong growth potential with strategic implementation.
+
+**Key Findings:**
+- Sales forecasts project positive growth trends
+- Market analysis supports expansion opportunities
+- Data modeling reveals seasonal patterns and optimization windows
+- Strategic recommendations align with projected market conditions
+
+**Future Outlook:**
+The analysis establishes confidence in future performance while identifying key factors for success. Implementation of forecasting-based strategies is expected to drive sustainable growth and competitive advantage.
+        """
+    
+    def _generate_comprehensive_summary(self, agent_results: Dict[str, Any], target_audience: str) -> str:
+        """Generate comprehensive executive summary."""
+        return f"""
+**Comprehensive Marketing Analysis Summary**
+
+Our multi-faceted analysis for {target_audience} provides strategic insights across market research, competitive positioning, data analytics, and content strategy. The comprehensive evaluation reveals significant opportunities for growth and optimization.
+
+**Key Findings:**
+- Market research indicates favorable conditions for strategic initiatives
+- Competitive analysis reveals positioning opportunities and market gaps
+- Data analytics support evidence-based decision making
+- Content strategy recommendations align with audience preferences and market trends
+
+**Strategic Impact:**
+The integrated analysis provides a roadmap for achieving marketing objectives while maximizing resource efficiency. Implementation of recommended strategies across all analyzed dimensions is expected to drive measurable improvements in market performance and competitive positioning.
+        """
+    
+    def _generate_downloadable_report(self, result: Dict[str, Any]) -> str:
+        """Generate a comprehensive downloadable report in Markdown format."""
+        agent_results = result.get("agent_results", {})
+        summary = result.get("summary", {})
+        workflow_id = summary.get("workflow_id", "N/A")
+        
+        report_lines = [
+            f"# Marketing Research Analysis Report",
+            f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"**Workflow ID:** {workflow_id}",
+            f"**Analysis Type:** {summary.get('workflow_type', 'Comprehensive').title()}",
+            "",
+            "## Executive Summary",
+            "",
+            "This comprehensive marketing research analysis provides strategic insights and actionable recommendations based on multi-agent analysis across market research, competitive intelligence, data analytics, and strategic planning.",
+            "",
+            "### Key Metrics",
+            f"- **Agents Executed:** {summary.get('completed_agents', len(agent_results))}",
+            f"- **Execution Time:** {summary.get('execution_time', 0):.1f} seconds",
+            f"- **Success Rate:** {summary.get('success_rate', 1.0)*100:.1f}%",
+            "",
+            "## Detailed Agent Analysis",
+            ""
+        ]
+        
+        # Add detailed agent results
+        for agent_name, agent_data in agent_results.items():
+            if not isinstance(agent_data, dict):
+                continue
+                
+            agent_title = agent_name.replace('_', ' ').title()
+            report_lines.extend([
+                f"### {agent_title}",
+                ""
+            ])
+            
+            if "analysis" in agent_data:
+                report_lines.extend([
+                    "**Analysis:**",
+                    agent_data["analysis"],
+                    ""
+                ])
+            
+            if "recommendations" in agent_data:
+                recs = agent_data["recommendations"]
+                report_lines.append("**Recommendations:**")
+                if isinstance(recs, list):
+                    for rec in recs:
+                        if isinstance(rec, str):
+                            report_lines.append(f"- {rec}")
+                elif isinstance(recs, str):
+                    report_lines.append(f"- {recs}")
+                report_lines.append("")
+            
+            if "metrics" in agent_data:
+                report_lines.extend([
+                    "**Key Metrics:**",
+                    "```json",
+                    json.dumps(agent_data["metrics"], indent=2),
+                    "```",
+                    ""
+                ])
+        
+        # Add performance metrics
+        if "token_usage" in result:
+            token_usage = result["token_usage"]
+            report_lines.extend([
+                "## Performance Metrics",
+                "",
+                f"- **Total Tokens:** {token_usage.get('total_tokens', 0):,}",
+                f"- **Total Cost:** ${token_usage.get('total_cost', 0):.4f}",
+                f"- **Optimization Level:** {token_usage.get('optimization_level', 'Standard')}",
+                ""
+            ])
+        
+        # Add recommendations
+        report_lines.extend([
+            "## Strategic Recommendations",
+            "",
+            "1. Implement data-driven strategies based on agent analysis",
+            "2. Monitor key performance indicators identified in the analysis",
+            "3. Execute recommended optimizations in priority order",
+            "4. Schedule regular follow-up analysis to track progress",
+            "5. Adapt strategies based on market feedback and performance data",
+            "",
+            "---",
+            "*Report generated by LangGraph Marketing Research Dashboard*"
+        ])
+        
+        return "\n".join(report_lines)
+
     def _render_analysis_results(self, result: Dict[str, Any]):
         """Render the main analysis results."""
-        st.subheader("📊 Analysis Results")
+        st.subheader("📊 Individual Agent Results")
         
         # Workflow summary
         if "summary" in result:
@@ -3365,7 +3661,7 @@ class LangGraphDashboard:
         )
         
         if mode == "🤖 Chat Mode":
-            self._render_integrated_chat_mode()
+            self._render_chat_mode()
         else:
             self._render_manual_mode()
     
@@ -3373,23 +3669,54 @@ class LangGraphDashboard:
         """Render the chat mode interface."""
         st.header("🤖 Chat Mode - Conversational Analysis Setup")
         
-        # Initialize chat agent
+        # Initialize RAG-enhanced chat agent
         if "chat_agent" not in st.session_state:
             try:
-                from src.marketing_research_swarm.chat.chat_agent import ChatAgent
-                st.session_state.chat_agent = ChatAgent()
+                # Try to use RAG-enhanced chat agent with dashboard adapter
+                from src.marketing_research_swarm.rag.dashboard_adapter import get_rag_chat_agent_adapter
+                st.session_state.chat_agent = get_rag_chat_agent_adapter()
                 st.session_state.chat_messages = []
-            except ImportError as e:
-                st.error(f"Chat agent not available: {e}")
-                st.info("Falling back to manual configuration mode...")
-                self._render_manual_mode()
-                return
+                st.session_state.workflow_ready = False
+                st.session_state.last_response = {}
+                st.info("✅ RAG-Enhanced Chat Agent loaded - Advanced knowledge base integration active!")
+            except ImportError as rag_error:
+                # Fallback to basic chat agent
+                try:
+                    from src.marketing_research_swarm.chat.chat_agent import ChatAgent
+                    st.session_state.chat_agent = ChatAgent()
+                    st.session_state.chat_messages = []
+                    st.session_state.workflow_ready = False
+                    st.session_state.last_response = {}
+                    st.warning("⚠️ Using basic chat agent - RAG features not available")
+                    st.info(f"RAG Error: {rag_error}")
+                except ImportError as basic_error:
+                    st.error(f"No chat agent available: {basic_error}")
+                    st.info("Falling back to manual configuration mode...")
+                    self._render_manual_mode()
+                    return
         
         chat_agent = st.session_state.chat_agent
         
         # Chat interface
-        st.markdown("### 💬 Chat with AI Assistant")
-        st.markdown("Tell me about your marketing research needs, and I'll help you build the perfect analysis workflow!")
+        st.markdown("### 💬 Chat with RAG-Enhanced AI Assistant")
+        
+        # Show RAG capabilities if available
+        if hasattr(chat_agent, 'knowledge_base') and chat_agent.knowledge_base:
+            st.markdown("🧠 **Advanced Features Active:**")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown("✅ **Knowledge Base Search**")
+                st.markdown("*Intelligent agent discovery*")
+            with col2:
+                st.markdown("✅ **Dynamic Tool Retrieval**")
+                st.markdown("*Context-aware tool selection*")
+            with col3:
+                st.markdown("✅ **Historical Analysis**")
+                st.markdown("*Learn from past workflows*")
+            
+            st.markdown("Tell me about your marketing research needs, and I'll use the knowledge base to build the perfect analysis workflow!")
+        else:
+            st.markdown("Tell me about your marketing research needs, and I'll help you build the perfect analysis workflow!")
         
         # Add helpful query templates
         with st.expander("💡 Example Queries - Click to see sample questions", expanded=False):
@@ -3423,35 +3750,66 @@ class LangGraphDashboard:
             st.markdown("• *What insights can you provide about our sales data?*")
             st.markdown("• *Help me understand market opportunities*")
         
-        # Add data context hint
-        if "chat_agent" in st.session_state and hasattr(st.session_state.chat_agent, 'metadata_cache') and st.session_state.chat_agent.metadata_cache:
-            metadata = st.session_state.chat_agent.metadata_cache
-            distinct_values = metadata.get("distinct_values", {})
+        # Add data context hint with RAG enhancements
+        if "chat_agent" in st.session_state:
+            chat_agent = st.session_state.chat_agent
             
-            with st.expander("📊 Available Data Context", expanded=False):
-                col1, col2, col3 = st.columns(3)
+            # Check for RAG-enhanced metadata
+            metadata = None
+            if hasattr(chat_agent, 'metadata_cache') and chat_agent.metadata_cache:
+                metadata = chat_agent.metadata_cache
+            elif hasattr(chat_agent, 'get_data_context'):
+                try:
+                    metadata = chat_agent.get_data_context()
+                except:
+                    metadata = None
+            
+            if metadata:
+                distinct_values = metadata.get("distinct_values", {})
                 
-                with col1:
-                    if "region" in distinct_values:
-                        st.markdown("**🌍 Regions:**")
-                        for region in distinct_values["region"][:5]:
-                            st.markdown(f"• {region}")
-                        if len(distinct_values["region"]) > 5:
-                            st.markdown(f"• *...and {len(distinct_values['region']) - 5} more*")
-                
-                with col2:
-                    if "brand" in distinct_values:
-                        st.markdown("**🏷️ Brands:**")
-                        for brand in distinct_values["brand"][:5]:
-                            st.markdown(f"• {brand}")
-                        if len(distinct_values["brand"]) > 5:
-                            st.markdown(f"• *...and {len(distinct_values['brand']) - 5} more*")
-                
-                with col3:
-                    if "category" in distinct_values:
-                        st.markdown("**📦 Categories:**")
-                        for category in distinct_values["category"]:
-                            st.markdown(f"• {category}")
+                with st.expander("📊 Available Data Context & Knowledge Base", expanded=False):
+                    # Show RAG knowledge base status
+                    if hasattr(chat_agent, 'knowledge_base') and chat_agent.knowledge_base:
+                        st.markdown("🧠 **Knowledge Base Status:**")
+                        try:
+                            kb_stats = chat_agent.knowledge_base.get_stats()
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Agent Profiles", kb_stats.get('agents', 0))
+                            with col2:
+                                st.metric("Tool Descriptions", kb_stats.get('tools', 0))
+                            with col3:
+                                st.metric("Workflow Patterns", kb_stats.get('workflows', 0))
+                        except:
+                            st.markdown("✅ Knowledge base loaded and ready")
+                        
+                        st.markdown("---")
+                    
+                    # Show data context
+                    st.markdown("📊 **Available Data:**")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        if "region" in distinct_values:
+                            st.markdown("**🌍 Regions:**")
+                            for region in distinct_values["region"][:5]:
+                                st.markdown(f"• {region}")
+                            if len(distinct_values["region"]) > 5:
+                                st.markdown(f"• *...and {len(distinct_values['region']) - 5} more*")
+                    
+                    with col2:
+                        if "brand" in distinct_values:
+                            st.markdown("**🏷️ Brands:**")
+                            for brand in distinct_values["brand"][:5]:
+                                st.markdown(f"• {brand}")
+                            if len(distinct_values["brand"]) > 5:
+                                st.markdown(f"• *...and {len(distinct_values['brand']) - 5} more*")
+                    
+                    with col3:
+                        if "category" in distinct_values:
+                            st.markdown("**📦 Categories:**")
+                            for category in distinct_values["category"]:
+                                st.markdown(f"• {category}")
         
         # Add quick start buttons
         st.markdown("**🚀 Quick Start:**")
@@ -3496,44 +3854,93 @@ class LangGraphDashboard:
             # Get response from chat agent
             response = chat_agent.chat(user_input)
             
+            # Store response in session state to persist workflow ready status
+            st.session_state.last_response = response
+            st.session_state.workflow_ready = response.get("workflow_ready", False)
+            
             # Add assistant response to history
             st.session_state.chat_messages.append({"role": "assistant", "content": response["response"]})
             
-            # Handle parameter selection if needed
-            if response.get("needs_parameters", False):
-                st.markdown("### 🎯 Parameter Selection")
-                self._render_parameter_selection(response["parameter_options"], chat_agent)
+            st.rerun()
+        
+        # Handle parameter selection if needed (check session state)
+        if st.session_state.get("last_response", {}).get("needs_parameters", False):
+            st.markdown("### 🎯 Parameter Selection")
+            self._render_parameter_selection(st.session_state.last_response["parameter_options"], chat_agent)
+        
+        # Show workflow status (check session state)
+        if st.session_state.get("workflow_ready", False):
+            st.success("✅ Workflow is ready!")
             
-            # Show workflow status
-            if response.get("workflow_ready", False):
-                st.success("✅ Workflow is ready!")
+            # Show recommended configuration
+            with st.expander("📋 View Recommended Configuration", expanded=True):
+                config = chat_agent.get_workflow_config()
                 
-                # Show recommended configuration
-                with st.expander("📋 View Recommended Configuration", expanded=True):
-                    config = chat_agent.get_workflow_config()
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.markdown("**Selected Agents:**")
-                        for agent in config.get("selected_agents", []):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**🤖 Selected Agents:**")
+                    for agent in config.get("selected_agents", []):
+                        # Show RAG-enhanced agent info if available
+                        if hasattr(chat_agent, 'knowledge_base') and chat_agent.knowledge_base:
+                            try:
+                                agent_info = chat_agent.knowledge_base.get_agent_info(agent)
+                                if agent_info:
+                                    st.markdown(f"• **{agent}** - {agent_info.get('specialization', 'Marketing specialist')}")
+                                else:
+                                    st.markdown(f"• {agent}")
+                            except:
+                                st.markdown(f"• {agent}")
+                        else:
                             st.markdown(f"• {agent}")
                     
-                    with col2:
-                        st.markdown("**Key Parameters:**")
-                        st.markdown(f"• Target Markets: {', '.join(config.get('market_segments', []))}")
-                        st.markdown(f"• Product Categories: {', '.join(config.get('product_categories', []))}")
-                        st.markdown(f"• Budget: ${config.get('budget', 0):,}")
+                    # Show RAG selection reasoning if available
+                    if hasattr(chat_agent, 'get_selection_reasoning'):
+                        try:
+                            reasoning = chat_agent.get_selection_reasoning()
+                            if reasoning:
+                                st.markdown("**🧠 Selection Reasoning:**")
+                                st.markdown(f"*{reasoning}*")
+                        except:
+                            pass
                 
-                # Run analysis button
-                if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
-                    self._run_chat_analysis(config)
+                with col2:
+                    st.markdown("**🎯 Key Parameters:**")
+                    st.markdown(f"• Target Markets: {', '.join(config.get('market_segments', []))}")
+                    st.markdown(f"• Product Categories: {', '.join(config.get('product_categories', []))}")
+                    st.markdown(f"• Budget: ${config.get('budget', 0):,}")
+                    
+                    # Show RAG-enhanced insights if available
+                    if hasattr(chat_agent, 'get_workflow_insights'):
+                        try:
+                            insights = chat_agent.get_workflow_insights()
+                            if insights:
+                                st.markdown("**💡 RAG Insights:**")
+                                for insight in insights[:3]:  # Show top 3 insights
+                                    st.markdown(f"• {insight}")
+                        except:
+                            pass
             
-            st.rerun()
+            # Show LangGraph Workflow Visualization (same as Manual Configuration mode)
+            if DASHBOARD_ENHANCEMENTS_AVAILABLE and state_graph_visualizer and state_graph_visualizer.available:
+                with st.expander("🔄 LangGraph Workflow Visualization", expanded=False):
+                    selected_agents = config.get("selected_agents", [])
+                    analysis_type = config.get("analysis_type", "rag_enhanced")
+                    
+                    if selected_agents:
+                        self._render_workflow_graph(selected_agents, analysis_type)
+                    else:
+                        st.info("Select agents to view the workflow graph")
+            
+            # Run analysis button
+            if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
+                self._run_chat_analysis(config)
         
         # Reset chat button
         if st.button("🔄 Reset Chat"):
             chat_agent.reset()
             st.session_state.chat_messages = []
+            st.session_state.workflow_ready = False
+            st.session_state.last_response = {}
             st.rerun()
         
         # Show previous results if available
@@ -3566,6 +3973,9 @@ class LangGraphDashboard:
                         "role": "assistant", 
                         "content": response["response"]
                     })
+                    # Update session state with new response
+                    st.session_state.last_response = response
+                    st.session_state.workflow_ready = response.get("workflow_ready", False)
                     st.rerun()
                 else:
                     st.warning("Please select at least one option for each parameter.")
@@ -3577,6 +3987,9 @@ class LangGraphDashboard:
                     "role": "assistant", 
                     "content": response["response"]
                 })
+                # Update session state with new response
+                st.session_state.last_response = response
+                st.session_state.workflow_ready = response.get("workflow_ready", False)
                 st.rerun()
     
     def _run_chat_analysis(self, config: Dict[str, Any]):

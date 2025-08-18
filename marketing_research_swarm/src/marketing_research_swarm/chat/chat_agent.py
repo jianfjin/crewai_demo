@@ -429,12 +429,19 @@ class ChatAgent:
         # Determine missing parameters
         missing_params = []
         if intent == "analysis_request":
+            # Only require parameters if they weren't extracted from the message
             if not extracted_params["target_markets"]:
                 missing_params.append("target_markets")
             if not extracted_params["product_categories"]:
                 missing_params.append("product_categories")
-            if not extracted_params["key_metrics"]:
+            # Don't require key_metrics if we have brands or regions - we can infer
+            if not extracted_params["key_metrics"] and not extracted_params["brands"] and not extracted_params["target_markets"]:
                 missing_params.append("key_metrics")
+            
+            # If we have enough info (brands or regions), we can proceed
+            if extracted_params["brands"] or extracted_params["target_markets"]:
+                missing_params = []  # Clear missing params if we have enough context
+                next_action = "build_workflow"
         
         return {
             "intent": intent,
@@ -501,8 +508,40 @@ class ChatAgent:
         final_config = self.default_parameters.copy()
         final_config.update(self.extracted_requirements)
         
-        # Set recommended agents
-        self.recommended_agents = analysis.get("recommended_agents", ["market_research_analyst", "data_analyst"])
+        # Auto-fill missing parameters with intelligent defaults based on what we have
+        extracted_params = analysis.get("extracted_parameters", {})
+        
+        # If we have brands but no categories, infer categories
+        if extracted_params.get("brands") and not final_config.get("product_categories"):
+            brand_category_mapping = {
+                "Coca-Cola": ["Cola", "Citrus"],
+                "Pepsi": ["Cola", "Citrus"], 
+                "Red Bull": ["Energy"],
+                "Monster Energy": ["Energy"],
+                "Gatorade": ["Sports"],
+                "Powerade": ["Sports"],
+                "Tropicana": ["Juice"],
+                "Simply Orange": ["Juice"]
+            }
+            inferred_categories = []
+            for brand in extracted_params["brands"]:
+                if brand in brand_category_mapping:
+                    inferred_categories.extend(brand_category_mapping[brand])
+            if inferred_categories:
+                final_config["product_categories"] = list(set(inferred_categories))
+        
+        # If we have no key metrics, infer from analysis type and brands
+        if not final_config.get("key_metrics"):
+            analysis_type = analysis.get("analysis_type", "comprehensive")
+            if analysis_type == "brand_performance" or extracted_params.get("brands"):
+                final_config["key_metrics"] = ["brand_performance", "category_trends", "profitability_analysis"]
+            elif analysis_type == "roi_focused":
+                final_config["key_metrics"] = ["profitability_analysis", "roi"]
+            else:
+                final_config["key_metrics"] = ["brand_performance", "category_trends", "profitability_analysis"]
+        
+        # Set recommended agents based on final config
+        self.recommended_agents = self._select_agents_for_requirements_with_config(final_config, analysis)
         
         response_text = f"""
 Perfect! I have all the information needed to build your marketing analysis workflow.
@@ -701,6 +740,62 @@ The workflow is ready! You can now run the analysis.
         # Add content strategy if marketing goals are present
         if any(goal for goal in self.extracted_requirements.get('campaign_goals', []) if 'marketing' in goal.lower()):
             agents.extend(['content_strategist', 'creative_copywriter'])
+        
+        # Remove duplicates and ensure we have valid agents
+        agents = list(set(agents))
+        valid_agents = [agent for agent in agents if agent in self.available_agents]
+        
+        return valid_agents[:6]  # Limit to 6 agents for performance
+    
+    def _select_agents_for_requirements_with_config(self, config: Dict[str, Any], analysis: Dict[str, Any]) -> List[str]:
+        """Select appropriate agents based on requirements and config."""
+        
+        agents = []
+        key_metrics = config.get('key_metrics', [])
+        analysis_type = analysis.get('analysis_type', 'comprehensive')
+        brands = config.get('brands', [])
+        
+        # Always include market research analyst for comprehensive analysis
+        agents.append('market_research_analyst')
+        
+        # Add agents based on analysis type and content
+        if analysis_type == 'brand_performance' or brands:
+            agents.extend(['competitive_analyst', 'brand_performance_specialist'])
+        
+        if analysis_type == 'roi_focused' or any(metric in key_metrics for metric in ['profitability_analysis', 'roi']):
+            agents.append('data_analyst')
+        
+        if analysis_type == 'sales_forecast':
+            agents.append('forecasting_specialist')
+        
+        if analysis_type == 'content_strategy':
+            agents.extend(['content_strategist', 'creative_copywriter'])
+        
+        # Add agents based on key metrics
+        if any(metric in key_metrics for metric in ['brand_performance', 'market_share']):
+            if 'competitive_analyst' not in agents:
+                agents.append('competitive_analyst')
+            if 'brand_performance_specialist' not in agents:
+                agents.append('brand_performance_specialist')
+        
+        if any(metric in key_metrics for metric in ['profitability_analysis', 'roi']):
+            if 'data_analyst' not in agents:
+                agents.append('data_analyst')
+        
+        if 'pricing_optimization' in key_metrics:
+            agents.append('campaign_optimizer')
+        
+        # Add forecasting if needed
+        if any(goal for goal in config.get('campaign_goals', []) if 'forecast' in goal.lower()):
+            if 'forecasting_specialist' not in agents:
+                agents.append('forecasting_specialist')
+        
+        # Add content strategy if marketing goals are present
+        if any(goal for goal in config.get('campaign_goals', []) if 'marketing' in goal.lower()):
+            if 'content_strategist' not in agents:
+                agents.append('content_strategist')
+            if 'creative_copywriter' not in agents:
+                agents.append('creative_copywriter')
         
         # Remove duplicates and ensure we have valid agents
         agents = list(set(agents))
