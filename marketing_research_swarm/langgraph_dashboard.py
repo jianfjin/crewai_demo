@@ -2725,7 +2725,7 @@ class LangGraphDashboard:
         else:
             return selected_agents[:3]  # Limit to 3 agents for efficiency
     
-    def render_results(self, result: Dict[str, Any]):
+    def render_results(self, result: Dict[str, Any], context_key: str = "default"):
         """Render analysis results with optimization metrics."""
         if not result.get("success"):
             st.error(f"❌ Analysis failed: {result.get('error', 'Unknown error')}")
@@ -2737,7 +2737,7 @@ class LangGraphDashboard:
         tab_summary, tab1, tab_tools, tab2, tab3, tab4, tab5 = st.tabs(["📋 Executive Summary", "📊 Agent Results", "🧰 Tools", "⚡ Optimization", "🔍 Token Usage", "📈 Performance", "🧠 Context Quality"])
         
         with tab_summary:
-            self._render_executive_summary(result)
+            self._render_executive_summary(result, context_key=context_key)
         
         with tab1:
             self._render_analysis_results(result)
@@ -2757,7 +2757,7 @@ class LangGraphDashboard:
         with tab5:
             self._render_context_quality(result)
     
-    def _render_executive_summary(self, result: Dict[str, Any]):
+    def _render_executive_summary(self, result: Dict[str, Any], context_key: str = "default"):
         """Render a comprehensive executive summary combining all agent results."""
         st.subheader("📋 Executive Summary & Final Report")
         
@@ -2882,13 +2882,14 @@ class LangGraphDashboard:
         
         # Download report option
         st.markdown("---")
-        if st.button("📥 Download Full Report", help="Generate and download comprehensive report"):
+        if st.button("📥 Download Full Report", help="Generate and download comprehensive report", key=f"download_report_{context_key}"):
             report_content = self._generate_downloadable_report(result)
             st.download_button(
                 label="📄 Download Report (Markdown)",
                 data=report_content,
                 file_name=f"marketing_analysis_report_{workflow_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                mime="text/markdown"
+                mime="text/markdown",
+                key=f"download_button_{context_key}"
             )
     
     def _generate_brand_summary(self, agent_results: Dict[str, Any], target_audience: str) -> str:
@@ -4024,7 +4025,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         st.session_state["last_result"] = result
         
         # Render results
-        self.render_results(result)
+        self.render_results(result, context_key="chat_main")
     
     def _render_manual_mode(self):
         """Render the manual configuration mode (original interface)."""
@@ -4148,7 +4149,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
             st.session_state["last_result"] = result
             
             # Render results
-            self.render_results(result)
+            self.render_results(result, context_key="manual_main")
         
         # Show previous results if available (for both modes)
         self._render_previous_results()
@@ -4158,7 +4159,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         if "last_result" in st.session_state:
             st.header("📋 Previous Results")
             with st.expander("View Last Analysis"):
-                self.render_results(st.session_state["last_result"])
+                self.render_results(st.session_state["last_result"], context_key="previous")
 
 
 def main():
