@@ -422,4 +422,8 @@ def get_next_agent(state: MarketingResearchState) -> Optional[str]:
         if dependencies_satisfied:
             return agent
     
-    return None
+    return None    
+    # Summary and final report
+    final_report: str
+    report_metadata: Dict[str, Any]
+    summary_status: str
