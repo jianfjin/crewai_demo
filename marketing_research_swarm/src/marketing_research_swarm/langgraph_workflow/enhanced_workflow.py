@@ -22,7 +22,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from .state import MarketingResearchState, WorkflowStatus, AgentStatus
-from .agents import AGENT_NODES
+from .enhanced_agent_nodes import ENHANCED_AGENT_NODES as AGENT_NODES
 from ..blackboard.integrated_blackboard import get_integrated_blackboard
 from ..context.enhanced_context_engineering import get_enhanced_context_engineering
 from ..context.persistent_context_storage import get_persistent_storage

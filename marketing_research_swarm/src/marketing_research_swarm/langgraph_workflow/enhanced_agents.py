@@ -13,7 +13,7 @@ from datetime import datetime
 from .agents import LangGraphAgent
 from .smart_tool_selector import SmartToolSelector
 from .state import MarketingResearchState
-from ..tools.advanced_tools_fixed import get_tools
+from ..tools.langgraph_tools import get_tools
 # Temporarily disable context_aware_tools due to circular import
 # from ..tools.context_aware_tools import get_context_aware_tools
 

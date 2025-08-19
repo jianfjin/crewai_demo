@@ -809,15 +809,15 @@ try:
     
     # Try to import the real LangGraph workflow first, fallback to mock if needed
     try:
-        from marketing_research_swarm.langgraph_workflow.workflow import MarketingResearchWorkflow as RealMarketingResearchWorkflow
-        from marketing_research_swarm.langgraph_workflow.optimized_workflow import OptimizedMarketingWorkflow as RealOptimizedMarketingWorkflow
+        from marketing_research_swarm.langgraph_workflow.enhanced_workflow import MarketingResearchWorkflow as RealMarketingResearchWorkflow
+        from marketing_research_swarm.langgraph_workflow.optimized_workflow import MarketingResearchWorkflow as RealMarketingResearchWorkflow
         
         # Test instantiation to make sure they work
-        test_workflow = RealOptimizedMarketingWorkflow()
+        test_workflow = RealMarketingResearchWorkflow()
         
         # Use the optimized workflows since they don't have numpy dependencies
         MarketingResearchWorkflow = RealMarketingResearchWorkflow
-        OptimizedMarketingWorkflow = RealOptimizedMarketingWorkflow
+        MarketingResearchWorkflow = RealMarketingResearchWorkflow
         logger.info("✅ Using real optimized LangGraph workflows (numpy-free)")
         st.info("✅ Using optimized LangGraph workflows with advanced features")
         
@@ -931,11 +931,14 @@ try:
         
         # Try to use optimized workflow instead of mock
         try:
-            from marketing_research_swarm.langgraph_workflow.optimized_workflow import OptimizedMarketingWorkflow
+            from marketing_research_swarm.langgraph_workflow.enhanced_workflow import MarketingResearchWorkflow
             
             class OptimizedWorkflowWrapper:
                 def __init__(self, checkpoint_path=None, optimization_level="full", **kwargs):
-                    self.workflow = OptimizedMarketingWorkflow(checkpoint_path=checkpoint_path, optimization_level=optimization_level)
+                    # Use CrewAI crew instead of LangGraph
+                    agents_config_path = "src/marketing_research_swarm/config/agents.yaml"
+                    tasks_config_path = "src/marketing_research_swarm/config/tasks.yaml"
+                    self.crew = MarketingResearchCrew(agents_config_path, tasks_config_path)
                     self.available_agents = ["market_research_analyst", "data_analyst", "content_strategist", 
                                            "competitive_analyst", "brand_performance_specialist", "forecasting_specialist"]
                     self.checkpoint_path = checkpoint_path
@@ -992,7 +995,7 @@ try:
                     return {"workflow_id": f"langgraph_{datetime.now().strftime('%Y%m%d_%H%M%S')}", **kwargs}
             
             MarketingResearchWorkflow = OptimizedWorkflowWrapper
-            OptimizedMarketingWorkflow = OptimizedWorkflowWrapper
+            MarketingResearchWorkflow = OptimizedWorkflowWrapper
             logger.info("✅ Using optimized LangGraph workflow (REAL ANALYSIS)")
             st.info("✅ LangGraph components loaded successfully (using optimized REAL workflow)")
             
@@ -1001,7 +1004,7 @@ try:
             
             # Final fallback to mock
             MarketingResearchWorkflow = MockLangGraphWorkflow
-            OptimizedMarketingWorkflow = MockLangGraphWorkflow
+            MarketingResearchWorkflow = MockLangGraphWorkflow
             logger.info("✅ Using enhanced mock LangGraph workflows")
     
     LANGGRAPH_AVAILABLE = True
@@ -2274,7 +2277,7 @@ class LangGraphDashboard:
                 logger.info(f"🔍 Created LangSmith tracer for workflow: {workflow_id}")
             
             # Always use the optimized workflow wrapper with smart tools enabled
-            workflow = MarketingResearchWorkflow()  # This is actually OptimizedWorkflowWrapper
+            workflow = MarketingResearchWorkflow()  # Using standard workflow for detailed results
             logger.info(f"Using optimized LangGraph workflow with smart tool selection and optimization level: {optimization_level}")
             
             # Apply optimization strategies
@@ -2882,13 +2885,17 @@ class LangGraphDashboard:
         
         # Download report option
         st.markdown("---")
-        if st.button("📥 Download Full Report", help="Generate and download comprehensive report"):
+        # Use a unique key with timestamp to avoid duplicates
+        import time
+        unique_key = f"download_full_report_executive_{int(time.time() * 1000000)}"
+        if st.button("📥 Download Full Report", help="Generate and download comprehensive report", key=unique_key):
             report_content = self._generate_downloadable_report(result)
             st.download_button(
                 label="📄 Download Report (Markdown)",
                 data=report_content,
                 file_name=f"marketing_analysis_report_{workflow_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                mime="text/markdown"
+                mime="text/markdown",
+                key="download_markdown_report_executive"
             )
     
     def _generate_brand_summary(self, agent_results: Dict[str, Any], target_audience: str) -> str:
@@ -3421,7 +3428,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 st.markdown(f"[🔗 View in LangSmith]({project_url})")
             
             # Recent runs
-            if st.button("🔄 Refresh Runs"):
+            if st.button("🔄 Refresh Runs", key="refresh_runs_langsmith"):
                 st.rerun()
             
             recent_runs = enhanced_langsmith_monitor.get_recent_runs(limit=5)
@@ -3546,7 +3553,8 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                                     label="📥 Download PNG",
                                     data=png_data,
                                     file_name=f"workflow_graph_{analysis_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
-                                    mime="image/png"
+                                    mime="image/png",
+                                    key="download_workflow_graph_png"
                                 )
                             else:
                                 st.markdown(f"**Direct PNG URL:** [Download PNG]({png_url})")
@@ -3816,17 +3824,17 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if st.button("🥤 Brand Analysis", help="Analyze brand performance"):
+            if st.button("🥤 Brand Analysis", help="Analyze brand performance", key="btn___brand_analysis_9766"):
                 quick_query = "I want to analyze brand performance in the beverage market"
                 st.session_state.quick_query = quick_query
         
         with col2:
-            if st.button("🌍 Regional Analysis", help="Analyze regional markets"):
+            if st.button("🌍 Regional Analysis", help="Analyze regional markets", key="btn___regional_analysis_2191"):
                 quick_query = "Show me regional market analysis for beverage sales"
                 st.session_state.quick_query = quick_query
         
         with col3:
-            if st.button("💰 ROI Analysis", help="Analyze return on investment"):
+            if st.button("💰 ROI Analysis", help="Analyze return on investment", key="btn___roi_analysis_3254"):
                 quick_query = "Calculate ROI and profitability for beverage campaigns"
                 st.session_state.quick_query = quick_query
         
@@ -3932,11 +3940,11 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                         st.info("Select agents to view the workflow graph")
             
             # Run analysis button
-            if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
+            if st.button("🚀 Run Analysis", type="primary", use_container_width=True, key="btn___run_analysis_7373"):
                 self._run_chat_analysis(config)
         
         # Reset chat button
-        if st.button("🔄 Reset Chat"):
+        if st.button("🔄 Reset Chat", key="btn___reset_chat_6008"):
             chat_agent.reset()
             st.session_state.chat_messages = []
             st.session_state.workflow_ready = False
@@ -3966,7 +3974,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("✅ Use Selected Parameters"):
+            if st.button("✅ Use Selected Parameters", key="btn___use_selected_parameters_8757"):
                 if selected_params:
                     response = chat_agent.set_parameters(selected_params)
                     st.session_state.chat_messages.append({
@@ -3981,7 +3989,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     st.warning("Please select at least one option for each parameter.")
         
         with col2:
-            if st.button("🎯 Use Default Values"):
+            if st.button("🎯 Use Default Values", key="btn___use_default_values_1544"):
                 response = chat_agent.set_parameters(chat_agent.default_parameters)
                 st.session_state.chat_messages.append({
                     "role": "assistant", 
@@ -4050,7 +4058,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("🔄 Refresh Runs", help="Refresh LangSmith run data"):
+                    if st.button("🔄 Refresh Runs", help="Refresh LangSmith run data", key="refresh_runs_unique"):
                         st.rerun()
                 
                 with col2:
@@ -4097,7 +4105,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
             st.info("💡 **Using CrewAI Optimization System** - LangGraph not available, but all optimization features work through CrewAI fallback!")
         
         # Run analysis button
-        if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
+        if st.button("🚀 Run Analysis", type="primary", use_container_width=True, key="btn___run_analysis_7373"):
             if not config["selected_agents"]:
                 st.error("Please select at least one agent to run the analysis.")
                 return

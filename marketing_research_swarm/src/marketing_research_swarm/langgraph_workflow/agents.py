@@ -16,7 +16,7 @@ from langchain.schema import HumanMessage, SystemMessage
 import requests
 
 from .state import MarketingResearchState, AgentStatus, store_agent_result, store_agent_error, get_agent_context
-from ..tools.advanced_tools import (
+from ..tools.langgraph_tools import (
     calculate_roi, analyze_kpis, forecast_sales, plan_budget,
     analyze_brand_performance, calculate_market_share, time_series_analysis,
     cross_sectional_analysis, beverage_market_analysis, profitability_analysis
@@ -641,82 +641,74 @@ Format your response as a comprehensive analysis with these clearly marked secti
             if self.role == 'data_analyst':
                 # Execute multiple analytical tools with specific parameters
                 if 'profitability_analysis' in self.tools:
-                    result = profitability_analysis.invoke({
-                        'data_path': data_file,
-                        'analysis_dimension': 'brand',
-                        'brands': brands if brands else None,
-                        'market_segments': market_segments if market_segments else None
-                    })
+                    result = profitability_analysis._run(
+                        data_path=data_file,
+                        analysis_dimension='brand'
+                    )
                     tool_results['profitability_analysis'] = result
                 
                 if 'cross_sectional_analysis' in self.tools:
-                    result = cross_sectional_analysis.invoke({
-                        'data_path': data_file,
-                        'segment_column': 'brand',
-                        'value_column': 'total_revenue',
-                        'brands': brands if brands else None
-                    })
+                    result = cross_sectional_analysis._run(
+                        data_path=data_file,
+                        segment_column='brand',
+                        value_column='total_revenue'
+                    )
                     tool_results['cross_sectional_analysis'] = result
                 
                 if 'analyze_kpis' in self.tools:
-                    result = analyze_kpis.invoke({
-                        'data_path': data_file,
-                        'brands': brands if brands else None,
-                        'market_segments': market_segments if market_segments else None
-                    })
+                    result = analyze_kpis._run(
+                        data_path=data_file
+                    )
                     tool_results['analyze_kpis'] = result
             
             elif self.role == 'market_research_analyst':
                 if 'beverage_market_analysis' in self.tools:
-                    result = beverage_market_analysis.invoke({
-                        'data_path': data_file,
-                        'brands': brands if brands else None,
-                        'market_segments': market_segments if market_segments else None,
-                        'product_categories': product_categories if product_categories else None
-                    })
+                    result = beverage_market_analysis._run(
+                        data_path=data_file
+                    )
                     tool_results['beverage_market_analysis'] = result
             
             elif self.role == 'forecasting_specialist':
                 if 'forecast_sales' in self.tools:
-                    result = forecast_sales.invoke({
-                        'data_path': data_file,
-                        'periods': context.get('forecast_periods', 30),
-                        'brands': brands if brands else None,
-                        'market_segments': market_segments if market_segments else None
-                    })
+                    result = forecast_sales._run(
+                        data_path=data_file,
+                        periods=context.get('forecast_periods', 30),
+                        brands=brands if brands else None,
+                        market_segments=market_segments if market_segments else None
+                    )
                     tool_results['forecast_sales'] = result
             
             elif self.role == 'campaign_optimizer':
                 if 'calculate_roi' in self.tools:
-                    result = calculate_roi.invoke({
-                        'investment': context.get('budget', 250000),
-                        'revenue': context.get('expected_revenue', 25000)
-                    })
+                    result = calculate_roi._run(
+                        investment=context.get('budget', 250000),
+                        revenue=context.get('expected_revenue', 25000)
+                    )
                     tool_results['calculate_roi'] = result
                 
                 if 'plan_budget' in self.tools:
-                    result = plan_budget.invoke({
-                        'total_budget': context.get('budget', 250000),
-                        'channels': ['Digital Marketing', 'Social Media', 'Traditional Media', 'Content Marketing'],
-                        'priorities': [1.5, 1.3, 1.0, 1.2]  # Higher priority for digital and social
-                    })
+                    result = plan_budget._run(
+                        total_budget=context.get('budget', 250000),
+                        channels=['Digital Marketing', 'Social Media', 'Traditional Media', 'Content Marketing'],
+                        priorities=[1.5, 1.3, 1.0, 1.2]  # Higher priority for digital and social
+                    )
                     tool_results['plan_budget'] = result
             
             elif self.role == 'brand_performance_specialist':
                 if 'analyze_brand_performance' in self.tools:
-                    result = analyze_brand_performance.invoke({
-                        'data_path': data_file,
-                        'brands': brands if brands else None,
-                        'market_segments': market_segments if market_segments else None
-                    })
+                    result = analyze_brand_performance._run(
+                        data_path=data_file,
+                        brands=brands if brands else None,
+                        market_segments=market_segments if market_segments else None
+                    )
                     tool_results['analyze_brand_performance'] = result
                 
                 if 'calculate_market_share' in self.tools:
-                    result = calculate_market_share.invoke({
-                        'company_revenue': None,  # Will use defaults from tool
-                        'total_market_revenue': None,
-                        'brands': brands if brands else None
-                    })
+                    result = calculate_market_share._run(
+                        company_revenue=None,  # Will use defaults from tool
+                        total_market_revenue=None,
+                        brands=brands if brands else None
+                    )
                     tool_results['calculate_market_share'] = result
                 
         except Exception as e:
