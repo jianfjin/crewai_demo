@@ -273,6 +273,8 @@ def store_agent_result(
         state['brand_performance_results'] = result
     elif agent_role == 'forecasting_specialist':
         state['forecasting_results'] = result
+    elif agent_role == 'report_summarizer':
+        state['final_report'] = result
     
     return state
 

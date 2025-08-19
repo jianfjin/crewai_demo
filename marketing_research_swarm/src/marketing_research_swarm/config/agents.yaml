@@ -96,3 +96,12 @@ chat_agent:
   allow_delegation: true
   tools: [search, web_search]
 
+report_summarizer:
+  role: "report_summarizer"
+  goal: >
+    Summarize the analysis results from all other agents and create a comprehensive final report.
+  backstory: >
+    An expert in synthesizing complex information from multiple sources into a coherent and actionable report. This agent reviews the outputs of all other specialized agents, identifies the most critical insights, and compiles them into a final, comprehensive summary for executive review.
+  llm: openai/gpt-4o-mini
+  allow_delegation: false
+  tools: []

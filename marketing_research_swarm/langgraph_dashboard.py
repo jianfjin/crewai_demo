@@ -3073,72 +3073,80 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         if "agent_results" in result:
             st.subheader("🤖 Agent Results")
             
-            for agent, agent_result in result["agent_results"].items():
-                with st.expander(f"📋 {agent.replace('_', ' ').title()}"):
-                    if isinstance(agent_result, dict):
-                        if "analysis" in agent_result:
-                            st.write("**Analysis:**")
-                            st.write(agent_result["analysis"])
-                        if "recommendations" in agent_result:
-                            st.write("**Recommendations:**")
-                            recommendations = agent_result["recommendations"]
-                            
-                            # Fix: Handle different recommendation formats properly
-                            if isinstance(recommendations, list):
-                                # If it's a list, display each item properly
-                                for i, rec in enumerate(recommendations, 1):
-                                    if isinstance(rec, str):
-                                        # Clean up any truncated text
-                                        cleaned_rec = rec.strip()
-                                        # Fix truncated "ations" back to "Recommendations"
-                                        if cleaned_rec.startswith("ations"):
-                                            cleaned_rec = "Recommend" + cleaned_rec
-                                        st.write(f"{i}. {cleaned_rec}")
-                                    else:
-                                        st.write(f"{i}. {rec}")
-                            elif isinstance(recommendations, str):
-                                # If it's a string, display it properly
-                                cleaned_recommendations = recommendations.strip()
-                                # Fix truncated "ations" back to "Recommendations"
-                                if cleaned_recommendations.startswith("ations"):
-                                    cleaned_recommendations = "Recommend" + cleaned_recommendations
-                                st.write(cleaned_recommendations)
-                            else:
-                                # Fallback for other formats
-                                st.write(recommendations)
-                        if "metrics" in agent_result:
-                            st.write("**Metrics:**")
-                            st.json(agent_result["metrics"])
-                        # Suggested structured parameters (if any)
-                        for sugg_key in ["tool_param_suggestions", "structured_params", "tool_parameters"]:
-                            if sugg_key in agent_result and agent_result[sugg_key]:
-                                st.write("**Suggested Tool Parameters:**")
-                                # Show normalized suggestion preview for known tools
-                                suggestions = agent_result[sugg_key]
-                                try:
-                                    if isinstance(suggestions, dict):
-                                        norm = {}
-                                        for tname, params in suggestions.items():
-                                            # map aliases for preview
-                                            if isinstance(params, dict):
-                                                p = dict(params)
-                                                if "data_file_path" in p and "data_path" not in p:
-                                                    p["data_path"] = p["data_file_path"]
-                                                if "forecast_periods" in p and "periods" not in p:
-                                                    p["periods"] = p["forecast_periods"]
-                                                norm[tname] = p
-                                        st.json(norm)
-                                    else:
+            agent_results = result.get("agent_results", {})
+            if "report_summarizer" in agent_results:
+                summary_data = agent_results["report_summarizer"]
+                if isinstance(summary_data, dict) and "final_summary" in summary_data:
+                    st.markdown(summary_data["final_summary"])
+                else:
+                    st.write(summary_data)
+            else:
+                for agent, agent_result in result["agent_results"].items():
+                    with st.expander(f"📋 {agent.replace('_', ' ').title()}"):
+                        if isinstance(agent_result, dict):
+                            if "analysis" in agent_result:
+                                st.write("**Analysis:**")
+                                st.write(agent_result["analysis"])
+                            if "recommendations" in agent_result:
+                                st.write("**Recommendations:**")
+                                recommendations = agent_result["recommendations"]
+                                
+                                # Fix: Handle different recommendation formats properly
+                                if isinstance(recommendations, list):
+                                    # If it's a list, display each item properly
+                                    for i, rec in enumerate(recommendations, 1):
+                                        if isinstance(rec, str):
+                                            # Clean up any truncated text
+                                            cleaned_rec = rec.strip()
+                                            # Fix truncated "ations" back to "Recommendations"
+                                            if cleaned_rec.startswith("ations"):
+                                                cleaned_rec = "Recommend" + cleaned_rec
+                                            st.write(f"{i}. {cleaned_rec}")
+                                        else:
+                                            st.write(f"{i}. {rec}")
+                                elif isinstance(recommendations, str):
+                                    # If it's a string, display it properly
+                                    cleaned_recommendations = recommendations.strip()
+                                    # Fix truncated "ations" back to "Recommendations"
+                                    if cleaned_recommendations.startswith("ations"):
+                                        cleaned_recommendations = "Recommend" + cleaned_recommendations
+                                    st.write(cleaned_recommendations)
+                                else:
+                                    # Fallback for other formats
+                                    st.write(recommendations)
+                            if "metrics" in agent_result:
+                                st.write("**Metrics:**")
+                                st.json(agent_result["metrics"])
+                            # Suggested structured parameters (if any)
+                            for sugg_key in ["tool_param_suggestions", "structured_params", "tool_parameters"]:
+                                if sugg_key in agent_result and agent_result[sugg_key]:
+                                    st.write("**Suggested Tool Parameters:**")
+                                    # Show normalized suggestion preview for known tools
+                                    suggestions = agent_result[sugg_key]
+                                    try:
+                                        if isinstance(suggestions, dict):
+                                            norm = {}
+                                            for tname, params in suggestions.items():
+                                                # map aliases for preview
+                                                if isinstance(params, dict):
+                                                    p = dict(params)
+                                                    if "data_file_path" in p and "data_path" not in p:
+                                                        p["data_path"] = p["data_file_path"]
+                                                    if "forecast_periods" in p and "periods" not in p:
+                                                        p["periods"] = p["forecast_periods"]
+                                                    norm[tname] = p
+                                            st.json(norm)
+                                        else:
+                                            st.json(suggestions)
+                                    except Exception:
                                         st.json(suggestions)
-                                except Exception:
-                                    st.json(suggestions)
-                                break
-                        # Render tool results if present
-                        if "tool_results" in agent_result and agent_result["tool_results"]:
-                            st.write("**Tool Results:**")
-                            self._render_tool_results(agent, agent_result["tool_results"]) 
-                    else:
-                        st.write(str(agent_result))
+                                    break
+                            # Render tool results if present
+                            if "tool_results" in agent_result and agent_result["tool_results"]:
+                                st.write("**Tool Results:**")
+                                self._render_tool_results(agent, agent_result["tool_results"]) 
+                        else:
+                            st.write(str(agent_result))
     
     def _render_optimization_metrics(self, result: Dict[str, Any]):
         """Render optimization performance metrics."""

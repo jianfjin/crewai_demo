@@ -67,6 +67,8 @@ class OptimizedMarketingWorkflow:
         
         # Available agent types
         self.available_agents = list(AGENT_NODES.keys())
+        if 'report_summarizer' not in self.available_agents:
+            self.available_agents.append('report_summarizer')
         
         # Build the optimized workflow graph
         self.workflow = self._build_optimized_workflow()
@@ -137,7 +139,7 @@ class OptimizedMarketingWorkflow:
         
         # Validate agent names
         valid_agents = ["Market Research Analyst", "Data Analyst", "Brand Performance Analyst", 
-                       "Sales Forecast Analyst", "ROI Analysis Expert"]
+                       "Sales Forecast Analyst", "ROI Analysis Expert", "Report Summarizer"]
         invalid_agents = [agent for agent in kwargs.get('selected_agents', []) if agent not in valid_agents]
         if invalid_agents:
             raise ValueError(f"Invalid agent names: {invalid_agents}")
@@ -200,6 +202,10 @@ class OptimizedMarketingWorkflow:
                 state.get("campaign_type", "")
             )
         
+        # Add summarizer as the last agent if not present
+        if 'report_summarizer' not in state['selected_agents']:
+            state['selected_agents'].append('report_summarizer')
+
         # Set token budget based on optimization level
         token_budgets = {
             "none": 50000,
@@ -326,7 +332,13 @@ class OptimizedMarketingWorkflow:
             if state["agent_status"].get(agent) == AgentStatus.PENDING
         ]
         
-        if not pending_agents:
+        # Exclude summarizer if other agents are pending
+        other_pending_agents = [agent for agent in pending_agents if agent != 'report_summarizer']
+
+        if not other_pending_agents:
+            # If no other agents are pending, check for the summarizer
+            if 'report_summarizer' in pending_agents:
+                return 'report_summarizer'
             return None
         
         # Optimized dependency resolution - prioritize high-impact, low-token agents
@@ -342,7 +354,7 @@ class OptimizedMarketingWorkflow:
         
         # Sort by priority and check dependencies
         sorted_agents = sorted(
-            pending_agents,
+            other_pending_agents,
             key=lambda x: agent_priorities.get(x, 10)
         )
         

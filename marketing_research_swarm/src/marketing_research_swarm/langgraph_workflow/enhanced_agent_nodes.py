@@ -489,6 +489,69 @@ def enhanced_forecasting_specialist_node(state: MarketingResearchState) -> Marke
     return state
 
 
+def enhanced_report_summarizer_node(state: MarketingResearchState) -> MarketingResearchState:
+    """Enhanced Report Summarizer node to generate the final report."""
+    agent_role = 'report_summarizer'
+    
+    try:
+        config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'agents.yaml')
+        agent_configs = load_agent_configs(config_path)
+        agent_config = agent_configs.get(agent_role, {})
+        
+        agent = create_enhanced_agent_from_config(agent_role, agent_config)
+        
+        # Consolidate all previous agent results into a comprehensive summary
+        all_results = state.get('agent_results', {})
+        summary_of_results = ""
+        for agent_name, result in all_results.items():
+            summary_of_results += f"### {agent_name.replace('_', ' ').title()} Analysis\n"
+            summary_of_results += f"- **Analysis**: {result.get('analysis', 'N/A')}\n"
+            if 'key_insights' in result:
+                summary_of_results += f"- **Key Insights**: {result['key_insights']}\n"
+            if 'recommendations' in result:
+                summary_of_results += f"- **Recommendations**: {result['recommendations']}\n"
+            summary_of_results += "\n"
+
+        task_description = f"""
+        Synthesize all the provided analysis results into a single, comprehensive final report.
+        
+        **Analysis Summary from All Agents**:
+        {summary_of_results}
+        
+        **Final Report Requirements**:
+        - **Executive Summary**: Start with a high-level overview of the key findings and strategic recommendations.
+        - **Integrated Insights**: Combine insights from all agents to tell a cohesive story about the market, competition, and brand performance.
+        - **Strategic Recommendations**: Provide a consolidated list of actionable recommendations based on the entire body of research.
+        - **Conclusion**: End with a concluding paragraph that summarizes the overall outlook and next steps.
+        
+        Your final output should be a polished, professional report ready for executive review.
+        """
+        
+        # Since this agent has no tools, we call the LLM directly with the consolidated context
+        from langchain.schema import SystemMessage, HumanMessage
+        
+        system_message = SystemMessage(content=f"You are a {agent.role} with the goal to {agent.goal}. Your backstory is: {agent.backstory}")
+        human_message = HumanMessage(content=task_description)
+        
+        response = agent.llm.invoke([system_message, human_message])
+        
+        final_report = {
+            'final_summary': response.content,
+            'timestamp': agent.execute_task_with_smart_tools(state, task_description).get('timestamp')
+        }
+        
+        state = store_agent_result(state, agent_role, final_report)
+        state['final_report'] = final_report
+        
+        logger.info(f"Enhanced {agent_role} completed and generated the final report.")
+        
+    except Exception as e:
+        logger.error(f"Error in enhanced {agent_role} node: {e}")
+        state = store_agent_error(state, agent_role, str(e))
+    
+    return state
+
+
 # Enhanced Agent Node Mapping
 ENHANCED_AGENT_NODES = {
     # Lowercase with underscores (original format)
@@ -500,6 +563,7 @@ ENHANCED_AGENT_NODES = {
     'campaign_optimizer': enhanced_campaign_optimizer_node,
     'brand_performance_specialist': enhanced_brand_performance_specialist_node,
     'forecasting_specialist': enhanced_forecasting_specialist_node,
+    'report_summarizer': enhanced_report_summarizer_node,
     
     # Title case with spaces (dashboard format) - CRITICAL FIX
     'Market Research Analyst': enhanced_market_research_analyst_node,
@@ -511,4 +575,5 @@ ENHANCED_AGENT_NODES = {
     'Brand Performance Analyst': enhanced_brand_performance_specialist_node,
     'Sales Forecast Analyst': enhanced_forecasting_specialist_node,
     'ROI Analysis Expert': enhanced_forecasting_specialist_node,  # Using forecasting for ROI as well
+    'Report Summarizer': enhanced_report_summarizer_node,
 }

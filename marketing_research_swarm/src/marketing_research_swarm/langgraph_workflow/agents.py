@@ -314,7 +314,7 @@ Format your response as a comprehensive analysis with these clearly marked secti
             numerical_data['roi_percentage'] = float(roi_matches[0])
         
         # Revenue/cost figures
-        money_matches = re.findall(r"\$\s*([\d,]+(?:\.\d+)?)", analysis_text)
+        money_matches = re.findall(r"\$\s*(\d[\d,]*(?:\.\d+)?)", analysis_text)
         if money_matches:
             amounts = [float(m.replace(',', '')) for m in money_matches]
             numerical_data['financial_figures'] = amounts
@@ -359,7 +359,7 @@ Format your response as a comprehensive analysis with these clearly marked secti
             structure['competitive_landscape_insights'] = competitive_insights[:3]
         
         # Market size/value
-        market_values = re.findall(r"market\s+(?:size|value|worth)\s*(?:of\s*)?\$?\s*([\d,]+(?:\.\d+)?)", text, re.IGNORECASE)
+        market_values = re.findall(r"market\s+(?:size|value|worth)\s*(?:of\s*)?\$?\s*(\d[\d,]*(?:\.\d+)?)", text, re.IGNORECASE)
         if market_values:
             structure['market_size_estimates'] = [float(v.replace(',', '')) for v in market_values]
         
@@ -374,8 +374,8 @@ Format your response as a comprehensive analysis with these clearly marked secti
         # Performance metrics
         metrics = {}
         metric_patterns = [
-            (r"revenue:?\s*\$?([\d,]+(?:\.\d+)?)", 'revenue'),
-            (r"profit:?\s*\$?([\d,]+(?:\.\d+)?)", 'profit'),
+            (r"revenue:?\s*\$?(\d[\d,]*(?:\.\d+)?)", 'revenue'),
+            (r"profit:?\s*\$?(\d[\d,]*(?:\.\d+)?)", 'profit'),
             (r"margin:?\s*([\d,]+(?:\.\d+)?)\s*%", 'profit_margin'),
             (r"growth:?\s*([\d,]+(?:\.\d+)?)\s*%", 'growth_rate'),
             (r"market\s+share:?\s*([\d,]+(?:\.\d+)?)\s*%", 'market_share')
@@ -426,7 +426,7 @@ Format your response as a comprehensive analysis with these clearly marked secti
         structure = {}
         
         # Budget allocation
-        budget_items = re.findall(r"(?:allocate|budget|spend):?\s*\$?([\d,]+(?:\.\d+)?)\s*(?:for|on|to)\s*(.+?)(?=\n|,|\.|and)", text, re.IGNORECASE)
+        budget_items = re.findall(r"(?:allocate|budget|spend):?\s*\$?(\d[\d,]*(?:\.\d+)?)s*(?:for|on|to)\s*(.+?)(?=\n|,|\.|and)", text, re.IGNORECASE)
         if budget_items:
             budget_allocation = {}
             for amount, item in budget_items:
@@ -447,7 +447,7 @@ Format your response as a comprehensive analysis with these clearly marked secti
         structure = {}
         
         # Forecast values
-        forecast_values = re.findall(r"(?:forecast|predicted|projected):?\s*\$?([\d,]+(?:\.\d+)?)", text, re.IGNORECASE)
+        forecast_values = re.findall(r"(?:forecast|predicted|projected):?\s*\$?(\d[\d,]*(?:\.\d+)?)", text, re.IGNORECASE)
         if forecast_values:
             structure['forecast_values'] = [float(v.replace(',', '')) for v in forecast_values]
         
