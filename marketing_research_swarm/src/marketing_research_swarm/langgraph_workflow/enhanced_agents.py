@@ -13,7 +13,18 @@ from datetime import datetime
 from .agents import LangGraphAgent
 from .smart_tool_selector import SmartToolSelector
 from .state import MarketingResearchState
-from ..tools.advanced_tools_fixed import get_tools
+from ..tools.langgraph_tools import (
+    calculate_roi,
+    analyze_kpis,
+    forecast_sales,
+    plan_budget,
+    analyze_brand_performance,
+    calculate_market_share,
+    time_series_analysis,
+    cross_sectional_analysis,
+    beverage_market_analysis,
+    profitability_analysis,
+)
 # Temporarily disable context_aware_tools due to circular import
 # from ..tools.context_aware_tools import get_context_aware_tools
 
@@ -51,16 +62,18 @@ class EnhancedLangGraphAgent(LangGraphAgent):
     def _initialize_available_tools(self):
         """Initialize all available tools for fallback access."""
         try:
-            # Get standard tools
-            standard_tools = get_tools()
-            for tool in standard_tools:
-                self.available_tools[tool.name] = tool
-            
-            # TODO: Re-enable context-aware tools once circular import is resolved
-            # context_tools = get_context_aware_tools()
-            # for tool in context_tools:
-            #     self.available_tools[tool.name] = tool
-                
+            self.available_tools = {
+                "calculate_roi": calculate_roi,
+                "analyze_kpis": analyze_kpis,
+                "forecast_sales": forecast_sales,
+                "plan_budget": plan_budget,
+                "analyze_brand_performance": analyze_brand_performance,
+                "calculate_market_share": calculate_market_share,
+                "time_series_analysis": time_series_analysis,
+                "cross_sectional_analysis": cross_sectional_analysis,
+                "beverage_market_analysis": beverage_market_analysis,
+                "profitability_analysis": profitability_analysis,
+            }
             logger.info(f"Initialized {len(self.available_tools)} available tools for enhanced agent")
         except Exception as e:
             logger.error(f"Failed to initialize available tools: {e}")
@@ -293,18 +306,7 @@ class EnhancedLangGraphAgent(LangGraphAgent):
             if tool_name in self.available_tools:
                 tool_func = self.available_tools[tool_name]
                 
-                # Execute with proper parameter handling
-                if hasattr(tool_func, 'invoke'):
-                    result = tool_func.invoke(tool_params)
-                elif hasattr(tool_func, '_run'):
-                    result = tool_func._run(**tool_params)
-                elif hasattr(tool_func, 'run'):
-                    try:
-                        result = tool_func.run(**tool_params)
-                    except TypeError:
-                        result = tool_func.run(tool_params)
-                else:
-                    result = tool_func(**tool_params)
+                result = tool_func(**tool_params)
                 
                 success = True
                 logger.debug(f"Successfully executed {tool_name}")
