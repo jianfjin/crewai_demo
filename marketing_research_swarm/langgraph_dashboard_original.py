@@ -94,38 +94,523 @@ optimization_manager = None
 token_tracker = None
 smart_cache = None
 
-# Import dashboard components
-try:
-    from src.marketing_research_swarm.dashboard import (
-        EnhancedTokenTracker,
-        EnhancedLangSmithMonitor,
-        StateGraphVisualizer,
-        MockOptimizationManager,
-        create_langsmith_tracer,
-        load_agents_config,
-        create_custom_task_config,
-        initialize_components,
-        render_header
-    )
-    DASHBOARD_COMPONENTS_AVAILABLE = True
-    logger.info("✅ Dashboard components imported successfully")
-except ImportError as e:
-    logger.error(f"Failed to import dashboard components: {e}")
-    DASHBOARD_COMPONENTS_AVAILABLE = False
+# Enhanced Dashboard Components (Integrated)
+class EnhancedTokenTracker:
+    """Enhanced token tracker that properly integrates with LangGraph workflows."""
+    
+    def __init__(self):
+        self.workflow_tokens = {}
+        self.agent_tokens = {}
+        self.current_workflow_id = None
+        
+    def start_workflow_tracking(self, workflow_id: str, optimization_level: str = "none"):
+        """Start tracking tokens for a workflow."""
+        self.current_workflow_id = workflow_id
+        self.workflow_tokens[workflow_id] = {
+            'start_time': datetime.now(),
+            'optimization_level': optimization_level,
+            'agents': {},
+            'total_tokens': 0,
+            'prompt_tokens': 0,
+            'completion_tokens': 0,
+            'total_cost': 0.0,
+            'optimization_savings': 0
+        }
+        logger.info(f"🔍 Started token tracking for workflow: {workflow_id}")
+        
+    def track_agent_execution(self, agent_name: str, tokens_used: int, cost: float = 0.0):
+        """Track token usage for a specific agent."""
+        if not self.current_workflow_id:
+            return
+            
+        workflow_data = self.workflow_tokens.get(self.current_workflow_id, {})
+        
+        # Update agent-specific tracking
+        if agent_name not in workflow_data['agents']:
+            workflow_data['agents'][agent_name] = {
+                'tokens': 0,
+                'cost': 0.0,
+                'calls': 0
+            }
+        
+        workflow_data['agents'][agent_name]['tokens'] += tokens_used
+        workflow_data['agents'][agent_name]['cost'] += cost
+        workflow_data['agents'][agent_name]['calls'] += 1
+        
+        # Update workflow totals
+        workflow_data['total_tokens'] += tokens_used
+        workflow_data['total_cost'] += cost
+        
+        logger.info(f"📊 Agent {agent_name} used {tokens_used} tokens (${cost:.4f})")
+        
+    def complete_workflow_tracking(self, workflow_id: str) -> Dict[str, Any]:
+        """Complete tracking and return final statistics."""
+        if workflow_id not in self.workflow_tokens:
+            return {}
+            
+        workflow_data = self.workflow_tokens[workflow_id]
+        end_time = datetime.now()
+        duration = (end_time - workflow_data['start_time']).total_seconds()
+        
+        # Calculate optimization savings
+        optimization_level = workflow_data['optimization_level']
+        baseline_tokens = workflow_data['total_tokens']
+        
+        if optimization_level == "blackboard":
+            baseline_tokens = int(workflow_data['total_tokens'] / 0.15)  # 85% reduction
+            savings_percent = 85
+        elif optimization_level == "full":
+            baseline_tokens = int(workflow_data['total_tokens'] / 0.25)  # 75% reduction
+            savings_percent = 75
+        elif optimization_level == "partial":
+            baseline_tokens = int(workflow_data['total_tokens'] / 0.55)  # 45% reduction
+            savings_percent = 45
+        else:
+            savings_percent = 0
+            
+        final_stats = {
+            'workflow_id': workflow_id,
+            'duration_seconds': duration,
+            'total_tokens': workflow_data['total_tokens'],
+            'prompt_tokens': int(workflow_data['total_tokens'] * 0.7),
+            'completion_tokens': int(workflow_data['total_tokens'] * 0.3),
+            'total_cost': workflow_data['total_cost'],
+            'optimization_level': optimization_level,
+            'baseline_tokens': baseline_tokens,
+            'tokens_saved': baseline_tokens - workflow_data['total_tokens'],
+            'savings_percent': savings_percent,
+            'agents': workflow_data['agents'],
+            'completed_at': end_time.isoformat()
+        }
+        
+        logger.info(f"🎯 Workflow {workflow_id} completed: {final_stats['total_tokens']} tokens, {savings_percent}% savings")
+        return final_stats
+
+class EnhancedLangSmithMonitor:
+    """Enhanced LangSmith monitoring with proper UUID handling."""
+    
+    def __init__(self):
+        self.client = None
+        self.project_name = "marketing-research-swarm"
+        self.available = False
+        self._initialize_client()
+        
+    def _initialize_client(self):
+        """Initialize LangSmith client with proper error handling."""
+        try:
+            if not LANGSMITH_AVAILABLE:
+                return
+                
+            api_key = os.getenv("LANGCHAIN_API_KEY")
+            if not api_key:
+                logger.warning("LANGCHAIN_API_KEY not found")
+                return
+                
+            self.client = langsmith_client
+            self.available = True
+            logger.info(f"✅ Enhanced LangSmith monitoring enabled for project: {self.project_name}")
+                
+        except Exception as e:
+            logger.warning(f"Enhanced LangSmith initialization failed: {e}")
+            self.available = False
+            
+    def create_run_tracer(self, workflow_id: str):
+        """Create a tracer for a specific workflow run."""
+        if not self.available:
+            return None
+            
+        try:
+            # Set environment variables for this run
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            os.environ["LANGCHAIN_PROJECT"] = self.project_name
+            
+            logger.info(f"🔍 Created LangSmith tracer for workflow: {workflow_id}")
+            return create_langsmith_tracer(self.project_name)
+            
+        except Exception as e:
+            logger.error(f"Failed to create LangSmith tracer: {e}")
+            return None
+            
+    def get_recent_runs(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get recent runs from LangSmith."""
+        if not self.available:
+            return []
+            
+        try:
+            runs = list(self.client.list_runs(
+                project_name=self.project_name,
+                limit=limit
+            ))
+            
+            formatted_runs = []
+            for run in runs:
+                formatted_runs.append({
+                    'id': str(run.id),
+                    'name': run.name or 'Unknown',
+                    'status': run.status or 'unknown',
+                    'start_time': run.start_time,
+                    'end_time': run.end_time,
+                    'total_tokens': getattr(run, 'total_tokens', 0),
+                    'tags': getattr(run, 'tags', []),
+                    'url': f"https://smith.langchain.com/public/{run.id}/r"
+                })
+                
+            return formatted_runs
+            
+        except Exception as e:
+            logger.error(f"Failed to get LangSmith runs: {e}")
+            return []
+
+class StateGraphVisualizer:
+    """StateGraph visualization for the dashboard."""
+    
+    def __init__(self):
+        self.available = PLOTLY_AVAILABLE
+        
+        # Define actual agent dependencies from the LangGraph workflow
+        self.agent_dependencies = {
+            "market_research_analyst": [],  # Can run first
+            "competitive_analyst": [],  # Can run first
+            "data_analyst": [],  # Can run first
+            "content_strategist": ["market_research_analyst"],  # Needs market research
+            "creative_copywriter": ["content_strategist"],  # Needs content strategy
+            "brand_performance_specialist": ["competitive_analyst", "data_analyst"],  # Needs competitive and data analysis
+            "forecasting_specialist": ["market_research_analyst", "data_analyst"],  # Needs market research and data analysis
+            "campaign_optimizer": ["data_analyst", "content_strategist"],  # Needs data and content strategy
+        }
+        
+    def get_execution_order(self, selected_agents: List[str]) -> List[List[str]]:
+        """Calculate the actual execution order based on dependencies."""
+        if not selected_agents:
+            return []
+        
+        # Create execution layers
+        execution_layers = []
+        remaining_agents = set(selected_agents)
+        completed_agents = set()
+        
+        while remaining_agents:
+            current_layer = []
+            
+            # Find agents whose dependencies are satisfied
+            for agent in list(remaining_agents):
+                dependencies = self.agent_dependencies.get(agent, [])
+                
+                # Check if all dependencies are completed or not in selected agents
+                dependencies_met = all(
+                    dep in completed_agents or dep not in selected_agents
+                    for dep in dependencies
+                )
+                
+                if dependencies_met:
+                    current_layer.append(agent)
+            
+            if not current_layer:
+                # Circular dependency or error - add remaining agents
+                current_layer = list(remaining_agents)
+            
+            execution_layers.append(current_layer)
+            
+            # Update completed and remaining
+            for agent in current_layer:
+                completed_agents.add(agent)
+                remaining_agents.discard(agent)
+        
+        return execution_layers
+    
+    def draw_ascii_graph(self, selected_agents: List[str]) -> str:
+        """Create ASCII representation of the workflow graph."""
+        if not selected_agents:
+            return "No agents selected"
+        
+        execution_order = self.get_execution_order(selected_agents)
+        
+        ascii_graph = []
+        ascii_graph.append("LangGraph Workflow Execution Order:")
+        ascii_graph.append("=" * 50)
+        ascii_graph.append("")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│    START    │")
+        ascii_graph.append("└─────────────┘")
+        ascii_graph.append("       │")
+        ascii_graph.append("       ▼")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│   CONTEXT   │")
+        ascii_graph.append("│ OPTIMIZATION│")
+        ascii_graph.append("└─────────────┘")
+        ascii_graph.append("       │")
+        ascii_graph.append("       ▼")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│    AGENT    │")
+        ascii_graph.append("│   ROUTER    │")
+        ascii_graph.append("└─────────────┘")
+        
+        # Add execution layers
+        for layer_idx, layer in enumerate(execution_order):
+            ascii_graph.append("       │")
+            ascii_graph.append("       ▼")
+            ascii_graph.append(f"  Layer {layer_idx + 1}:")
+            
+            if len(layer) == 1:
+                agent = layer[0]
+                agent_display = agent.replace('_', ' ').title()
+                # Use wider box for full names
+                box_width = max(len(agent_display) + 4, 20)
+                ascii_graph.append("┌" + "─" * box_width + "┐")
+                ascii_graph.append(f"│{agent_display.center(box_width)}│")
+                ascii_graph.append("└" + "─" * box_width + "┘")
+            else:
+                # Multiple agents in parallel
+                ascii_graph.append("       │")
+                if len(layer) == 2:
+                    ascii_graph.append("   ┌───┴───┐")
+                    ascii_graph.append("   ▼       ▼")
+                    agent1_display = layer[0].replace('_', ' ').title()
+                    agent2_display = layer[1].replace('_', ' ').title()
+                    box_width = max(len(agent1_display) + 4, len(agent2_display) + 4, 20)
+                    ascii_graph.append("┌" + "─" * box_width + "┐  ┌" + "─" * box_width + "┐")
+                    ascii_graph.append(f"│{agent1_display.center(box_width)}│  │{agent2_display.center(box_width)}│")
+                    ascii_graph.append("└" + "─" * box_width + "┘  └" + "─" * box_width + "┘")
+                else:
+                    # More than 2 agents - show them vertically
+                    for agent in layer:
+                        agent_display = agent.replace('_', ' ').title()
+                        box_width = max(len(agent_display) + 4, 20)
+                        ascii_graph.append("┌" + "─" * box_width + "┐")
+                        ascii_graph.append(f"│{agent_display.center(box_width)}│")
+                        ascii_graph.append("└" + "─" * box_width + "┘")
+        
+        ascii_graph.append("       │")
+        ascii_graph.append("       ▼")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│   RESULT    │")
+        ascii_graph.append("│ COMPRESSION │")
+        ascii_graph.append("└─────────────┘")
+        ascii_graph.append("       │")
+        ascii_graph.append("       ▼")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│  FINALIZE   │")
+        ascii_graph.append("└─────────────┘")
+        ascii_graph.append("       │")
+        ascii_graph.append("       ▼")
+        ascii_graph.append("┌─────────────┐")
+        ascii_graph.append("│     END     │")
+        ascii_graph.append("└─────────────┘")
+        
+        return "\n".join(ascii_graph)
+    
+    def create_mermaid_graph(self, selected_agents: List[str]) -> str:
+        """Create Mermaid diagram representation of the workflow."""
+        if not selected_agents:
+            return "graph TD\n    A[No agents selected]"
+        
+        execution_order = self.get_execution_order(selected_agents)
+        
+        mermaid_lines = ["graph TD"]
+        mermaid_lines.append("    START([START]) --> CONTEXT[Context Optimization]")
+        mermaid_lines.append("    CONTEXT --> ROUTER[Agent Router]")
+        
+        # Add agent nodes and dependencies
+        for layer_idx, layer in enumerate(execution_order):
+            for agent in layer:
+                agent_id = agent.upper().replace("_", "")
+                agent_name = agent.replace("_", " ").title()
+                mermaid_lines.append(f"    {agent_id}[{agent_name}]")
+                
+                # Connect from router or dependencies
+                dependencies = self.agent_dependencies.get(agent, [])
+                connected_deps = [dep for dep in dependencies if dep in selected_agents]
+                
+                if not connected_deps:
+                    mermaid_lines.append(f"    ROUTER --> {agent_id}")
+                else:
+                    for dep in connected_deps:
+                        dep_id = dep.upper().replace("_", "")
+                        mermaid_lines.append(f"    {dep_id} --> {agent_id}")
+                
+                # Connect to compression
+                mermaid_lines.append(f"    {agent_id} --> COMPRESSION[Result Compression]")
+        
+        mermaid_lines.append("    COMPRESSION --> FINALIZE[Finalize]")
+        mermaid_lines.append("    FINALIZE --> END([END])")
+        
+        # Add styling
+        mermaid_lines.append("    classDef startEnd fill:#e1f5fe")
+        mermaid_lines.append("    classDef process fill:#f3e5f5")
+        mermaid_lines.append("    classDef agent fill:#e8f5e8")
+        mermaid_lines.append("    class START,END startEnd")
+        mermaid_lines.append("    class CONTEXT,ROUTER,COMPRESSION,FINALIZE process")
+        
+        for agent in selected_agents:
+            agent_id = agent.upper().replace("_", "")
+            mermaid_lines.append(f"    class {agent_id} agent")
+        
+        return "\n".join(mermaid_lines)
+        
+    def create_workflow_graph(self, selected_agents: List[str], analysis_type: str = "comprehensive"):
+        """Create a visual representation of the workflow StateGraph."""
+        if not self.available:
+            return None
+            
+        try:
+            # Create a simple workflow visualization using Plotly
+            import plotly.graph_objects as go
+            
+            if not selected_agents:
+                return None
+            
+            # Define node positions
+            nodes = ["start", "context_optimization", "agent_router"] + selected_agents + ["result_compression", "finalize", "end"]
+            
+            # Create layout
+            y_positions = {}
+            y_positions["start"] = 4
+            y_positions["context_optimization"] = 3
+            y_positions["agent_router"] = 2
+            
+            # Position agents horizontally
+            agent_count = len(selected_agents)
+            if agent_count > 0:
+                agent_spacing = 2.0 / max(agent_count - 1, 1) if agent_count > 1 else 0
+                start_x = -1.0 if agent_count > 1 else 0
+                
+                for i, agent in enumerate(selected_agents):
+                    y_positions[agent] = 1
+            
+            y_positions["result_compression"] = 0
+            y_positions["finalize"] = -1
+            y_positions["end"] = -2
+            
+            # Create node traces
+            node_x = []
+            node_y = []
+            node_text = []
+            node_colors = []
+            node_sizes = []
+            
+            for i, node in enumerate(nodes):
+                if node in selected_agents:
+                    x_pos = start_x + selected_agents.index(node) * agent_spacing if agent_count > 1 else 0
+                else:
+                    x_pos = 0
+                    
+                node_x.append(x_pos)
+                node_y.append(y_positions.get(node, 0))
+                node_text.append(node.replace('_', ' ').title())
+                
+                # Color coding and sizing
+                if node == "start":
+                    node_colors.append('#00ff00')  # Green
+                    node_sizes.append(40)
+                elif node == "end":
+                    node_colors.append('#ff0000')  # Red
+                    node_sizes.append(40)
+                elif node in selected_agents:
+                    node_colors.append('#1f77b4')  # Blue
+                    node_sizes.append(35)
+                else:
+                    node_colors.append('#ff7f0e')  # Orange
+                    node_sizes.append(30)
+            
+            # Create the figure
+            fig = go.Figure()
+            
+            # Add edges first (so they appear behind nodes)
+            edge_x = []
+            edge_y = []
+            
+            # Create proper workflow connections with dependencies
+            connections = [
+                ("start", "context_optimization"),
+                ("context_optimization", "agent_router")
+            ]
+            
+            # Add connections based on actual dependencies
+            for agent in selected_agents:
+                dependencies = self.agent_dependencies.get(agent, [])
+                connected_deps = [dep for dep in dependencies if dep in selected_agents]
+                
+                if not connected_deps:
+                    # No dependencies - connect from router
+                    connections.append(("agent_router", agent))
+                else:
+                    # Has dependencies - connect from dependency agents
+                    for dep in connected_deps:
+                        connections.append((dep, agent))
+                
+                # All agents connect to compression
+                connections.append((agent, "result_compression"))
+            
+            # Add final connections
+            connections.extend([
+                ("result_compression", "finalize"),
+                ("finalize", "end")
+            ])
+            
+            # Create edge coordinates
+            for start_node, end_node in connections:
+                if start_node in nodes and end_node in nodes:
+                    start_idx = nodes.index(start_node)
+                    end_idx = nodes.index(end_node)
+                    
+                    edge_x.extend([node_x[start_idx], node_x[end_idx], None])
+                    edge_y.extend([node_y[start_idx], node_y[end_idx], None])
+            
+            # Add edges
+            fig.add_trace(go.Scatter(
+                x=edge_x, y=edge_y,
+                mode='lines',
+                line=dict(width=2, color='#888'),
+                hoverinfo='none',
+                showlegend=False,
+                name='Connections'
+            ))
+            
+            # Add nodes
+            fig.add_trace(go.Scatter(
+                x=node_x, y=node_y,
+                mode='markers+text',
+                text=node_text,
+                textposition="middle center",
+                marker=dict(
+                    size=node_sizes,
+                    color=node_colors,
+                    line=dict(width=2, color='white')
+                ),
+                hoverinfo='text',
+                showlegend=False,
+                name='Workflow Nodes'
+            ))
+            
+            fig.update_layout(
+                title=dict(
+                    text=f'LangGraph Workflow: {analysis_type.title()} Analysis',
+                    font=dict(size=16)
+                ),
+                showlegend=False,
+                hovermode='closest',
+                margin=dict(b=20,l=5,r=5,t=40),
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                plot_bgcolor='white',
+                height=500
+            )
+            
+            return fig
+            
+        except Exception as e:
+            logger.error(f"Failed to create workflow graph: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return None
 
 # Initialize enhanced components
 try:
-    if DASHBOARD_COMPONENTS_AVAILABLE:
-        enhanced_token_tracker = EnhancedTokenTracker()
-        enhanced_langsmith_monitor = EnhancedLangSmithMonitor()
-        state_graph_visualizer = StateGraphVisualizer()
-        DASHBOARD_ENHANCEMENTS_AVAILABLE = True
-        logger.info("✅ Enhanced dashboard components initialized")
-    else:
-        DASHBOARD_ENHANCEMENTS_AVAILABLE = False
-        enhanced_token_tracker = None
-        enhanced_langsmith_monitor = None
-        state_graph_visualizer = None
+    enhanced_token_tracker = EnhancedTokenTracker()
+    enhanced_langsmith_monitor = EnhancedLangSmithMonitor()
+    state_graph_visualizer = StateGraphVisualizer()
+    DASHBOARD_ENHANCEMENTS_AVAILABLE = True
+    logger.info("✅ Enhanced dashboard components initialized")
 except Exception as e:
     logger.warning(f"Enhanced dashboard components initialization failed: {e}")
     DASHBOARD_ENHANCEMENTS_AVAILABLE = False
@@ -133,7 +618,146 @@ except Exception as e:
     enhanced_langsmith_monitor = None
     state_graph_visualizer = None
 
-# MockOptimizationManager is now imported from dashboard components
+# Create MockOptimizationManager class first
+class MockOptimizationManager:
+    def __init__(self):
+        self.optimization_history = []
+    
+    def run_analysis(self, *args, **kwargs):
+        return self._generate_mock_analysis_result(*args, **kwargs)
+    
+    def run_analysis_with_optimization(self, inputs=None, optimization_level="blackboard", **kwargs):
+        """Generate realistic mock analysis results."""
+        import time
+        import random
+        
+        # Simulate processing time
+        time.sleep(2)
+        
+        # Extract inputs safely
+        if not inputs:
+            inputs = kwargs
+        
+        target_audience = inputs.get('target_audience', 'target audience')
+        campaign_type = inputs.get('campaign_type', 'marketing campaign')
+        budget = inputs.get('budget', 50000)
+        duration = inputs.get('duration', '6 months')
+        analysis_focus = inputs.get('analysis_focus', 'market analysis')
+        
+        # Generate realistic metrics based on optimization level
+        base_tokens = random.randint(8000, 15000)
+        if optimization_level == "blackboard":
+            actual_tokens = int(base_tokens * 0.15)  # 85% reduction
+            savings_percent = 85
+        elif optimization_level == "full":
+            actual_tokens = int(base_tokens * 0.25)  # 75% reduction
+            savings_percent = 75
+        elif optimization_level == "partial":
+            actual_tokens = int(base_tokens * 0.55)  # 45% reduction
+            savings_percent = 45
+        else:
+            actual_tokens = base_tokens
+            savings_percent = 0
+        
+        # Generate realistic analysis result
+        analysis_result = f"""
+# Marketing Research Analysis Report
+
+## Executive Summary
+Comprehensive analysis for {target_audience} targeting {campaign_type} with ${budget:,} budget over {duration}.
+
+## Key Findings
+
+### Market Research Analysis
+- Target audience '{target_audience}' shows high engagement potential in {campaign_type} segment
+- Market size estimated at ${budget * 4:,} with {random.randint(15, 25)}% growth potential
+- Competitive landscape analysis reveals {random.randint(3, 7)} major competitors
+
+### Data Analysis & Forecasting
+- Projected ROI: {random.randint(15, 35)}% over {duration}
+- Expected conversion rate: {random.randint(3, 8)}%
+- Customer acquisition cost: ${random.randint(25, 75)}
+
+### Content Strategy Recommendations
+- Focus on {analysis_focus} messaging across digital channels
+- Recommended content mix: 40% educational, 30% promotional, 30% engagement
+- Optimal posting frequency: {random.randint(3, 7)} times per week
+
+### Competitive Analysis
+- Market share opportunity: {random.randint(5, 15)}%
+- Competitive advantage areas: pricing, quality, customer service
+- Recommended positioning: premium value proposition
+
+## Strategic Recommendations
+
+1. **Budget Allocation**
+   - Digital marketing: 60% (${int(budget * 0.6):,})
+   - Traditional media: 25% (${int(budget * 0.25):,})
+   - Content creation: 15% (${int(budget * 0.15):,})
+
+2. **Timeline & Milestones**
+   - Phase 1 (Months 1-2): Brand awareness campaign
+   - Phase 2 (Months 3-4): Lead generation focus
+   - Phase 3 (Months 5-6): Conversion optimization
+
+3. **Performance Metrics**
+   - Target impressions: {random.randint(500000, 2000000):,}
+   - Expected leads: {random.randint(1000, 5000):,}
+   - Projected sales: ${random.randint(100000, 500000):,}
+
+## Risk Assessment
+- Market volatility: Medium risk
+- Competitive response: Low-medium risk
+- Economic factors: Low risk
+
+## Conclusion
+The analysis indicates strong potential for success with the proposed {campaign_type} targeting {target_audience}. 
+Expected ROI of {random.randint(15, 35)}% justifies the ${budget:,} investment over {duration}.
+        """
+        
+        # Generate comprehensive metrics
+        metrics = {
+            'total_tokens': actual_tokens,
+            'prompt_tokens': int(actual_tokens * 0.7),
+            'completion_tokens': int(actual_tokens * 0.3),
+            'total_cost': actual_tokens * 0.0000025,
+            'successful_requests': random.randint(3, 6),
+            'estimated': False,
+            'source': f'mock_optimization_{optimization_level}',
+            'optimization_applied': {
+                'level': optimization_level,
+                'token_savings_percent': savings_percent,
+                'traditional_tokens': base_tokens,
+                'optimized_tokens': actual_tokens
+            }
+        }
+        
+        # Generate optimization record
+        optimization_record = {
+            'optimization_level': optimization_level,
+            'duration_seconds': 2.0,
+            'metrics': metrics,
+            'workflow_id': f'mock_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+            'success': True
+        }
+        
+        return {
+            'result': analysis_result,
+            'metrics': metrics,
+            'optimization_record': optimization_record,
+            'duration_seconds': 2.0
+        }
+    
+    def _generate_mock_analysis_result(self, *args, **kwargs):
+        """Generate basic mock analysis result."""
+        return {
+            'result': 'Mock analysis completed successfully',
+            'metrics': {'total_tokens': 5000, 'total_cost': 0.0125},
+            'optimization_record': {'optimization_level': 'mock', 'duration_seconds': 1.0}
+        }
+    
+    def get_token_usage(self):
+        return {"total_tokens": 5000, "cost": 0.0125}
 
 # Try to import and instantiate OptimizationManager first
 try:
@@ -447,7 +1071,116 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Utility functions are now imported from dashboard components
+def load_agents_config():
+    """Load available agents from agents.yaml"""
+    try:
+        agents_path = 'src/marketing_research_swarm/config/agents.yaml'
+        with open(agents_path, 'r') as file:
+            return yaml.safe_load(file)
+    except FileNotFoundError:
+        st.error(f"Agents configuration file not found at {agents_path}")
+        return {}
+    except Exception as e:
+        st.error(f"Error loading agents configuration: {e}")
+        return {}
+
+def create_custom_task_config(selected_agents: List[str], task_params: Dict[str, Any]) -> str:
+    """Create a custom task configuration YAML file"""
+    
+    # Generate unique task ID
+    task_id = str(uuid.uuid4())[:8]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Create task configuration
+    tasks_config = {}
+    
+    # Map agents to their typical tasks
+    agent_task_mapping = {
+        'market_research_analyst': {
+            'description': f"""Conduct comprehensive market research on the {task_params.get('analysis_focus', 'beverage industry')} using the enhanced sales data from {{data_file_path}}. 
+            Focus on {task_params.get('target_audience', 'target audience')} and analyze {', '.join(task_params.get('market_segments', []))} markets. 
+            Examine {', '.join(task_params.get('product_categories', []))} categories and {', '.join(task_params.get('brands', []))} brands.
+            Business objective: {task_params.get('business_objective', 'Optimize business performance')}""",
+            'expected_output': f"A comprehensive market research report with detailed analysis of {task_params.get('analysis_focus', 'market performance')}, competitive landscape insights, and strategic recommendations for {task_params.get('target_audience', 'the target market')}."
+        },
+        'content_strategist': {
+            'description': f"""Develop a comprehensive content strategy for {task_params.get('campaign_type', 'marketing campaign')} targeting {task_params.get('target_audience', 'target audience')}. 
+            Create strategies for {', '.join(task_params.get('market_segments', []))} markets with budget of ${task_params.get('budget', 0):,} over {task_params.get('duration', '6 months')}.
+            Focus on {', '.join(task_params.get('product_categories', []))} categories and competitive landscape: {task_params.get('competitive_landscape', 'competitive market')}.""",
+            'expected_output': f"A comprehensive content strategy document with channel-specific recommendations, campaign ideas for {task_params.get('duration', '6 months')} duration, and brand positioning strategies."
+        },
+        'creative_copywriter': {
+            'description': f"""Create compelling marketing copy for {task_params.get('campaign_type', 'marketing campaigns')} targeting {task_params.get('target_audience', 'target audience')}. 
+            Develop copy that addresses campaign goals: {', '.join(task_params.get('campaign_goals', []))}. 
+            Focus on {', '.join(task_params.get('brands', []))} brands across {', '.join(task_params.get('market_segments', []))} markets.""",
+            'expected_output': f"A collection of marketing copy including campaign materials, brand messaging, and promotional content tailored for {task_params.get('target_audience', 'the target audience')}."
+        },
+        'data_analyst': {
+            'description': f"""Perform comprehensive data analysis on the sales data from {{data_file_path}} focusing on {', '.join(task_params.get('key_metrics', []))}. 
+            Analyze {', '.join(task_params.get('product_categories', []))} categories across {', '.join(task_params.get('market_segments', []))} regions.
+            Generate forecasts for {task_params.get('forecast_periods', 30)} periods with expected revenue of ${task_params.get('expected_revenue', 25000):,}.
+            Include competitive analysis: {task_params.get('competitive_analysis', True)} and market share analysis: {task_params.get('market_share_analysis', True)}.""",
+            'expected_output': f"A detailed data analysis report with forecasts, trend analysis, performance metrics for {', '.join(task_params.get('key_metrics', []))}, and recommendations for optimization."
+        },
+        'campaign_optimizer': {
+            'description': f"""Optimize {task_params.get('campaign_type', 'marketing campaign')} performance with budget allocation of ${task_params.get('budget', 0):,} over {task_params.get('duration', '6 months')}.
+            Focus on {', '.join(task_params.get('campaign_goals', []))} across {', '.join(task_params.get('market_segments', []))} markets.
+            Optimize for {', '.join(task_params.get('key_metrics', []))} with competitive landscape: {task_params.get('competitive_landscape', 'competitive market')}.""",
+            'expected_output': f"A comprehensive optimization strategy with budget allocation recommendations, performance projections, and specific action plans for {task_params.get('duration', '6 months')} campaign duration."
+        },
+        'brand_performance_specialist': {
+            'description': f"""Monitor and analyze brand performance for {', '.join(task_params.get('brands', []))} across {', '.join(task_params.get('market_segments', []))} markets.
+            Track brand metrics including awareness: {task_params.get('brand_metrics', {}).get('brand_awareness', 'N/A')}, 
+            sentiment score: {task_params.get('brand_metrics', {}).get('sentiment_score', 'N/A')}, 
+            market position: {task_params.get('brand_metrics', {}).get('market_position', 'N/A')}.
+            Focus on {', '.join(task_params.get('product_categories', []))} categories and competitive positioning.""",
+            'expected_output': f"A comprehensive brand performance report with market positioning analysis, competitive insights, and strategic recommendations for {', '.join(task_params.get('brands', []))} brands."
+        },
+        'competitive_analyst': {
+            'description': f"""Analyze competitive landscape and market positioning for {', '.join(task_params.get('brands', []))} in the {task_params.get('analysis_focus', 'beverage industry')}.
+            Examine competitive dynamics across {', '.join(task_params.get('market_segments', []))} markets and {', '.join(task_params.get('product_categories', []))} categories.
+            Assess market share, competitive threats, pricing strategies, and positioning opportunities.
+            Focus on competitive intelligence for {task_params.get('target_audience', 'target market')} with budget considerations of ${task_params.get('budget', 0):,}.""",
+            'expected_output': f"A detailed competitive analysis report with market positioning insights, competitive landscape mapping, threat assessment, and strategic recommendations for competitive advantage."
+        },
+        'brand_strategist': {
+            'description': f"""Develop strategic brand recommendations based on competitive analysis and market insights for {', '.join(task_params.get('brands', []))}.
+            Create brand optimization strategies for {', '.join(task_params.get('market_segments', []))} markets with focus on {', '.join(task_params.get('campaign_goals', []))}.
+            Evaluate brand health, identify growth opportunities, and develop actionable strategies for brand performance improvement.
+            Consider budget allocation of ${task_params.get('budget', 0):,} over {task_params.get('duration', '6 months')} for brand initiatives.""",
+            'expected_output': f"A comprehensive brand strategy document with optimization recommendations, growth opportunities, brand health assessment, and actionable strategic plans for brand improvement."
+        },
+        'forecasting_specialist': {
+            'description': f"""Generate accurate sales forecasts and predictive models for {', '.join(task_params.get('brands', []))} across {', '.join(task_params.get('market_segments', []))} markets.
+            Create forecasts for {task_params.get('forecast_periods', 30)} periods with expected revenue targets of ${task_params.get('expected_revenue', 25000):,}.
+            Apply advanced forecasting techniques considering seasonal patterns, market trends, and competitive factors.
+            Focus on {', '.join(task_params.get('product_categories', []))} categories and key metrics: {', '.join(task_params.get('key_metrics', []))}.""",
+            'expected_output': f"A detailed sales forecast report with predictive models, confidence intervals, scenario planning, and strategic recommendations for {task_params.get('forecast_periods', 30)} periods ahead."
+        }
+    }
+    
+    # Create tasks for selected agents in the order they were selected
+    for i, agent in enumerate(selected_agents):
+        if agent in agent_task_mapping:
+            # Use zero-padded index to maintain order
+            task_name = f"{i:02d}_{agent}_task_{task_id}"
+            tasks_config[task_name] = {
+                'description': agent_task_mapping[agent]['description'],
+                'expected_output': agent_task_mapping[agent]['expected_output'],
+                'agent': agent
+            }
+    
+    # Save to temporary file
+    config_dir = 'src/marketing_research_swarm/config'
+    os.makedirs(config_dir, exist_ok=True)
+    
+    config_filename = f"tasks_custom_{timestamp}_{task_id}.yaml"
+    config_path = os.path.join(config_dir, config_filename)
+    
+    with open(config_path, 'w') as file:
+        yaml.dump(tasks_config, file, default_flow_style=False, indent=2)
+    
+    return config_path
 
 
 # Initialize global components

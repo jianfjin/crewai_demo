@@ -42,13 +42,28 @@ class OptimizationManager:
             return create_blackboard_crew(agents_config, tasks_config, selected_agents)
         elif mode == "optimized":
             from .crew_optimized import OptimizedMarketingResearchCrew
-            return OptimizedMarketingResearchCrew(**kwargs)
+            # Filter kwargs to only include parameters that OptimizedMarketingResearchCrew accepts
+            filtered_kwargs = {
+                k: v for k, v in kwargs.items() 
+                if k in ['agents_config_path', 'tasks_config_path']
+            }
+            return OptimizedMarketingResearchCrew(**filtered_kwargs)
         elif mode == "simple_optimized":
             from .crew_simple_optimized import SimpleOptimizedCrew
-            return SimpleOptimizedCrew(**kwargs)
+            # Filter kwargs to only include parameters that SimpleOptimizedCrew accepts
+            filtered_kwargs = {
+                k: v for k, v in kwargs.items() 
+                if k in ['agents_config_path', 'tasks_config_path']
+            }
+            return SimpleOptimizedCrew(**filtered_kwargs)
         else:
             from .crew_with_tracking import MarketingResearchCrewWithTracking
-            return MarketingResearchCrewWithTracking(**kwargs)
+            # Filter kwargs to only include parameters that MarketingResearchCrewWithTracking accepts
+            filtered_kwargs = {
+                k: v for k, v in kwargs.items() 
+                if k in ['agents_config_path', 'tasks_config_path']
+            }
+            return MarketingResearchCrewWithTracking(**filtered_kwargs)
     
     def store_tool_output(self, tool_name: str, output: Any, context_key: str = None) -> str:
         """Store tool output and return reference key instead of dumping to context."""

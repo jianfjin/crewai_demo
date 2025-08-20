@@ -216,6 +216,16 @@ class RAGChatAgent:
                 relevance_score += 1
                 matching_specializations.append("profitability optimization")
             
+            # Boost content strategist for content strategy requests
+            if agent == "content_strategist" and any(word in task_lower for word in ["content", "strategy", "develop", "create", "messaging", "communication", "millennial", "consumer", "target", "audience"]):
+                relevance_score += 3
+                matching_specializations.append("content strategy development")
+            
+            # Boost market research analyst for consumer and demographic analysis
+            if agent == "market_research_analyst" and any(word in task_lower for word in ["consumer", "millennial", "demographic", "target", "audience", "segment", "behavior"]):
+                relevance_score += 2
+                matching_specializations.append("consumer analysis")
+            
             if relevance_score > 0:
                 # Get additional info from knowledge base
                 agent_info = self.knowledge_base.get_agent_information(agent)
@@ -279,7 +289,9 @@ class RAGChatAgent:
             analysis_keywords = [
                 "analyze", "analysis", "compare", "performance", "forecast", "roi", "market share", "trends",
                 "profit", "profitability", "margin", "margins", "revenue", "cost", "which", "what", "show me",
-                "calculate", "identify", "find", "determine", "evaluate", "assess", "measure"
+                "calculate", "identify", "find", "determine", "evaluate", "assess", "measure", "develop", 
+                "create", "strategy", "content strategy", "plan", "planning", "design", "build", "recommend",
+                "suggest", "optimize", "improve", "enhance", "target", "targeting", "segment", "segmentation"
             ]
             is_analysis_request = any(keyword in query.lower() for keyword in analysis_keywords)
             
