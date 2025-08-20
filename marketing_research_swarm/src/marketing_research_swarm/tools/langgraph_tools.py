@@ -5,6 +5,10 @@ from typing import Dict, Any, List, Optional
 import json
 import os
 import hashlib
+from typing import Dict, Any, List, Optional, Union
+from datetime import datetime, timedelta
+from langchain.tools import BaseTool
+from pydantic import BaseModel, Field
 
 def make_json_serializable(obj):
     """Convert pandas/numpy objects to JSON-serializable types."""
@@ -128,8 +132,45 @@ def create_sample_beverage_data() -> pd.DataFrame:
     
     return pd.DataFrame(data)
 
-@tool
-def beverage_market_analysis(data_path: str = None, **kwargs) -> str:
+# Input schemas for LangGraph tools
+class BeverageAnalysisInput(BaseModel):
+    data_path: Optional[str] = Field(default=None, description="Path to beverage data file")
+    analysis_type: str = Field(default="comprehensive", description="Type of analysis to perform")
+
+class TimeSeriesAnalysisInput(BaseModel):
+    data_path: Optional[str] = Field(default=None, description="Path to data file")
+    date_column: str = Field(default="date", description="Name of date column")
+    value_column: str = Field(default="sales", description="Name of value column")
+    periods: int = Field(default=12, description="Number of periods to forecast")
+
+class CrossSectionalAnalysisInput(BaseModel):
+    data_path: Optional[str] = Field(default=None, description="Path to data file")
+    group_column: str = Field(default="brand", description="Column to group by")
+    value_column: str = Field(default="sales", description="Column to analyze")
+
+class BrandPerformanceInput(BaseModel):
+    data_path: Optional[str] = Field(default=None, description="Path to data file")
+    brand_column: str = Field(default="brand", description="Brand column name")
+    metrics: List[str] = Field(default=["sales", "market_share"], description="Metrics to analyze")
+
+class ProfitabilityAnalysisInput(BaseModel):
+    data_path: Optional[str] = Field(default=None, description="Path to data file")
+    analysis_dimension: str = Field(default="brand", description="Dimension to analyze")
+
+class KPIAnalysisInput(BaseModel):
+    data_path: Optional[str] = Field(default=None, description="Path to data file")
+
+class SalesForecastInput(BaseModel):
+    data_path: Optional[str] = Field(default=None, description="Path to data file")
+    periods: int = Field(default=30, description="Number of periods to forecast")
+    forecast_column: str = Field(default="sales", description="Column to forecast")
+
+class MarketShareInput(BaseModel):
+    company_revenue: Optional[float] = Field(default=None, description="Company revenue")
+    total_market_revenue: Optional[float] = Field(default=None, description="Total market revenue")
+
+@tool(args_schema=BeverageAnalysisInput)
+def beverage_market_analysis(data_path: str = None, analysis_type: str = "comprehensive") -> str:
     """Analyze beverage market structure, brand performance, and category dynamics"""
     try:
         # Load data using cached approach with fallback
@@ -188,8 +229,8 @@ def beverage_market_analysis(data_path: str = None, **kwargs) -> str:
     except Exception as e:
         return f"Error in beverage market analysis: {str(e)}"
 
-@tool
-def analyze_brand_performance(data_path: str = None, **kwargs) -> str:
+@tool(args_schema=BrandPerformanceInput)
+def analyze_brand_performance(data_path: str = None, brand_column: str = "brand", metrics: List[str] = ["sales", "market_share"]) -> str:
     """Analyze individual brand performance metrics and market positioning"""
     try:
         # Load data using cached approach with fallback
@@ -204,7 +245,7 @@ def analyze_brand_performance(data_path: str = None, **kwargs) -> str:
             })
         
         # Check required columns
-        required_cols = ['brand', 'total_revenue']
+        required_cols = [brand_column, 'total_revenue']
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             return json.dumps({
@@ -216,15 +257,23 @@ def analyze_brand_performance(data_path: str = None, **kwargs) -> str:
         # Brand performance analysis
         agg_dict = {'total_revenue': ['sum', 'mean']}
         
+        # Add metrics from input if they exist in the data
+        for metric in metrics:
+            if metric in df.columns and metric not in agg_dict:
+                if metric in ['profit', 'units_sold']:
+                    agg_dict[metric] = ['sum', 'mean']
+                else:
+                    agg_dict[metric] = 'mean'
+        
         # Add optional columns if they exist
-        if 'profit' in df.columns:
+        if 'profit' in df.columns and 'profit' not in agg_dict:
             agg_dict['profit'] = ['sum', 'mean']
-        if 'profit_margin' in df.columns:
+        if 'profit_margin' in df.columns and 'profit_margin' not in agg_dict:
             agg_dict['profit_margin'] = 'mean'
-        if 'units_sold' in df.columns:
+        if 'units_sold' in df.columns and 'units_sold' not in agg_dict:
             agg_dict['units_sold'] = 'sum'
         
-        brand_metrics = df.groupby('brand').agg(agg_dict).round(2)
+        brand_metrics = df.groupby(brand_column).agg(agg_dict).round(2)
         
         # Flatten column names
         brand_metrics.columns = ['_'.join(col).strip() for col in brand_metrics.columns]
@@ -270,8 +319,8 @@ def analyze_brand_performance(data_path: str = None, **kwargs) -> str:
     except Exception as e:
         return f"Error in brand performance analysis: {str(e)}"
 
-@tool
-def profitability_analysis(data_path: str = None, analysis_dimension: str = "brand", **kwargs) -> str:
+@tool(args_schema=ProfitabilityAnalysisInput)
+def profitability_analysis(data_path: str = None, analysis_dimension: str = "brand") -> str:
     """Analyze profitability metrics across different dimensions"""
     try:
         # Load data using cached approach with fallback
@@ -364,8 +413,8 @@ def profitability_analysis(data_path: str = None, analysis_dimension: str = "bra
     except Exception as e:
         return f"Error in profitability analysis: {str(e)}"
 
-@tool
-def cross_sectional_analysis(data_path: str = None, segment_column: str = None, value_column: str = None, **kwargs) -> str:
+@tool(args_schema=CrossSectionalAnalysisInput)
+def cross_sectional_analysis(data_path: str = None, group_column: str = "brand", value_column: str = "sales") -> str:
     """Perform cross-sectional analysis across different segments"""
     try:
         # Load data using cached approach with fallback
@@ -470,8 +519,8 @@ def cross_sectional_analysis(data_path: str = None, segment_column: str = None, 
     except Exception as e:
         return f"Error in cross-sectional analysis: {str(e)}"
 
-@tool
-def time_series_analysis(data_path: str = None, date_column: str = None, value_column: str = None, **kwargs) -> str:
+@tool(args_schema=TimeSeriesAnalysisInput)
+def time_series_analysis(data_path: str = None, date_column: str = "date", value_column: str = "sales", periods: int = 12) -> str:
     """Perform time series analysis on sales data"""
     try:
         # Load data using cached approach with fallback
@@ -585,8 +634,8 @@ def time_series_analysis(data_path: str = None, date_column: str = None, value_c
     except Exception as e:
         return f"Error in time series analysis: {str(e)}"
 
-@tool
-def forecast_sales(data_path: str = None, periods: int = 30, forecast_column: str = "sales", **kwargs) -> str:
+@tool(args_schema=SalesForecastInput)
+def forecast_sales(data_path: str = None, periods: int = 30, forecast_column: str = "sales") -> str:
     """Forecast future sales based on historical data"""
     try:
         # Load data using cached approach with fallback
@@ -696,8 +745,8 @@ def calculate_roi(investment: float, revenue: float) -> str:
     except Exception as e:
         return f"Error calculating ROI: {str(e)}"
 
-@tool
-def analyze_kpis(data_path: str = None, **kwargs) -> str:
+@tool(args_schema=KPIAnalysisInput)
+def analyze_kpis(data_path: str = None) -> str:
     """Analyze key performance indicators"""
     try:
         # Load data using cached approach with fallback
@@ -804,8 +853,8 @@ def plan_budget(total_budget: float, channels: List[str] = None, priorities: Lis
     except Exception as e:
         return f"Error planning budget: {str(e)}"
 
-@tool
-def calculate_market_share(company_revenue: float = None, total_market_revenue: float = None, **kwargs) -> str:
+@tool(args_schema=MarketShareInput)
+def calculate_market_share(company_revenue: float = None, total_market_revenue: float = None) -> str:
     """Calculate market share based on company and total market revenue"""
     try:
         # Set default values if not provided

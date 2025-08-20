@@ -9,6 +9,7 @@ import os
 import yaml
 import logging
 from typing import Dict, Any
+from datetime import datetime
 
 from .state import MarketingResearchState, store_agent_result, store_agent_error
 from .enhanced_agents import EnhancedLangGraphAgent
@@ -502,14 +503,50 @@ def enhanced_report_summarizer_node(state: MarketingResearchState) -> MarketingR
         
         # Consolidate all previous agent results into a comprehensive summary
         all_results = state.get('agent_results', {})
+        agent_errors = state.get('agent_errors', {})
+        
         summary_of_results = ""
         for agent_name, result in all_results.items():
+            # Handle both dictionary and string results
             summary_of_results += f"### {agent_name.replace('_', ' ').title()} Analysis\n"
-            summary_of_results += f"- **Analysis**: {result.get('analysis', 'N/A')}\n"
-            if 'key_insights' in result:
-                summary_of_results += f"- **Key Insights**: {result['key_insights']}\n"
-            if 'recommendations' in result:
-                summary_of_results += f"- **Recommendations**: {result['recommendations']}\n"
+            
+            if isinstance(result, dict):
+                # Handle dictionary results
+                analysis = result.get('analysis', 'N/A')
+                if isinstance(analysis, dict):
+                    # If analysis is a dict, convert to string
+                    analysis = str(analysis)
+                summary_of_results += f"- **Analysis**: {analysis}\n"
+                
+                # Extract key insights if available
+                if 'key_insights' in result:
+                    insights = result['key_insights']
+                    if isinstance(insights, list):
+                        summary_of_results += f"- **Key Insights**: {', '.join(str(i) for i in insights[:5])}\n"
+                    else:
+                        summary_of_results += f"- **Key Insights**: {insights}\n"
+                        
+                # Extract recommendations if available
+                if 'recommendations' in result:
+                    recommendations = result['recommendations']
+                    if isinstance(recommendations, list):
+                        summary_of_results += f"- **Recommendations**: {', '.join(str(r) for r in recommendations[:5])}\n"
+                    else:
+                        summary_of_results += f"- **Recommendations**: {recommendations}\n"
+            elif isinstance(result, str):
+                # Handle string results
+                summary_of_results += f"- **Analysis**: {result[:500]}{'...' if len(result) > 500 else ''}\n"
+            else:
+                # Handle other result types
+                summary_of_results += f"- **Result**: {str(result)}\n"
+            
+            summary_of_results += "\n"
+        
+        # Add any agent errors to the summary
+        if agent_errors:
+            summary_of_results += "### Agent Execution Issues\n"
+            for agent_name, error in agent_errors.items():
+                summary_of_results += f"- **{agent_name.replace('_', ' ').title()}**: {error}\n"
             summary_of_results += "\n"
 
         task_description = f"""
@@ -537,7 +574,7 @@ def enhanced_report_summarizer_node(state: MarketingResearchState) -> MarketingR
         
         final_report = {
             'final_summary': response.content,
-            'timestamp': agent.execute_task_with_smart_tools(state, task_description).get('timestamp')
+            'timestamp': datetime.now().isoformat()
         }
         
         state = store_agent_result(state, agent_role, final_report)

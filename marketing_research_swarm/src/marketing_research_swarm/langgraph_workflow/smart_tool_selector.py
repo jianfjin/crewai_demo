@@ -63,8 +63,8 @@ class SmartToolSelector:
             },
             "time_series_analysis": {
                 "keywords": ["trend", "seasonal", "time", "pattern", "series", "temporal", "historical", "evolution"],
-                "tier": 2,  # Contextual
-                "weight": 0.8,
+                "tier": 1,  # Contextual
+                "weight": 1.0,
                 "execution_time": "medium",
                 "data_requirements": ["time_series_data"]
             },
@@ -115,7 +115,7 @@ class SmartToolSelector:
     def _initialize_essential_tools(self) -> Dict[str, List[str]]:
         """Initialize essential tools for each agent role."""
         return {
-            "data_analyst": ["profitability_analysis", "analyze_kpis"],
+            "data_analyst": ["profitability_analysis", "analyze_kpis", "time_series_analysis"],
             "market_research_analyst": ["beverage_market_analysis"],
             "forecasting_specialist": ["forecast_sales"],
             "competitive_analyst": ["beverage_market_analysis", "analyze_brand_performance"],
@@ -277,6 +277,20 @@ class SmartToolSelector:
             query_keywords, available_tools, context
         )
         
+        # Boost scores for tools explicitly mentioned in the query text
+        query_lower = query_text.lower()
+        boosted_scores = []
+        for score in relevance_scores:
+            # Boost score if tool name is explicitly mentioned
+            tool_name_parts = score.tool_name.lower().replace('_', ' ').split()
+            if any(part in query_lower for part in tool_name_parts):
+                score.score *= 1.5  # 50% boost for explicit mentions
+            boosted_scores.append(score)
+        
+        # Sort boosted scores
+        boosted_scores.sort(key=lambda x: (x.score, -x.execution_priority), reverse=True)
+        relevance_scores = boosted_scores
+        
         # Separate tools by tier
         tier_1_tools = [score.tool_name for score in relevance_scores if score.tier == 1]
         tier_2_tools = [score.tool_name for score in relevance_scores if score.tier == 2]
@@ -297,6 +311,21 @@ class SmartToolSelector:
                 supplementary_tools.append(score.tool_name)
                 if len(supplementary_tools) >= 1:  # Limit supplementary tools
                     break
+        
+        # Ensure time series analysis is included if explicitly mentioned
+        if "time series" in query_lower or "trend identification" in query_lower:
+            time_series_tool = "time_series_analysis"
+            if time_series_tool in available_tools and time_series_tool not in essential_tools and time_series_tool not in contextual_tools:
+                # Add to contextual tools if there's space
+                if len(contextual_tools) < 2:
+                    contextual_tools.append(time_series_tool)
+                # Otherwise replace the lowest scoring contextual tool
+                elif relevance_scores:
+                    # Find the time_series_analysis score
+                    ts_score = next((s for s in relevance_scores if s.tool_name == time_series_tool), None)
+                    if ts_score:
+                        # Replace lowest scoring contextual tool if time_series_analysis has higher score
+                        contextual_tools[-1] = time_series_tool
         
         # Ensure we don't exceed max_tools
         total_selected = len(essential_tools) + len(contextual_tools) + len(supplementary_tools)

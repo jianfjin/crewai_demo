@@ -1016,7 +1016,7 @@ class LangGraphDashboard:
                 with cols[0]: st.metric("Investment", f"${data.get('investment', 0):,.2f}")
                 with cols[1]: st.metric("Revenue", f"${data.get('revenue', 0):,.2f}")
                 with cols[2]: st.metric("Profit", f"${data.get('profit', 0):,.2f}")
-                with cols[3]: st.metric("ROI %", f"{data.get('roi_percentage', 0):.2f}%")
+                with cols[3]: st.metric("ROI %", f"{data.get('roi_percentage', 0):,.2f}%")
                 if data.get("roi_insights"): st.info(data["roi_insights"])
                 return
             
@@ -1038,7 +1038,7 @@ class LangGraphDashboard:
                 cols = st.columns(3)
                 with cols[0]: st.metric("Company Revenue", f"${data.get('company_revenue', 0):,.0f}")
                 with cols[1]: st.metric("Total Market", f"${data.get('total_market_revenue', 0):,.0f}")
-                with cols[2]: st.metric("Share %", f"{data.get('market_share_percentage', 0):.2f}%")
+                with cols[2]: st.metric("Share %", f"{data.get('market_share_percentage', 0):,.2f}%")
                 if data.get("competitive_position"): st.info(f"Position: {data['competitive_position']}")
                 return
             
@@ -2610,6 +2610,96 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 st.metric("Prompt Tokens", f"{token_data.get('prompt_tokens', 0):,}")
             with col3:
                 st.metric("Completion Tokens", f"{token_data.get('completion_tokens', 0):,}")
+            with col4:
+                st.metric("Cost", f"${token_data.get('total_cost', 0):.4f}")
+            
+            # Optimization metrics
+            if "optimization_level" in token_data:
+                st.subheader("⚡ Optimization Performance")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    savings = token_data.get('savings_percent', 0)
+                    st.metric("Token Savings", f"{savings}%", 
+                             help="Percentage of tokens saved through optimization")
+                with col2:
+                    baseline = token_data.get('baseline_tokens', 0)
+                    st.metric("Baseline Tokens", f"{baseline:,}",
+                             help="Estimated tokens without optimization")
+                with col3:
+                    saved = token_data.get('tokens_saved', 0)
+                    st.metric("Tokens Saved", f"{saved:,}",
+                             help="Actual tokens saved")
+                
+                # Optimization visualization
+                if savings > 0 and PLOTLY_AVAILABLE:
+                    import plotly.graph_objects as go
+                    fig = go.Figure(data=[
+                        go.Bar(name='Baseline', x=['Token Usage'], y=[baseline], marker_color='lightcoral'),
+                        go.Bar(name='Optimized', x=['Token Usage'], y=[token_data.get('total_tokens', 0)], marker_color='lightblue')
+                    ])
+                    fig.update_layout(
+                        title='Token Usage: Baseline vs Optimized',
+                        yaxis_title='Tokens',
+                        barmode='group'
+                    )
+                    st.plotly_chart(fig, use_container_width=True, key=f"token_optimization_chart_{id(fig)}")
+            
+            # Agent breakdown
+            if "agents" in token_data:
+                st.subheader("🤖 Agent Token Breakdown")
+                
+                agent_data = token_data["agents"]
+                if agent_data:
+                    agent_names = list(agent_data.keys())
+                    agent_tokens = [agent_data[agent]['tokens'] for agent in agent_names]
+                    agent_costs = [agent_data[agent]['cost'] for agent in agent_names]
+                    
+                    # Create agent breakdown chart
+                    if PLOTLY_AVAILABLE:
+                        from plotly.subplots import make_subplots
+                        import plotly.graph_objects as go
+                        
+                        fig = make_subplots(
+                            rows=1, cols=2,
+                            subplot_titles=('Token Usage by Agent', 'Cost by Agent'),
+                            specs=[[{"type": "bar"}, {"type": "bar"}]]
+                        )
+                        
+                        fig.add_trace(
+                            go.Bar(x=agent_names, y=agent_tokens, name="Tokens"),
+                            row=1, col=1
+                        )
+                        
+                        fig.add_trace(
+                            go.Bar(x=agent_names, y=agent_costs, name="Cost ($)"),
+                            row=1, col=2
+                        )
+                        
+                        fig.update_layout(height=400, showlegend=False)
+                        st.plotly_chart(fig, use_container_width=True, key=f"agent_token_breakdown_chart_{id(fig)}")
+        else:
+            st.info("No token usage data available. Enable token tracking in optimization settings.")
+    
+    def _render_enhanced_langsmith_monitoring(self):
+        """Render enhanced LangSmith monitoring section."""
+        st.subheader("🔍 Enhanced LangSmith Monitoring")
+        
+        if enhanced_langsmith_monitor and enhanced_langsmith_monitor.available:
+            st.success("✅ LangSmith monitoring is active")
+            
+            # Project information
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Project", enhanced_langsmith_monitor.project_name)
+            with col2:
+                project_url = f"https://smith.langchain.com/o/default/projects/p/{enhanced_langsmith_monitor.project_name}"
+                st.markdown(f"[🔗 View in LangSmith]({project_url})")
+            
+            # Recent runs
+            if st.button("🔄 Refresh Runs"):
+                st.rerun()
+            
             with col4:
                 st.metric("Cost", f"${token_data.get('total_cost', 0):.4f}")
             
