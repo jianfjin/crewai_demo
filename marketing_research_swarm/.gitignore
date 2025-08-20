@@ -189,3 +189,6 @@ build/
 # Logs
 logs
 *.log
+
+# cache
+./cache
