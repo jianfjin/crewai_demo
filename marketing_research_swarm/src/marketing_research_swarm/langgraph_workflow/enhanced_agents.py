@@ -13,7 +13,18 @@ from datetime import datetime
 from .agents import LangGraphAgent
 from .smart_tool_selector import SmartToolSelector
 from .state import MarketingResearchState
-from ..tools.langgraph_tools import get_tools
+from ..tools.langgraph_tools import (
+    calculate_roi,
+    analyze_kpis,
+    forecast_sales,
+    plan_budget,
+    analyze_brand_performance,
+    calculate_market_share,
+    time_series_analysis,
+    cross_sectional_analysis,
+    beverage_market_analysis,
+    profitability_analysis,
+)
 # Temporarily disable context_aware_tools due to circular import
 # from ..tools.context_aware_tools import get_context_aware_tools
 
@@ -51,16 +62,18 @@ class EnhancedLangGraphAgent(LangGraphAgent):
     def _initialize_available_tools(self):
         """Initialize all available tools for fallback access."""
         try:
-            # Get standard tools
-            standard_tools = get_tools()
-            for tool in standard_tools:
-                self.available_tools[tool.name] = tool
-            
-            # TODO: Re-enable context-aware tools once circular import is resolved
-            # context_tools = get_context_aware_tools()
-            # for tool in context_tools:
-            #     self.available_tools[tool.name] = tool
-                
+            self.available_tools = {
+                "calculate_roi": calculate_roi,
+                "analyze_kpis": analyze_kpis,
+                "forecast_sales": forecast_sales,
+                "plan_budget": plan_budget,
+                "analyze_brand_performance": analyze_brand_performance,
+                "calculate_market_share": calculate_market_share,
+                "time_series_analysis": time_series_analysis,
+                "cross_sectional_analysis": cross_sectional_analysis,
+                "beverage_market_analysis": beverage_market_analysis,
+                "profitability_analysis": profitability_analysis,
+            }
             logger.info(f"Initialized {len(self.available_tools)} available tools for enhanced agent")
         except Exception as e:
             logger.error(f"Failed to initialize available tools: {e}")
@@ -293,18 +306,7 @@ class EnhancedLangGraphAgent(LangGraphAgent):
             if tool_name in self.available_tools:
                 tool_func = self.available_tools[tool_name]
                 
-                # Execute with proper parameter handling
-                if hasattr(tool_func, 'invoke'):
-                    result = tool_func.invoke(tool_params)
-                elif hasattr(tool_func, '_run'):
-                    result = tool_func._run(**tool_params)
-                elif hasattr(tool_func, 'run'):
-                    try:
-                        result = tool_func.run(**tool_params)
-                    except TypeError:
-                        result = tool_func.run(tool_params)
-                else:
-                    result = tool_func(**tool_params)
+                result = tool_func(**tool_params)
                 
                 success = True
                 logger.debug(f"Successfully executed {tool_name}")
@@ -653,157 +655,4 @@ Format your response as a comprehensive analysis with these clearly marked secti
             'average_result_quality': avg_quality,
             'tool_performance': self.tool_selector.get_tool_performance_summary(),
             'last_execution': self.execution_history[-1] if self.execution_history else None
-        }
-def summary_analyst(state: MarketingResearchState) -> MarketingResearchState:
-    """
-    Summary analyst that consolidates all agent results into a comprehensive final report
-    """
-    try:
-        print("📊 Summary Analyst: Consolidating all analysis results...")
-        
-        # Extract all analysis results from state
-        market_research = state.get("market_research_result", "")
-        competitive_analysis = state.get("competitive_analysis_result", "")
-        data_analysis = state.get("data_analysis_result", "")
-        brand_performance = state.get("brand_performance_result", "")
-        brand_strategy = state.get("brand_strategy_result", "")
-        campaign_optimization = state.get("campaign_optimization_result", "")
-        forecasting = state.get("forecasting_result", "")
-        content_strategy = state.get("content_strategy_result", "")
-        creative_copy = state.get("creative_copy_result", "")
-        
-        # Get business context
-        business_objective = state.get("business_objective", "Optimize marketing performance")
-        target_audience = state.get("target_audience", "Target customers")
-        budget = state.get("budget", "Marketing budget")
-        
-        # Create comprehensive synthesis prompt
-        synthesis_prompt = f"""
-        As a Senior Strategic Analyst, you must consolidate the following marketing research analysis results into a comprehensive, executive-level final report.
-        
-        BUSINESS CONTEXT:
-        - Objective: {business_objective}
-        - Target Audience: {target_audience}
-        - Budget: {budget}
-        
-        ANALYSIS RESULTS TO SYNTHESIZE:
-        
-        1. MARKET RESEARCH ANALYSIS:
-        {market_research if market_research else "No market research data available"}
-        
-        2. COMPETITIVE ANALYSIS:
-        {competitive_analysis if competitive_analysis else "No competitive analysis data available"}
-        
-        3. DATA ANALYSIS:
-        {data_analysis if data_analysis else "No data analysis available"}
-        
-        4. BRAND PERFORMANCE ANALYSIS:
-        {brand_performance if brand_performance else "No brand performance data available"}
-        
-        5. BRAND STRATEGY:
-        {brand_strategy if brand_strategy else "No brand strategy data available"}
-        
-        6. CAMPAIGN OPTIMIZATION:
-        {campaign_optimization if campaign_optimization else "No campaign optimization data available"}
-        
-        7. SALES FORECASTING:
-        {forecasting if forecasting else "No forecasting data available"}
-        
-        8. CONTENT STRATEGY:
-        {content_strategy if content_strategy else "No content strategy data available"}
-        
-        9. CREATIVE COPY:
-        {creative_copy if creative_copy else "No creative copy data available"}
-        
-        CREATE A COMPREHENSIVE FINAL REPORT WITH THE FOLLOWING STRUCTURE:
-        
-        # EXECUTIVE SUMMARY
-        - Key findings and insights (3-5 bullet points)
-        - Strategic recommendations overview
-        - Expected business impact
-        
-        # MARKET LANDSCAPE ANALYSIS
-        - Market opportunities and threats
-        - Competitive positioning insights
-        - Target audience insights
-        
-        # PERFORMANCE INSIGHTS
-        - Current brand performance assessment
-        - Data-driven insights and trends
-        - Key performance indicators
-        
-        # STRATEGIC RECOMMENDATIONS
-        - Priority action items (ranked by impact)
-        - Campaign optimization strategies
-        - Content and messaging recommendations
-        
-        # IMPLEMENTATION ROADMAP
-        - Short-term actions (0-3 months)
-        - Medium-term initiatives (3-6 months)
-        - Long-term strategic goals (6+ months)
-        
-        # FINANCIAL PROJECTIONS
-        - Expected ROI and business impact
-        - Budget allocation recommendations
-        - Success metrics and KPIs
-        
-        # RISK ASSESSMENT & MITIGATION
-        - Potential challenges and risks
-        - Mitigation strategies
-        - Contingency plans
-        
-        Ensure the report is:
-        - Executive-ready with clear, actionable insights
-        - Data-driven with specific metrics where available
-        - Strategic with both tactical and long-term recommendations
-        - Comprehensive yet concise
-        - Focused on driving business growth and ROI
-        
-        Connect insights across all analysis domains to tell a cohesive story that guides decision-making.
-        """
-        
-        # Get LLM response for comprehensive synthesis
-        llm = get_llm()
-        response = llm.invoke(synthesis_prompt)
-        
-        # Create final report metadata
-        import datetime
-        report_metadata = {
-            "generated_at": datetime.datetime.now().isoformat(),
-            "analysis_components": [
-                "market_research" if market_research else None,
-                "competitive_analysis" if competitive_analysis else None,
-                "data_analysis" if data_analysis else None,
-                "brand_performance" if brand_performance else None,
-                "brand_strategy" if brand_strategy else None,
-                "campaign_optimization" if campaign_optimization else None,
-                "forecasting" if forecasting else None,
-                "content_strategy" if content_strategy else None,
-                "creative_copy" if creative_copy else None
-            ],
-            "components_analyzed": len([x for x in [market_research, competitive_analysis, data_analysis, brand_performance, brand_strategy, campaign_optimization, forecasting, content_strategy, creative_copy] if x]),
-            "business_objective": business_objective,
-            "target_audience": target_audience
-        }
-        
-        # Filter out None values
-        report_metadata["analysis_components"] = [x for x in report_metadata["analysis_components"] if x is not None]
-        
-        print(f"✅ Summary Analyst: Generated comprehensive report with {report_metadata['components_analyzed']} analysis components")
-        
-        return {
-            **state,
-            "final_report": response.content,
-            "report_metadata": report_metadata,
-            "summary_status": "completed",
-            "status": "summary_completed"
-        }
-        
-    except Exception as e:
-        print(f"❌ Summary Analyst Error: {e}")
-        return {
-            **state,
-            "final_report": f"Error generating summary report: {str(e)}",
-            "summary_status": "error",
-            "status": "summary_error"
         }

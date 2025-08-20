@@ -260,7 +260,7 @@ def create_dashboard_interface():
             
             data_file_path = st.text_input(
                 "Data File Path",
-                value="data/beverage_sales_data.csv"
+                value="data/beverage_sales.csv"
             )
     
     # Main content area

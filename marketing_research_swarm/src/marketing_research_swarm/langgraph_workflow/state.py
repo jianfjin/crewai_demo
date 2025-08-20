@@ -273,6 +273,8 @@ def store_agent_result(
         state['brand_performance_results'] = result
     elif agent_role == 'forecasting_specialist':
         state['forecasting_results'] = result
+    elif agent_role == 'report_summarizer':
+        state['final_report'] = result
     
     return state
 
@@ -422,8 +424,4 @@ def get_next_agent(state: MarketingResearchState) -> Optional[str]:
         if dependencies_satisfied:
             return agent
     
-    return None    
-    # Summary and final report
-    final_report: str
-    report_metadata: Dict[str, Any]
-    summary_status: str
+    return None
