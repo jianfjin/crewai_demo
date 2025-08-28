@@ -12,6 +12,7 @@ import json
 import re
 
 from .knowledge_base import get_knowledge_base
+from .self_corrective_rag import SelfCorrectiveRAG
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class RAGChatAgent:
     def __init__(self):
         """Initialize the RAG chat agent."""
         self.knowledge_base = get_knowledge_base()
+        self.self_corrective_rag = SelfCorrectiveRAG(self.knowledge_base)
         
         # Intent patterns for query classification
         self.intent_patterns = {
@@ -273,7 +275,7 @@ class RAGChatAgent:
     
     def process_query(self, query: str) -> Dict[str, Any]:
         """
-        Process a user query and provide a comprehensive response.
+        Process a user query using self-corrective RAG with hallucination detection and web search fallback.
         
         Args:
             query: User's query string
@@ -282,7 +284,10 @@ class RAGChatAgent:
             Dictionary with response information
         """
         try:
-            # Classify intent
+            # Step 1: Use self-corrective RAG to get the best possible answer
+            corrective_result = self.self_corrective_rag.process_query_with_correction(query)
+            
+            # Classify intent for additional processing
             intent = self.classify_intent(query)
             
             # Check if this looks like an analysis request
@@ -295,57 +300,32 @@ class RAGChatAgent:
             ]
             is_analysis_request = any(keyword in query.lower() for keyword in analysis_keywords)
             
-            # Initialize response
+            # Initialize response with corrective RAG results
             response = {
                 "query": query,
                 "intent": intent if not is_analysis_request else "analysis_request",
                 "recommendations": {},
-                "knowledge_results": [],
+                "knowledge_results": corrective_result.get("documents", []),
                 "suggested_actions": [],
-                "confidence": 0.8
+                "confidence": corrective_result.get("confidence", 0.5),
+                "corrective_rag_result": corrective_result,  # Include full corrective result
+                "answer": corrective_result.get("answer", ""),
+                "source": corrective_result.get("source", "unknown")
             }
             
-            # Process based on intent
-            if response["intent"] == "analysis_request":
-                # For analysis requests, automatically recommend agents
+            # Add agent recommendations for analysis requests
+            if response["intent"] == "analysis_request" or intent in ["agent_inquiry", "tool_inquiry"]:
                 agent_recommendations = self.recommend_agents(query)
                 response["recommendations"]["agents"] = agent_recommendations
-                
-                # Also search for relevant information
-                general_results = self.knowledge_base.search_knowledge(query, limit=5)
-                response["knowledge_results"] = general_results
                 
                 response["suggested_actions"] = [
                     "Review the recommended agents for your analysis",
-                    "Confirm the analysis parameters",
+                    "Confirm the analysis parameters", 
                     "Run the analysis with the selected configuration"
                 ]
-                
-            elif intent == "agent_inquiry":
-                # Search for agent information
-                agent_results = self.knowledge_base.search_knowledge(
-                    query, limit=5, content_type="agent_documentation"
-                )
-                response["knowledge_results"] = agent_results
-                
-                # Recommend agents
-                agent_recommendations = self.recommend_agents(query)
-                response["recommendations"]["agents"] = agent_recommendations
-                
-                response["suggested_actions"] = [
-                    "Select recommended agents for your analysis",
-                    "Review agent capabilities and specializations",
-                    "Configure agent parameters for your specific needs"
-                ]
             
-            elif intent == "tool_inquiry":
-                # Search for tool information
-                tool_results = self.knowledge_base.search_knowledge(
-                    query, limit=5, content_type="tool_documentation"
-                )
-                response["knowledge_results"] = tool_results
-                
-                # Recommend tools
+            # Add tool recommendations for tool inquiries
+            if intent == "tool_inquiry":
                 tool_recommendations = self.recommend_tools(query)
                 response["recommendations"]["tools"] = tool_recommendations
                 
@@ -355,13 +335,8 @@ class RAGChatAgent:
                     "Review tool output formats and capabilities"
                 ]
             
+            # Add workflow information for workflow inquiries
             elif intent == "workflow_inquiry":
-                # Search for workflow information
-                workflow_results = self.knowledge_base.search_knowledge(
-                    query, limit=5, content_type="workflow_documentation"
-                )
-                response["knowledge_results"] = workflow_results
-                
                 workflow_info = self.knowledge_base.get_workflow_information()
                 response["recommendations"]["workflows"] = workflow_info
                 
@@ -371,14 +346,10 @@ class RAGChatAgent:
                     "Review execution options and optimization settings"
                 ]
             
+            # Add feature information for feature inquiries
             elif intent == "feature_inquiry":
-                # Get comprehensive feature information
                 feature_info = self.knowledge_base.get_feature_capabilities()
                 response["recommendations"]["features"] = feature_info
-                
-                # General search
-                general_results = self.knowledge_base.search_knowledge(query, limit=8)
-                response["knowledge_results"] = general_results
                 
                 response["suggested_actions"] = [
                     "Explore system capabilities and features",
@@ -386,47 +357,17 @@ class RAGChatAgent:
                     "Check optimization and performance features"
                 ]
             
-            elif intent == "implementation_help":
-                # Search for implementation guides
-                impl_results = self.knowledge_base.search_knowledge(
-                    query, limit=5, content_type="implementation_guide"
-                )
-                response["knowledge_results"] = impl_results
-                
-                response["suggested_actions"] = [
-                    "Follow implementation guides step by step",
-                    "Check system requirements and dependencies",
-                    "Review configuration examples"
-                ]
-            
-            elif intent == "optimization_help":
-                # Search for optimization information
-                opt_results = self.knowledge_base.search_knowledge(
-                    query, limit=5, content_type="optimization_guide"
-                )
-                response["knowledge_results"] = opt_results
-                
-                response["suggested_actions"] = [
-                    "Review optimization strategies",
-                    "Implement performance improvements",
-                    "Monitor token usage and caching"
-                ]
-            
+            # Default suggested actions for other intents
             else:
-                # General inquiry - search broadly
-                general_results = self.knowledge_base.search_knowledge(query, limit=8)
-                response["knowledge_results"] = general_results
-                
                 response["suggested_actions"] = [
-                    "Review relevant documentation",
-                    "Explore related features and capabilities",
-                    "Ask more specific questions for detailed guidance"
+                    "Review the provided information",
+                    "Ask more specific questions for detailed guidance",
+                    "Explore related features and capabilities"
                 ]
             
-            # Calculate confidence based on results
-            if response["knowledge_results"]:
-                avg_score = sum(r.get("score", 0) for r in response["knowledge_results"]) / len(response["knowledge_results"])
-                response["confidence"] = min(0.95, max(0.3, avg_score))
+            # Add web search indicator if used
+            if corrective_result.get("source") == "web_search":
+                response["suggested_actions"].append("Note: Information sourced from web search due to limited knowledge base coverage")
             
             return response
             
@@ -436,12 +377,14 @@ class RAGChatAgent:
                 "query": query,
                 "error": str(e),
                 "confidence": 0.1,
-                "suggested_actions": ["Please try rephrasing your question"]
+                "suggested_actions": ["Please try rephrasing your question"],
+                "answer": "I encountered an error processing your request. Please try rephrasing your question.",
+                "source": "error"
             }
     
     def format_response(self, response_data: Dict[str, Any]) -> str:
         """
-        Format the response data into a user-friendly string.
+        Format the response data into a user-friendly string with self-corrective RAG results.
         
         Args:
             response_data: Response data from process_query
@@ -453,6 +396,9 @@ class RAGChatAgent:
             query = response_data.get("query", "")
             intent = response_data.get("intent", "general_inquiry")
             confidence = response_data.get("confidence", 0.5)
+            answer = response_data.get("answer", "")
+            source = response_data.get("source", "unknown")
+            corrective_result = response_data.get("corrective_rag_result", {})
             
             # Start building response
             response_parts = []
@@ -461,20 +407,47 @@ class RAGChatAgent:
             response_parts.append(f"🤖 **Marketing Research Assistant** (Confidence: {confidence:.0%})")
             response_parts.append(f"I understand you're asking about: **{intent.replace('_', ' ').title()}**\n")
             
-            # Add knowledge results
+            # Add the main answer from self-corrective RAG
+            if answer and answer.strip():
+                response_parts.append("📋 **Answer:**")
+                response_parts.append(answer)
+                response_parts.append("")
+                
+                # Add source information
+                if source == "knowledge_base":
+                    response_parts.append("✅ *Answer generated from knowledge base with hallucination detection*")
+                elif source == "web_search":
+                    response_parts.append("🌐 *Answer generated from web search (knowledge base insufficient)*")
+                    # Show web search results if available
+                    web_results = corrective_result.get("web_results", [])
+                    if web_results:
+                        response_parts.append("\n🔍 **Web Search Sources:**")
+                        for i, result in enumerate(web_results[:2], 1):
+                            if isinstance(result, dict):
+                                title = result.get("title", f"Source {i}")
+                                url = result.get("url", "")
+                                response_parts.append(f"{i}. {title}")
+                                if url:
+                                    response_parts.append(f"   {url}")
+                elif source == "error":
+                    response_parts.append("⚠️ *Error occurred during processing*")
+                
+                response_parts.append("")
+            
+            # Add quality metrics if available
+            corrections_made = corrective_result.get("corrections_made", 0)
+            if corrections_made > 0:
+                response_parts.append(f"🔧 *Self-corrected {corrections_made} time(s) for accuracy*")
+                response_parts.append("")
+            
+            # Add knowledge results for context
             knowledge_results = response_data.get("knowledge_results", [])
-            if knowledge_results:
-                response_parts.append("📚 **Relevant Information:**")
-                for i, result in enumerate(knowledge_results[:3], 1):
-                    content = result.get("content", "")
+            if knowledge_results and source == "knowledge_base":
+                response_parts.append("📚 **Supporting Documents:**")
+                for i, result in enumerate(knowledge_results[:2], 1):
                     metadata = result.get("metadata", {})
-                    source = metadata.get("file_name", "Unknown source")
-                    
-                    # Truncate content for display
-                    if len(content) > 200:
-                        content = content[:200] + "..."
-                    
-                    response_parts.append(f"{i}. **{source}**: {content}")
+                    source_name = metadata.get("file_name", f"Document {i}")
+                    response_parts.append(f"{i}. {source_name}")
                 response_parts.append("")
             
             # Add recommendations
@@ -527,13 +500,14 @@ class RAGChatAgent:
                     response_parts.append(f"{i}. {action}")
                 response_parts.append("")
             
-            # Add help footer
-            response_parts.append("❓ **Need More Help?**")
-            response_parts.append("Ask me about:")
-            response_parts.append("• Specific agents and their capabilities")
-            response_parts.append("• Available analysis tools and functions")
-            response_parts.append("• Workflow setup and execution")
-            response_parts.append("• System features and optimization")
+            # Add help footer only if no specific answer was provided
+            if not answer or intent == "general_inquiry":
+                response_parts.append("❓ **Need More Help?**")
+                response_parts.append("Ask me about:")
+                response_parts.append("• Specific agents and their capabilities")
+                response_parts.append("• Available analysis tools and functions")
+                response_parts.append("• Workflow setup and execution")
+                response_parts.append("• System features and optimization")
             
             return "\n".join(response_parts)
             

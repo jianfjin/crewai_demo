@@ -5,11 +5,17 @@ Handles conversational interactions and dynamic workflow building
 
 import json
 import yaml
+import os
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
+from langchain_community.tools.tavily_search import TavilySearchResults
 import logging
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +34,13 @@ class ChatAgent:
         self.extracted_requirements = {}
         self.recommended_agents = []
         self.workflow_ready = False
+        
+        # Initialize web search tool for fallback
+        try:
+            self.web_search_tool = TavilySearchResults(max_results=3)
+        except Exception as e:
+            logger.warning(f"Web search tool not available: {e}")
+            self.web_search_tool = None
         
         # Load available agents and their capabilities
         self.available_agents = self._load_agents_config()
@@ -53,6 +66,10 @@ class ChatAgent:
         # Metadata cache
         self.metadata_cache = None
         self.metadata_retrieved = False
+        
+        # Initialize RAG system for enhanced responses
+        self.rag_system = None
+        self._initialize_rag_system()
         
         # Default values
         self.default_parameters = {
@@ -80,9 +97,19 @@ class ChatAgent:
             logger.error(f"Error loading agents config: {e}")
             return {}
     
+    def _initialize_rag_system(self):
+        """Initialize the RAG system for enhanced responses."""
+        try:
+            from ..rag.chat_integration import get_chat_agent
+            self.rag_system = get_chat_agent()
+            logger.info("✅ RAG system initialized successfully")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not initialize RAG system: {e}")
+            self.rag_system = None
+    
     def chat(self, user_message: str) -> Dict[str, Any]:
         """
-        Process user message and return response with workflow recommendations.
+        Process user message using self-corrective RAG and return response with workflow recommendations.
         
         Returns:
             Dict containing:
@@ -101,7 +128,26 @@ class ChatAgent:
         if not self.metadata_retrieved:
             self._retrieve_metadata()
         
-        # Analyze user intent and extract requirements
+        # Try to use RAG system first for enhanced responses
+        if self.rag_system:
+            try:
+                rag_response = self.rag_system.process_query(user_message)
+                
+                # Check if RAG provided a good answer
+                if rag_response.get("answer") and rag_response.get("confidence", 0) > 0.3:
+                    # Use RAG response but enhance with workflow capabilities
+                    enhanced_response = self._enhance_rag_response(user_message, rag_response)
+                    
+                    # Add assistant response to history
+                    self.conversation_history.append({"role": "assistant", "content": enhanced_response["response"]})
+                    
+                    return enhanced_response
+                else:
+                    logger.info("RAG response insufficient, falling back to standard analysis")
+            except Exception as e:
+                logger.warning(f"RAG system error, falling back to standard analysis: {e}")
+        
+        # Fallback to standard analysis if RAG is not available or insufficient
         analysis_result = self._analyze_user_intent(user_message)
         
         # Generate response based on analysis
@@ -111,6 +157,126 @@ class ChatAgent:
         self.conversation_history.append({"role": "assistant", "content": response["response"]})
         
         return response
+    
+    def _enhance_rag_response(self, user_message: str, rag_response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enhance RAG response with workflow capabilities and parameter extraction.
+        """
+        try:
+            # Extract the formatted response from RAG
+            rag_formatted_response = self.rag_system.format_response(rag_response)
+            
+            # Extract parameters from the user message for workflow building
+            extracted_params = self._extract_parameters_from_message(user_message)
+            
+            # Get agent recommendations from RAG response
+            agent_recommendations = rag_response.get("recommendations", {}).get("agents", [])
+            
+            # Convert RAG agent recommendations to our format
+            recommended_agents = []
+            for agent_rec in agent_recommendations:
+                if isinstance(agent_rec, dict):
+                    agent_name = agent_rec.get("agent", "")
+                    if agent_name:
+                        recommended_agents.append(agent_name)
+                else:
+                    recommended_agents.append(str(agent_rec))
+            
+            # Update internal state
+            self.extracted_requirements.update(extracted_params)
+            self.recommended_agents = recommended_agents
+            
+            # Determine if workflow is ready
+            workflow_ready = self._determine_workflow_readiness(extracted_params, recommended_agents)
+            self.workflow_ready = workflow_ready
+            
+            # Determine if parameters are needed
+            needs_parameters = not workflow_ready and rag_response.get("intent") == "analysis_request"
+            
+            return {
+                "response": rag_formatted_response,
+                "needs_parameters": needs_parameters,
+                "parameter_options": self.parameter_options if needs_parameters else {},
+                "workflow_ready": workflow_ready,
+                "recommended_agents": recommended_agents,
+                "extracted_requirements": self.extracted_requirements,
+                "rag_enhanced": True,
+                "rag_source": rag_response.get("source", "unknown"),
+                "rag_confidence": rag_response.get("confidence", 0.5)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error enhancing RAG response: {e}")
+            # Fallback to basic response
+            return {
+                "response": rag_response.get("answer", "I encountered an error processing your request."),
+                "needs_parameters": False,
+                "parameter_options": {},
+                "workflow_ready": False,
+                "recommended_agents": [],
+                "extracted_requirements": {},
+                "rag_enhanced": False
+            }
+    
+    def _extract_parameters_from_message(self, message: str) -> Dict[str, Any]:
+        """Extract marketing analysis parameters from user message."""
+        import re
+        
+        params = {}
+        message_lower = message.lower()
+        
+        # Extract brands
+        brand_patterns = {
+            r"\bcoca[- ]?cola\b": "Coca-Cola",
+            r"\bpepsi\b": "Pepsi", 
+            r"\bred bull\b": "Red Bull",
+            r"\bmonster( energy)?\b": "Monster Energy",
+            r"\bgatorade\b": "Gatorade",
+            r"\bpowerade\b": "Powerade",
+            r"\bsprite\b": "Sprite",
+            r"\bfanta\b": "Fanta"
+        }
+        
+        brands = []
+        for pattern, brand_name in brand_patterns.items():
+            if re.search(pattern, message_lower):
+                if brand_name not in brands:
+                    brands.append(brand_name)
+        
+        if brands:
+            params["brands"] = brands
+        
+        # Extract regions
+        region_patterns = {
+            r"north america": "North America",
+            r"europe": "Europe", 
+            r"asia pacific": "Asia Pacific"
+        }
+        regions = []
+        for pattern, region in region_patterns.items():
+            if re.search(pattern, message_lower):
+                regions.append(region)
+        if regions:
+            params["target_markets"] = regions
+        
+        # Extract analysis type
+        if any(word in message_lower for word in ["roi", "profitability", "profit"]):
+            params["key_metrics"] = ["roi", "profitability_analysis"]
+        elif any(word in message_lower for word in ["forecast", "predict"]):
+            params["key_metrics"] = ["forecasting"]
+        elif any(word in message_lower for word in ["market share", "competition"]):
+            params["key_metrics"] = ["market_share", "competitive_analysis"]
+        
+        return params
+    
+    def _determine_workflow_readiness(self, extracted_params: Dict[str, Any], recommended_agents: List[str]) -> bool:
+        """Determine if we have enough information to proceed with workflow."""
+        has_agents = bool(recommended_agents)
+        has_context = bool(extracted_params.get("brands") or extracted_params.get("target_markets"))
+        has_analysis_type = bool(extracted_params.get("key_metrics"))
+        
+        # If we have agents and either context or analysis type, we're ready
+        return has_agents and (has_context or has_analysis_type)
     
     def _retrieve_metadata(self):
         """Retrieve metadata from the metadata agent and update parameter options."""
