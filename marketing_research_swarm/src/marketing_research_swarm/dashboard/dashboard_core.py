@@ -67,17 +67,60 @@ try:
         EnhancedLangSmithMonitor,
         StateGraphVisualizer,
         MockOptimizationManager,
+        RAGDocumentMonitor,
         create_langsmith_tracer,
         load_agents_config,
         create_custom_task_config,
         initialize_components,
-        render_header
+        render_header,
+        monitor_langsmith_runs
     )
     DASHBOARD_COMPONENTS_AVAILABLE = True
     logger.info("✅ Dashboard components imported successfully")
 except ImportError as e:
     logger.error(f"Failed to import dashboard components: {e}")
+    # Print detailed error information
+    import traceback
+    logger.error(f"Import error details: {traceback.format_exc()}")
     DASHBOARD_COMPONENTS_AVAILABLE = False
+    
+    # Try to import monitor_langsmith_runs specifically as a fallback
+    try:
+        from src.marketing_research_swarm.dashboard.utils.dashboard_utils import monitor_langsmith_runs
+        logger.info("✅ monitor_langsmith_runs imported as fallback")
+    except ImportError:
+        logger.warning("⚠️ monitor_langsmith_runs not available")
+        # Create a mock function
+        def monitor_langsmith_runs(project_name: str = "marketing-research-dashboard"):
+            pass
+
+# Import RAG knowledge base
+try:
+    from src.marketing_research_swarm.rag.knowledge_base import MarketingResearchKnowledgeBase, get_knowledge_base
+    RAG_KNOWLEDGE_BASE_AVAILABLE = True
+    logger.info("✅ RAG knowledge base imported successfully")
+except ImportError as e:
+    logger.warning(f"RAG knowledge base not available: {e}")
+    RAG_KNOWLEDGE_BASE_AVAILABLE = False
+    get_knowledge_base = None
+
+# Try to import RAGDocumentMonitor specifically if the main import failed
+if not DASHBOARD_COMPONENTS_AVAILABLE:
+    try:
+        from src.marketing_research_swarm.dashboard.components.rag_document_monitor import RAGDocumentMonitor
+        logger.info("✅ RAGDocumentMonitor imported successfully as fallback")
+        # Set a flag to indicate RAG is available even if other components aren't
+        RAG_COMPONENTS_AVAILABLE = True
+    except ImportError as e:
+        logger.error(f"Failed to import RAGDocumentMonitor: {e}")
+        RAG_COMPONENTS_AVAILABLE = False
+        RAGDocumentMonitor = None
+    except Exception as e:
+        logger.error(f"Unexpected error importing RAGDocumentMonitor: {e}")
+        RAG_COMPONENTS_AVAILABLE = False
+        RAGDocumentMonitor = None
+else:
+    RAG_COMPONENTS_AVAILABLE = True
 
 # Initialize enhanced components
 try:
@@ -85,24 +128,201 @@ try:
         enhanced_token_tracker = EnhancedTokenTracker()
         enhanced_langsmith_monitor = EnhancedLangSmithMonitor()
         state_graph_visualizer = StateGraphVisualizer()
+        
+        # Initialize RAG knowledge base and document monitor
+        knowledge_base = None
+        if RAG_KNOWLEDGE_BASE_AVAILABLE and get_knowledge_base:
+            try:
+                knowledge_base = get_knowledge_base()
+                logger.info("✅ RAG knowledge base initialized")
+            except Exception as kb_e:
+                logger.warning(f"Failed to initialize RAG knowledge base: {kb_e}")
+        
+        rag_document_monitor = RAGDocumentMonitor(knowledge_base=knowledge_base)
         DASHBOARD_ENHANCEMENTS_AVAILABLE = True
         logger.info("✅ Enhanced dashboard components initialized")
-    else:
-        DASHBOARD_ENHANCEMENTS_AVAILABLE = False
+    elif RAG_COMPONENTS_AVAILABLE:
+        # Even if other components failed, we can still initialize RAG
+        knowledge_base = None
+        if RAG_KNOWLEDGE_BASE_AVAILABLE and get_knowledge_base:
+            try:
+                knowledge_base = get_knowledge_base()
+                logger.info("✅ RAG knowledge base initialized")
+            except Exception as kb_e:
+                logger.warning(f"Failed to initialize RAG knowledge base: {kb_e}")
+        
+        rag_document_monitor = RAGDocumentMonitor(knowledge_base=knowledge_base)
+        DASHBOARD_ENHANCEMENTS_AVAILABLE = True
         enhanced_token_tracker = None
         enhanced_langsmith_monitor = None
         state_graph_visualizer = None
+        logger.info("✅ RAG components initialized (other components unavailable)")
+    else:
+        # Try to initialize RAG directly as a last resort
+        try:
+            from src.marketing_research_swarm.dashboard.components.rag_document_monitor import RAGDocumentMonitor
+            knowledge_base = None
+            if RAG_KNOWLEDGE_BASE_AVAILABLE and get_knowledge_base:
+                try:
+                    knowledge_base = get_knowledge_base()
+                    logger.info("✅ RAG knowledge base initialized")
+                except Exception as kb_e:
+                    logger.warning(f"Failed to initialize RAG knowledge base: {kb_e}")
+            
+            rag_document_monitor = RAGDocumentMonitor(knowledge_base=knowledge_base)
+            DASHBOARD_ENHANCEMENTS_AVAILABLE = True
+            enhanced_token_tracker = None
+            enhanced_langsmith_monitor = None
+            state_graph_visualizer = None
+            logger.info("✅ Direct RAG initialization successful")
+        except Exception as direct_e:
+            logger.error(f"Direct RAG initialization failed: {direct_e}")
+            DASHBOARD_ENHANCEMENTS_AVAILABLE = False
+            enhanced_token_tracker = None
+            enhanced_langsmith_monitor = None
+            state_graph_visualizer = None
+            rag_document_monitor = None
 except Exception as e:
     logger.warning(f"Enhanced dashboard components initialization failed: {e}")
-    DASHBOARD_ENHANCEMENTS_AVAILABLE = False
-    enhanced_token_tracker = None
-    enhanced_langsmith_monitor = None
-    state_graph_visualizer = None
+    # Print detailed error information
+    import traceback
+    logger.error(f"Initialization error details: {traceback.format_exc()}")
+    
+    # Try fallback initialization for RAG only
+    if RAG_COMPONENTS_AVAILABLE:
+        try:
+            knowledge_base = None
+            if RAG_KNOWLEDGE_BASE_AVAILABLE and get_knowledge_base:
+                try:
+                    knowledge_base = get_knowledge_base()
+                    logger.info("✅ RAG knowledge base initialized")
+                except Exception as kb_e:
+                    logger.warning(f"Failed to initialize RAG knowledge base: {kb_e}")
+            
+            rag_document_monitor = RAGDocumentMonitor(knowledge_base=knowledge_base)
+            DASHBOARD_ENHANCEMENTS_AVAILABLE = True
+            enhanced_token_tracker = None
+            enhanced_langsmith_monitor = None
+            state_graph_visualizer = None
+            logger.info("✅ Fallback: RAG components initialized (other components failed)")
+        except Exception as rag_e:
+            logger.error(f"Fallback RAG initialization also failed: {rag_e}")
+            # Try direct initialization as last resort
+            try:
+                from src.marketing_research_swarm.dashboard.components.rag_document_monitor import RAGDocumentMonitor
+                knowledge_base = None
+                if RAG_KNOWLEDGE_BASE_AVAILABLE and get_knowledge_base:
+                    try:
+                        knowledge_base = get_knowledge_base()
+                        logger.info("✅ RAG knowledge base initialized")
+                    except Exception as kb_e:
+                        logger.warning(f"Failed to initialize RAG knowledge base: {kb_e}")
+                
+                rag_document_monitor = RAGDocumentMonitor(knowledge_base=knowledge_base)
+                DASHBOARD_ENHANCEMENTS_AVAILABLE = True
+                enhanced_token_tracker = None
+                enhanced_langsmith_monitor = None
+                state_graph_visualizer = None
+                logger.info("✅ Last resort: Direct RAG initialization successful")
+            except Exception as direct_e:
+                logger.error(f"Last resort RAG initialization failed: {direct_e}")
+                DASHBOARD_ENHANCEMENTS_AVAILABLE = False
+                rag_document_monitor = None
+    else:
+        # Try direct initialization as last resort
+        try:
+            from src.marketing_research_swarm.dashboard.components.rag_document_monitor import RAGDocumentMonitor
+            knowledge_base = None
+            if RAG_KNOWLEDGE_BASE_AVAILABLE and get_knowledge_base:
+                try:
+                    knowledge_base = get_knowledge_base()
+                    logger.info("✅ RAG knowledge base initialized")
+                except Exception as kb_e:
+                    logger.warning(f"Failed to initialize RAG knowledge base: {kb_e}")
+            
+            rag_document_monitor = RAGDocumentMonitor(knowledge_base=knowledge_base)
+            DASHBOARD_ENHANCEMENTS_AVAILABLE = True
+            enhanced_token_tracker = None
+            enhanced_langsmith_monitor = None
+            state_graph_visualizer = None
+            logger.info("✅ Last resort: Direct RAG initialization successful")
+        except Exception as direct_e:
+            logger.error(f"Last resort RAG initialization failed: {direct_e}")
+            DASHBOARD_ENHANCEMENTS_AVAILABLE = False
+            enhanced_token_tracker = None
+            enhanced_langsmith_monitor = None
+            state_graph_visualizer = None
+            rag_document_monitor = None
 
 # Global variables for components
 optimization_manager = None
 token_tracker = None
 smart_cache = None
+rag_document_monitor = None
+
+# RAG availability flags
+DASHBOARD_COMPONENTS_AVAILABLE = False
+DASHBOARD_ENHANCEMENTS_AVAILABLE = False
+RAG_COMPONENTS_AVAILABLE = False
+
+# Ensure RAG is always available if possible
+def _ensure_rag_availability():
+    """Ensure RAG components are available if at all possible."""
+    global rag_document_monitor, RAG_COMPONENTS_AVAILABLE
+    
+    # Try multiple approaches to get RAG working
+    approaches = [
+        # Approach 1: Direct import
+        lambda: __import__('src.marketing_research_swarm.dashboard.components.rag_document_monitor', fromlist=['RAGDocumentMonitor']).RAGDocumentMonitor,
+        # Approach 2: Import from dashboard package
+        lambda: __import__('src.marketing_research_swarm.dashboard', fromlist=['RAGDocumentMonitor']).RAGDocumentMonitor,
+    ]
+    
+    for i, approach in enumerate(approaches, 1):
+        try:
+            RAGDocumentMonitorClass = approach()
+            # Initialize with knowledge base if available
+            knowledge_base = None
+            if RAG_KNOWLEDGE_BASE_AVAILABLE and get_knowledge_base:
+                try:
+                    knowledge_base = get_knowledge_base()
+                    logger.info("✅ RAG knowledge base initialized in ensure_rag_availability")
+                except Exception as kb_e:
+                    logger.warning(f"Failed to initialize RAG knowledge base in ensure_rag_availability: {kb_e}")
+            
+            rag_document_monitor = RAGDocumentMonitorClass(knowledge_base=knowledge_base)
+            RAG_COMPONENTS_AVAILABLE = True
+            logger.info(f"✅ RAG availability ensured via approach {i}")
+            return True
+        except Exception as e:
+            logger.debug(f"Approach {i} failed: {e}")
+            continue
+    
+    # Final fallback: Try to create a minimal RAGDocumentMonitor
+    try:
+        # Try to import the class directly
+        from src.marketing_research_swarm.dashboard.components.rag_document_monitor import RAGDocumentMonitor
+        # Initialize with knowledge base if available
+        knowledge_base = None
+        if RAG_KNOWLEDGE_BASE_AVAILABLE and get_knowledge_base:
+            try:
+                knowledge_base = get_knowledge_base()
+                logger.info("✅ RAG knowledge base initialized in final fallback")
+            except Exception as kb_e:
+                logger.warning(f"Failed to initialize RAG knowledge base in final fallback: {kb_e}")
+        
+        rag_document_monitor = RAGDocumentMonitor(knowledge_base=knowledge_base)
+        RAG_COMPONENTS_AVAILABLE = True
+        logger.info("✅ RAG availability ensured via direct import")
+        return True
+    except Exception as e:
+        logger.warning(f"All RAG initialization approaches failed: {e}")
+        rag_document_monitor = None
+        RAG_COMPONENTS_AVAILABLE = False
+        return False
+
+# Ensure RAG availability early
+_ensure_rag_availability()
 
 # Try to import and instantiate OptimizationManager first
 try:
@@ -1579,7 +1799,7 @@ class LangGraphDashboard:
         st.success("✅ Analysis completed successfully!")
         
         # Create tabs for different result views
-        tab_summary, tab1, tab_tools, tab2, tab3, tab4, tab5 = st.tabs(["📋 Executive Summary", "📊 Agent Results", "🧰 Tools", "⚡ Optimization", "🔍 Token Usage", "📈 Performance", "🧠 Context Quality"])
+        tab_summary, tab1, tab_tools, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 Executive Summary", "📊 Agent Results", "🧰 Tools", "⚡ Optimization", "🔍 Token Usage", "📈 Performance", "🧠 Context Quality", "📚 RAG Management"])
         
         with tab_summary:
             self._render_executive_summary(result, context_key=context_key)
@@ -1601,6 +1821,9 @@ class LangGraphDashboard:
         
         with tab5:
             self._render_context_quality(result)
+        
+        with tab6:
+            self._render_rag_management()
     
     def _render_executive_summary(self, result: Dict[str, Any], context_key: str = "default"):
         """Render a comprehensive executive summary combining all agent results."""
@@ -2275,7 +2498,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 st.markdown(f"[🔗 View in LangSmith]({project_url})")
             
             # Recent runs
-            if st.button("🔄 Refresh Runs"):
+            if st.button("🔄 Refresh Runs", key="refresh_runs_token_tracker_1"):
                 st.rerun()
             
             with col4:
@@ -2365,7 +2588,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 st.markdown(f"[🔗 View in LangSmith]({project_url})")
             
             # Recent runs
-            if st.button("🔄 Refresh Runs"):
+            if st.button("🔄 Refresh Runs", key="refresh_runs_token_tracker_2"):
                 st.rerun()
             
             recent_runs = enhanced_langsmith_monitor.get_recent_runs(limit=5)
@@ -2600,12 +2823,14 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         # Mode selection
         mode = st.sidebar.radio(
             "🎯 Select Mode",
-            ["🤖 Chat Mode", "⚙️ Manual Configuration"],
-            help="Choose between conversational chat mode or manual parameter configuration"
+            ["🤖 Chat Mode", "⚙️ Manual Configuration", "📚 RAG Management"],
+            help="Choose between conversational chat mode, manual parameter configuration, or RAG knowledge base management"
         )
         
         if mode == "🤖 Chat Mode":
             self._render_chat_mode()
+        elif mode == "📚 RAG Management":
+            self._render_rag_management_mode()
         else:
             self._render_manual_mode()
     
@@ -2759,20 +2984,15 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         st.markdown("**🚀 Quick Start:**")
         col1, col2, col3 = st.columns(3)
         
-        with col1:
-            if st.button("🥤 Brand Analysis", help="Analyze brand performance"):
-                quick_query = "I want to analyze brand performance in the beverage market"
-                st.session_state.quick_query = quick_query
-        
-        with col2:
-            if st.button("🌍 Regional Analysis", help="Analyze regional markets"):
-                quick_query = "Show me regional market analysis for beverage sales"
-                st.session_state.quick_query = quick_query
-        
-        with col3:
-            if st.button("💰 ROI Analysis", help="Analyze return on investment"):
-                quick_query = "Calculate ROI and profitability for beverage campaigns"
-                st.session_state.quick_query = quick_query
+        if st.button("🥤 Brand Analysis", key="brand_analysis_btn", help="Analyze brand performance"):
+            quick_query = "I want to analyze Coca-Cola's performance against Pepsi in North America"
+            st.session_state.quick_query = quick_query
+        if st.button("🌍 Regional Analysis", key="regional_analysis_btn", help="Analyze regional markets"):
+            quick_query = "Show me regional market analysis for beverage sales in Europe and Asia Pacific"
+            st.session_state.quick_query = quick_query
+        if st.button("💰 ROI Analysis", key="roi_analysis_btn", help="Analyze return on investment"):
+            quick_query = "Calculate ROI and profitability for our Energy drink campaigns"
+            st.session_state.quick_query = quick_query
         
         # Display chat history
         chat_container = st.container()
@@ -2818,7 +3038,20 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
             
             # Show recommended configuration
             with st.expander("📋 View Recommended Configuration", expanded=True):
-                config = chat_agent.get_workflow_config()
+                # Get config from session state to ensure consistency
+                config = st.session_state.get("last_response", {}).get("config", {})
+                if not config:
+                    # Fallback to chat agent config if available
+                    try:
+                        config = chat_agent.get_workflow_config()
+                    except:
+                        config = {
+                            "selected_agents": [],
+                            "analysis_type": "rag_enhanced",
+                            "market_segments": [],
+                            "product_categories": [],
+                            "budget": 0
+                        }
                 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -2867,6 +3100,15 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
             # Show LangGraph Workflow Visualization (same as Manual Configuration mode)
             if DASHBOARD_ENHANCEMENTS_AVAILABLE and state_graph_visualizer and state_graph_visualizer.available:
                 with st.expander("🔄 LangGraph Workflow Visualization", expanded=False):
+                    # Get config from session state to ensure consistency
+                    config = st.session_state.get("last_response", {}).get("config", {})
+                    if not config:
+                        # Fallback to chat agent config if available
+                        try:
+                            config = chat_agent.get_workflow_config()
+                        except:
+                            config = {}
+                    
                     selected_agents = config.get("selected_agents", [])
                     analysis_type = config.get("analysis_type", "rag_enhanced")
                     
@@ -2876,16 +3118,21 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                         st.info("Select agents to view the workflow graph")
             
             # Run analysis button
-            if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
+            if st.button("🚀 Run Analysis", type="primary", use_container_width=True, key="run_analysis_chat_btn"):
                 self._run_chat_analysis(config)
         
         # Reset chat button
-        if st.button("🔄 Reset Chat"):
+        if st.button("🔄 Reset Chat", key="reset_chat_btn"):
             chat_agent.reset()
             st.session_state.chat_messages = []
             st.session_state.workflow_ready = False
             st.session_state.last_response = {}
             st.rerun()
+        
+        # Show RAG Management Interface in chat mode
+        if DASHBOARD_ENHANCEMENTS_AVAILABLE and rag_document_monitor:
+            with st.expander("📚 RAG Management", expanded=False):
+                self._render_rag_management()
         
         # Show previous results if available
         self._render_previous_results()
@@ -2910,7 +3157,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("✅ Use Selected Parameters"):
+            if st.button("✅ Use Selected Parameters", key="use_selected_params_btn"):
                 if selected_params:
                     response = chat_agent.set_parameters(selected_params)
                     st.session_state.chat_messages.append({
@@ -2925,7 +3172,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     st.warning("Please select at least one option for each parameter.")
         
         with col2:
-            if st.button("🎯 Use Default Values"):
+            if st.button("🎯 Use Default Values", key="use_default_values_btn"):
                 response = chat_agent.set_parameters(chat_agent.default_parameters)
                 st.session_state.chat_messages.append({
                     "role": "assistant", 
@@ -2994,7 +3241,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("🔄 Refresh Runs", help="Refresh LangSmith run data"):
+                    if st.button("🔄 Refresh Runs", help="Refresh LangSmith run data", key="refresh_runs_manual_btn"):
                         st.rerun()
                 
                 with col2:
@@ -3041,7 +3288,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
             st.info("💡 **Using CrewAI Optimization System** - LangGraph not available, but all optimization features work through CrewAI fallback!")
         
         # Run analysis button
-        if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
+        if st.button("🚀 Run Analysis", type="primary", use_container_width=True, key="run_analysis_manual_btn"):
             if not config["selected_agents"]:
                 st.error("Please select at least one agent to run the analysis.")
                 return
@@ -3094,9 +3341,233 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
             # Render results
             self.render_results(result, context_key="manual_main")
         
+        # Show RAG Management Interface in manual mode
+        if DASHBOARD_ENHANCEMENTS_AVAILABLE and rag_document_monitor:
+            with st.expander("📚 RAG Management", expanded=False):
+                self._render_rag_management()
+        
         # Show previous results if available (for both modes)
         self._render_previous_results()
     
+    def _render_rag_management_mode(self):
+        """Render the RAG Management mode interface."""
+        st.header("📚 RAG Management - Knowledge Base Administration")
+        
+        # Check if RAG components are available
+        if not DASHBOARD_ENHANCEMENTS_AVAILABLE and not RAG_COMPONENTS_AVAILABLE:
+            st.error("⚠️ RAG components not available. Please check your installation.")
+            st.info("To enable RAG features, ensure you have the required dependencies installed.")
+            return
+        
+        # Special case: RAG might be available even if other dashboard components aren't
+        if not DASHBOARD_ENHANCEMENTS_AVAILABLE and RAG_COMPONENTS_AVAILABLE:
+            st.warning("⚠️ Some dashboard components unavailable, but RAG features are accessible.")
+        
+        # Display RAG Management Interface
+        self._render_rag_management()
+    
+    def _render_rag_management_mode(self):
+        """Render the RAG Management mode interface."""
+        st.header("📚 RAG Management - Knowledge Base Administration")
+        
+        # Check if RAG components are available
+        if not RAG_COMPONENTS_AVAILABLE and rag_document_monitor is None:
+            st.error("⚠️ RAG components not available. Please check your installation.")
+            
+            # Try to initialize RAG one more time
+            if _ensure_rag_availability():
+                st.success("✅ RAG components initialized successfully!")
+                st.rerun()
+            else:
+                st.info("To enable RAG features, ensure you have the required dependencies installed.")
+                st.info("The system will automatically detect and enable RAG when possible.")
+                return
+        
+        # Display RAG Management Interface
+        self._render_rag_management()
+
+    def _render_rag_management(self):
+        """Render the RAG management interface."""
+        global rag_document_monitor
+        
+        # Initialize session state variables if they don't exist
+        session_vars = [
+            "discovered_docs_list",
+            "selected_docs_for_rag"
+        ]
+        
+        for var in session_vars:
+            if var not in st.session_state:
+                st.session_state[var] = []
+        
+        if not rag_document_monitor:
+            st.error("⚠️ RAG Document Monitor not initialized")
+            return
+            
+        # Get monitoring status
+        monitor_status = rag_document_monitor.get_monitoring_status()
+        
+        # Display monitoring status
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if monitor_status["monitoring"]:
+                st.metric("📁 Monitoring", "🟢 Active")
+            else:
+                st.metric("📁 Monitoring", "🔴 Inactive")
+        with col2:
+            st.metric("📚 Knowledge Base", "🟢 Available" if monitor_status["knowledge_base_available"] else "🔴 Unavailable")
+        with col3:
+            st.metric("👁️ Watchdog", "🟢 Available" if monitor_status["watchdog_available"] else "🔴 Unavailable")
+        with col4:
+            st.metric("🔄 Pending Updates", monitor_status["pending_updates"])
+        
+        # File monitoring controls
+        st.subheader("👁️ File Monitoring")
+        
+        if monitor_status["monitoring"]:
+            if st.button("🛑 Stop File Monitoring", key="stop_file_monitoring_btn"):
+                rag_document_monitor.stop_monitoring()
+                st.success("Stopped file monitoring")
+                st.rerun()
+            
+            if monitor_status["watched_directories"]:
+                st.markdown("**📁 Watched Directories:**")
+                for directory in monitor_status["watched_directories"]:
+                    st.markdown(f"- `{directory}`")
+        else:
+            if st.button("👁️ Start File Monitoring", key="start_file_monitoring_btn"):
+                success = rag_document_monitor.start_monitoring()
+                if success:
+                    st.success("Started file monitoring")
+                else:
+                    st.error("Failed to start file monitoring")
+                st.rerun()
+        
+        # Document discovery
+        st.subheader("🔍 Document Discovery")
+        
+        # Directory input for discovery
+        base_directory = st.text_input(
+            "Base Directory for Discovery", 
+            value=".", 
+            help="Enter the directory path to discover documents"
+        )
+        
+        # Initialize session state for document discovery
+        if "discovered_docs_list" not in st.session_state:
+            st.session_state.discovered_docs_list = []
+        if "selected_docs_for_rag" not in st.session_state:
+            st.session_state.selected_docs_for_rag = []
+            
+        if st.button("📄 Discover Documents", key="discover_docs_btn"):
+            if not base_directory:
+                st.error("❌ Please provide a directory path")
+            elif not os.path.exists(base_directory):
+                st.error("❌ Directory does not exist")
+            else:
+                with st.spinner("Discovering documents..."):
+                    discovered_docs = rag_document_monitor.discover_documents(base_directory)
+                
+                if discovered_docs:
+                    st.success(f"📄 Discovered {len(discovered_docs)} documents")
+                    # Store in session state
+                    st.session_state.discovered_docs_list = discovered_docs
+                    # Clear previous selections when new discovery happens
+                    st.session_state.selected_docs_for_rag = []
+                else:
+                    st.info("No documents discovered in the specified directory")
+                    st.session_state.discovered_docs_list = []
+        
+        # Show selection interface if we have discovered docs
+        if st.session_state.discovered_docs_list:
+            st.markdown("**📁 Select Documents to Add to RAG:**")
+            
+            # Create document selection multiselect
+            selected_paths = st.multiselect(
+                "Choose documents to add:",
+                options=[doc["path"] for doc in st.session_state.discovered_docs_list],
+                default=st.session_state.selected_docs_for_rag,
+                format_func=lambda x: f"{os.path.basename(x)} ({x})",
+                key="rag_document_selector"
+            )
+            
+            # Update selection state
+            st.session_state.selected_docs_for_rag = selected_paths
+            
+            # Show selection count
+            if selected_paths:
+                st.info(f"Selected {len(selected_paths)} document(s)")
+            
+            # Add documents button
+            if st.button("📥 Add Selected Documents to RAG Knowledge Base", key="add_selected_docs_to_rag_btn"):
+                if st.session_state.selected_docs_for_rag:
+                    with st.spinner(f"Adding {len(st.session_state.selected_docs_for_rag)} documents to RAG..."):
+                        success_count = 0
+                        for doc_path in st.session_state.selected_docs_for_rag:
+                            success = rag_document_monitor.add_document_to_rag(doc_path, force_reindex=True)
+                            if success:
+                                success_count += 1
+                        
+                        if success_count > 0:
+                            st.success(f"✅ Added {success_count}/{len(st.session_state.selected_docs_for_rag)} documents to RAG knowledge base")
+                            # Clear selection after successful addition
+                            st.session_state.selected_docs_for_rag = []
+                        else:
+                            st.error("❌ Error adding documents to RAG")
+                else:
+                    st.warning("⚠️ Please select at least one document")
+        
+        # Knowledge base management
+        st.subheader("🔄 Knowledge Base Management")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔄 Update Knowledge Base", key="update_kb_btn"):
+                with st.spinner("Updating knowledge base..."):
+                    result = rag_document_monitor.update_rag_knowledge_base()
+                
+                if "error" in result:
+                    st.error(f"❌ Error updating knowledge base: {result['error']}")
+                else:
+                    st.success(f"✅ Knowledge base updated: {result.get('files_indexed', 0)} files indexed")
+        
+        with col2:
+            if st.button("🧨 Force Rebuild Knowledge Base", key="rebuild_kb_btn"):
+                with st.spinner("Rebuilding knowledge base..."):
+                    result = rag_document_monitor.update_rag_knowledge_base(force_rebuild=True)
+                
+                if "error" in result:
+                    st.error(f"❌ Error rebuilding knowledge base: {result['error']}")
+                else:
+                    st.success(f"✅ Knowledge base rebuilt: {result.get('files_indexed', 0)} files indexed")
+        
+        # Manual document upload
+        st.subheader("📤 Manual Document Upload")
+        
+        uploaded_file = st.file_uploader(
+            "Upload a document to add to RAG knowledge base",
+            type=["md", "txt", "py", "yaml", "yml", "json"],
+            help="Supported formats: Markdown (.md), Text (.txt), Python (.py), YAML (.yaml, .yml), JSON (.json)"
+        )
+        
+        if uploaded_file is not None:
+            # Create a temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_file_path = tmp_file.name
+            
+            # Add to RAG
+            success = rag_document_monitor.add_document_to_rag(tmp_file_path, force_reindex=True)
+            
+            # Clean up temporary file
+            os.unlink(tmp_file_path)
+            
+            if success:
+                st.success(f"✅ Added uploaded document to RAG knowledge base: {uploaded_file.name}")
+            else:
+                st.error("❌ Error adding uploaded document to RAG")
+
     def _render_previous_results(self):
         """Render previous results section."""
         if "last_result" in st.session_state:

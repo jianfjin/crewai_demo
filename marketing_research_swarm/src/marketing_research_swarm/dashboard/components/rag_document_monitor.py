@@ -81,10 +81,10 @@ class RAGDocumentMonitor:
         self.knowledge_base = knowledge_base
         self.observer = None
         self.monitoring = False
+        self.stop_monitoring_flag = False
         self.watched_directories = set()
         self.update_queue = []
         self.update_thread = None
-        self.stop_monitoring = False
         
         # Document discovery patterns
         self.discovery_patterns = [
@@ -128,6 +128,9 @@ class RAGDocumentMonitor:
             return True
             
         try:
+            # Reset stop flag
+            self.stop_monitoring_flag = False
+            
             # Use default directories if none provided
             if directories is None:
                 directories = self._get_default_directories()
@@ -165,7 +168,7 @@ class RAGDocumentMonitor:
             return
             
         try:
-            self.stop_monitoring = True
+            self.stop_monitoring_flag = True
             
             if self.observer:
                 self.observer.stop()
@@ -313,7 +316,7 @@ class RAGDocumentMonitor:
     def _start_update_thread(self):
         """Start the update processing thread."""
         def process_updates():
-            while not self.stop_monitoring:
+            while not getattr(self, 'stop_monitoring_flag', False):
                 try:
                     if self.update_queue:
                         # Process pending updates

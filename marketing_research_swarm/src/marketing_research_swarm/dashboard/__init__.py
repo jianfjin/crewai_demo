@@ -6,6 +6,7 @@ from .monitoring.enhanced_token_tracker import EnhancedTokenTracker
 from .monitoring.enhanced_langsmith_monitor import EnhancedLangSmithMonitor, create_langsmith_tracer
 from .visualization.state_graph_visualizer import StateGraphVisualizer
 from .mock_optimization_manager import MockOptimizationManager
+from .components.rag_document_monitor import RAGDocumentMonitor
 
 # Utility functions
 def load_agents_config():
@@ -118,6 +119,7 @@ __all__ = [
     'EnhancedLangSmithMonitor', 
     'StateGraphVisualizer',
     'MockOptimizationManager',
+    'RAGDocumentMonitor',
     'create_langsmith_tracer',
     'load_agents_config',
     'create_custom_task_config',
