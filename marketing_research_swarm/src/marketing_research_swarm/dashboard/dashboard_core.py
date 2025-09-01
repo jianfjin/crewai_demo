@@ -16,6 +16,44 @@ import uuid
 import logging
 from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
+# LangSmith configuration
+try:
+    from langsmith import Client
+    from langchain.callbacks.tracers import LangChainTracer
+    from langchain.callbacks.manager import CallbackManager
+    
+    # Initialize LangSmith client
+    LANGSMITH_API_KEY = os.getenv("LANGCHAIN_API_KEY")
+    LANGSMITH_PROJECT = os.getenv("LANGCHAIN_PROJECT", "marketing-research-swarm")
+    
+    if LANGSMITH_API_KEY:
+        try:
+            langsmith_client = Client(api_key=LANGSMITH_API_KEY)
+            # Test access to avoid permission errors
+            langsmith_client.list_runs(project_name=LANGSMITH_PROJECT, limit=1)
+            LANGSMITH_AVAILABLE = True
+            logger = logging.getLogger(__name__)
+            logger.info(f"✅ LangSmith monitoring enabled for project: {LANGSMITH_PROJECT}")
+        except Exception as langsmith_error:
+            LANGSMITH_AVAILABLE = False
+            langsmith_client = None
+            logger = logging.getLogger(__name__)
+            logger.warning(f"⚠️ LangSmith access error: {langsmith_error}")
+            logger.info("💡 LangSmith disabled - continuing without tracing")
+    else:
+        LANGSMITH_AVAILABLE = False
+        langsmith_client = None
+        logger = logging.getLogger(__name__)
+        logger.warning("⚠️ LANGCHAIN_API_KEY not found - LangSmith monitoring disabled")
+except ImportError as e:
+    LANGSMITH_AVAILABLE = False
+    langsmith_client = None
+    logger = logging.getLogger(__name__)
+    logger.warning(f"⚠️ LangSmith not available: {e}")
+
 # Optional imports with fallbacks
 try:
     import pandas as pd
@@ -943,9 +981,15 @@ class LangGraphDashboard:
     """
     """LangGraph Marketing Research Dashboard class."""
 
-    def __init__(self, langsmith_available: bool):
+    def __init__(self, langsmith_available: bool = False):
         """Initialize the dashboard."""
         self.langsmith_available = langsmith_available
+        
+        # Ensure LangSmith environment variables are set for tracing
+        if LANGSMITH_AVAILABLE:
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            if not os.environ.get("LANGCHAIN_PROJECT"):
+                os.environ["LANGCHAIN_PROJECT"] = "marketing-research-swarm"
 
     def render_sidebar(self):
         """Render the sidebar configuration."""
@@ -2628,9 +2672,43 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         """Render workflow StateGraph visualization."""
         st.subheader("🔄 LangGraph Workflow Visualization")
         
-        if state_graph_visualizer and selected_agents:
-            # Create tabs for different visualizations
-            tab1, tab2, tab3, tab4 = st.tabs(["📊 Interactive Graph", "🔤 ASCII Diagram", "🌊 Mermaid", "📋 Execution Analysis"])
+        if selected_agents:
+            # Import state_graph_visualizer from the original dashboard if not available
+            global state_graph_visualizer
+            if not state_graph_visualizer:
+                try:
+                    from langgraph_dashboard_original import state_graph_visualizer as orig_visualizer
+                    state_graph_visualizer = orig_visualizer
+                except ImportError:
+                    # Create a minimal visualizer if import fails
+                    class MinimalStateGraphVisualizer:
+                        def __init__(self):
+                            self.available = True
+                        
+                        def draw_ascii_graph(self, agents):
+                            return f"Workflow: {' -> '.join(agents)}"
+                        
+                        def create_mermaid_graph(self, agents):
+                            lines = ["graph TD"]
+                            for i, agent in enumerate(agents):
+                                if i == 0:
+                                    lines.append(f"    START --> {agent.upper()}")
+                                else:
+                                    lines.append(f"    {agents[i-1].upper()} --> {agent.upper()}")
+                            lines.append(f"    {agents[-1].upper()} --> END")
+                            return "\n".join(lines)
+                        
+                        def create_workflow_graph(self, agents, analysis_type):
+                            return None
+                        
+                        def get_execution_order(self, agents):
+                            return [[agent] for agent in agents]
+                    
+                    state_graph_visualizer = MinimalStateGraphVisualizer()
+            
+            if state_graph_visualizer:
+                # Create tabs for different visualizations
+                tab1, tab2, tab3, tab4 = st.tabs(["📊 Interactive Graph", "🔤 ASCII Diagram", "🌊 Mermaid", "📋 Execution Analysis"])
             
             with tab1:
                 st.subheader("Interactive Workflow Graph")
@@ -3098,24 +3176,23 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                             pass
             
             # Show LangGraph Workflow Visualization (same as Manual Configuration mode)
-            if DASHBOARD_ENHANCEMENTS_AVAILABLE and state_graph_visualizer and state_graph_visualizer.available:
-                with st.expander("🔄 LangGraph Workflow Visualization", expanded=False):
-                    # Get config from session state to ensure consistency
-                    config = st.session_state.get("last_response", {}).get("config", {})
-                    if not config:
-                        # Fallback to chat agent config if available
-                        try:
-                            config = chat_agent.get_workflow_config()
-                        except:
-                            config = {}
-                    
-                    selected_agents = config.get("selected_agents", [])
-                    analysis_type = config.get("analysis_type", "rag_enhanced")
-                    
-                    if selected_agents:
-                        self._render_workflow_graph(selected_agents, analysis_type)
-                    else:
-                        st.info("Select agents to view the workflow graph")
+            with st.expander("🔄 LangGraph Workflow Visualization", expanded=False):
+                # Get config from session state to ensure consistency
+                config = st.session_state.get("last_response", {}).get("config", {})
+                if not config:
+                    # Fallback to chat agent config if available
+                    try:
+                        config = chat_agent.get_workflow_config()
+                    except:
+                        config = {}
+                
+                selected_agents = config.get("selected_agents", [])
+                analysis_type = config.get("analysis_type", "rag_enhanced")
+                
+                if selected_agents:
+                    self._render_workflow_graph(selected_agents, analysis_type)
+                else:
+                    st.info("Select agents to view the workflow graph")
             
             # Run analysis button
             if st.button("🚀 Run Analysis", type="primary", use_container_width=True, key="run_analysis_chat_btn"):
@@ -3227,9 +3304,8 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         st.header("⚙️ Manual Configuration - Marketing Analysis")
         
         # StateGraph Visualization Section
-        if DASHBOARD_ENHANCEMENTS_AVAILABLE and state_graph_visualizer and state_graph_visualizer.available:
-            with st.expander("🔄 Workflow StateGraph Visualization", expanded=True):
-                self._render_workflow_graph(config["selected_agents"], config["analysis_type"])
+        with st.expander("🔄 Workflow StateGraph Visualization", expanded=True):
+            self._render_workflow_graph(config["selected_agents"], config["analysis_type"])
         
         # Enhanced LangSmith Monitoring Section
         if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_langsmith_monitor:
@@ -3349,22 +3425,22 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         # Show previous results if available (for both modes)
         self._render_previous_results()
     
-    def _render_rag_management_mode(self):
-        """Render the RAG Management mode interface."""
-        st.header("📚 RAG Management - Knowledge Base Administration")
+    # def _render_rag_management_mode(self):
+    #     """Render the RAG Management mode interface."""
+    #     st.header("📚 RAG Management - Knowledge Base Administration")
         
-        # Check if RAG components are available
-        if not DASHBOARD_ENHANCEMENTS_AVAILABLE and not RAG_COMPONENTS_AVAILABLE:
-            st.error("⚠️ RAG components not available. Please check your installation.")
-            st.info("To enable RAG features, ensure you have the required dependencies installed.")
-            return
+    #     # Check if RAG components are available
+    #     if not DASHBOARD_ENHANCEMENTS_AVAILABLE and not RAG_COMPONENTS_AVAILABLE:
+    #         st.error("⚠️ RAG components not available. Please check your installation.")
+    #         st.info("To enable RAG features, ensure you have the required dependencies installed.")
+    #         return
         
-        # Special case: RAG might be available even if other dashboard components aren't
-        if not DASHBOARD_ENHANCEMENTS_AVAILABLE and RAG_COMPONENTS_AVAILABLE:
-            st.warning("⚠️ Some dashboard components unavailable, but RAG features are accessible.")
+    #     # Special case: RAG might be available even if other dashboard components aren't
+    #     if not DASHBOARD_ENHANCEMENTS_AVAILABLE and RAG_COMPONENTS_AVAILABLE:
+    #         st.warning("⚠️ Some dashboard components unavailable, but RAG features are accessible.")
         
-        # Display RAG Management Interface
-        self._render_rag_management()
+    #     # Display RAG Management Interface
+    #     self._render_rag_management()
     
     def _render_rag_management_mode(self):
         """Render the RAG Management mode interface."""
@@ -3425,23 +3501,23 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         st.subheader("👁️ File Monitoring")
         
         if monitor_status["monitoring"]:
-            if st.button("🛑 Stop File Monitoring", key="stop_file_monitoring_btn"):
-                rag_document_monitor.stop_monitoring()
-                st.success("Stopped file monitoring")
-                st.rerun()
+            # if st.button("🛑 Stop File Monitoring", key="stop_file_monitoring_btn"):
+            rag_document_monitor.stop_monitoring()
+            st.success("Stopped file monitoring")
+            st.rerun()
             
             if monitor_status["watched_directories"]:
                 st.markdown("**📁 Watched Directories:**")
                 for directory in monitor_status["watched_directories"]:
                     st.markdown(f"- `{directory}`")
         else:
-            if st.button("👁️ Start File Monitoring", key="start_file_monitoring_btn"):
-                success = rag_document_monitor.start_monitoring()
-                if success:
-                    st.success("Started file monitoring")
-                else:
-                    st.error("Failed to start file monitoring")
-                st.rerun()
+            # if st.button("👁️ Start File Monitoring", key="start_file_monitoring_unique"):
+            success = rag_document_monitor.start_monitoring()
+            if success:
+                st.success("Started file monitoring")
+            else:
+                st.error("Failed to start file monitoring")
+            st.rerun()
         
         # Document discovery
         st.subheader("🔍 Document Discovery")
