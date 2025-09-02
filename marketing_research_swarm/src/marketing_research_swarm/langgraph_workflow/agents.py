@@ -32,6 +32,65 @@ from ..tools.langgraph_tools import (
 logger = logging.getLogger(__name__)
 
 
+def _import_and_execute_report_summarizer(state: MarketingResearchState) -> MarketingResearchState:
+    """Import and execute the enhanced report summarizer from enhanced_agent_nodes"""
+    try:
+        from .enhanced_agent_nodes import enhanced_report_summarizer_node
+        return enhanced_report_summarizer_node(state)
+    except ImportError as e:
+        logger.error(f"Failed to import enhanced report summarizer: {e}")
+        # Fallback to a simple summarizer
+        return _simple_report_summarizer(state)
+
+
+def _simple_report_summarizer(state: MarketingResearchState) -> MarketingResearchState:
+    """Simple fallback report summarizer if enhanced version is not available"""
+    try:
+        all_results = state.get('agent_results', {})
+        
+        # Create a simple summary
+        summary_lines = ["# Marketing Research Summary\n"]
+        
+        for agent_name, result in all_results.items():
+            if agent_name == 'report_summarizer':
+                continue
+                
+            agent_title = agent_name.replace('_', ' ').title()
+            summary_lines.append(f"## {agent_title}\n")
+            
+            if isinstance(result, dict):
+                if 'analysis' in result:
+                    summary_lines.append(f"**Analysis:** {result['analysis']}\n")
+                if 'recommendations' in result:
+                    summary_lines.append(f"**Recommendations:** {result['recommendations']}\n")
+            else:
+                summary_lines.append(f"{result}\n")
+            
+            summary_lines.append("")
+        
+        final_report = {
+            'final_summary': '\n'.join(summary_lines),
+            'timestamp': datetime.now().isoformat(),
+            'mode': 'fallback'
+        }
+        
+        # Store the result
+        if 'agent_results' not in state:
+            state['agent_results'] = {}
+        state['agent_results']['report_summarizer'] = final_report
+        state['final_report'] = final_report
+        
+        logger.info("Simple report summarizer completed")
+        
+    except Exception as e:
+        logger.error(f"Error in simple report summarizer: {e}")
+        if 'agent_errors' not in state:
+            state['agent_errors'] = {}
+        state['agent_errors']['report_summarizer'] = str(e)
+    
+    return state
+
+
 class LangGraphAgent:
     """Base class for LangGraph agent nodes."""
     
@@ -1193,4 +1252,5 @@ AGENT_NODES = {
     'campaign_optimizer': campaign_optimizer_node,
     'brand_performance_specialist': brand_performance_specialist_node,
     'forecasting_specialist': forecasting_specialist_node,
+    'report_summarizer': lambda state: _import_and_execute_report_summarizer(state),
 }

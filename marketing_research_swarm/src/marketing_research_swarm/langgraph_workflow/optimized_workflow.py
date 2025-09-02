@@ -407,7 +407,7 @@ class OptimizedMarketingWorkflow:
                 
                 # Get cached result if available
                 cache_key = self._generate_cache_key(agent_name, state)
-                cached_result = self.smart_cache.get(cache_key)
+                cached_result = self.smart_cache.retrieve(cache_key)
                 
                 if cached_result:
                     logger.info(f"Using cached result for {agent_name}")
@@ -655,7 +655,7 @@ class OptimizedMarketingWorkflow:
                 
                 # Get cached result if available
                 cache_key = self._generate_cache_key(agent_name, state)
-                cached_result = self.smart_cache.get(cache_key)
+                cached_result = self.smart_cache.retrieve(cache_key)
                 
                 if cached_result:
                     logger.info(f"Using cached result for enhanced {agent_name}")

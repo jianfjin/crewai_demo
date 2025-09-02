@@ -156,35 +156,46 @@ class MarketingResearchWorkflow:
         if not pending_agents:
             return None
         
-        # Define agent dependencies and execution order
-        agent_dependencies = {
-            "market_research_analyst": [],  # Can run first
-            "competitive_analyst": [],  # Can run first
-            "data_analyst": [],  # Can run first
-            "content_strategist": ["market_research_analyst"],  # Needs market research
-            "creative_copywriter": ["content_strategist"],  # Needs content strategy
-            "brand_performance_specialist": ["competitive_analyst", "data_analyst"],  # Needs competitive and data analysis
-            "forecasting_specialist": ["market_research_analyst", "data_analyst"],  # Needs market research and data analysis
-            "campaign_optimizer": ["data_analyst", "content_strategist"],  # Needs data and content strategy
-        }
+        # Exclude report_summarizer from initial execution - it should run last
+        other_pending_agents = [agent for agent in pending_agents if agent != 'report_summarizer']
         
-        # Find agents whose dependencies are satisfied
-        for agent in pending_agents:
-            dependencies = agent_dependencies.get(agent, [])
+        # If there are other agents pending, prioritize them
+        if other_pending_agents:
+            # Define agent dependencies and execution order
+            agent_dependencies = {
+                "market_research_analyst": [],  # Can run first
+                "competitive_analyst": [],  # Can run first
+                "data_analyst": [],  # Can run first
+                "content_strategist": ["market_research_analyst"],  # Needs market research
+                "creative_copywriter": ["content_strategist"],  # Needs content strategy
+                "brand_performance_specialist": ["competitive_analyst", "data_analyst"],  # Needs competitive and data analysis
+                "forecasting_specialist": ["market_research_analyst", "data_analyst"],  # Needs market research and data analysis
+                "campaign_optimizer": ["data_analyst", "content_strategist"],  # Needs data and content strategy
+            }
             
-            # Check if all dependencies are completed
-            dependencies_met = all(
-                state["agent_status"].get(dep) == AgentStatus.COMPLETED
-                for dep in dependencies
-                if dep in state["selected_agents"]
-            )
+            # Find agents whose dependencies are satisfied
+            for agent in other_pending_agents:
+                dependencies = agent_dependencies.get(agent, [])
+                
+                # Check if all dependencies are completed
+                dependencies_met = all(
+                    state["agent_status"].get(dep) == AgentStatus.COMPLETED
+                    for dep in dependencies
+                    if dep in state["selected_agents"]
+                )
+                
+                if dependencies_met:
+                    return agent
             
-            if dependencies_met:
-                return agent
+            # If no dependencies are met, return the first pending agent
+            # (this handles cases where dependencies aren't selected)
+            return other_pending_agents[0] if other_pending_agents else None
         
-        # If no dependencies are met, return the first pending agent
-        # (this handles cases where dependencies aren't selected)
-        return pending_agents[0] if pending_agents else None
+        # If only report_summarizer is pending, return it
+        elif 'report_summarizer' in pending_agents:
+            return 'report_summarizer'
+        
+        return None
     
     def _should_continue(self, state: MarketingResearchState) -> Literal["continue", "finalize"] | str:
         """Determine whether to continue with another agent or finalize."""
@@ -297,6 +308,10 @@ class MarketingResearchWorkflow:
         
         workflow_id = str(uuid.uuid4())
         current_time = datetime.now()
+        
+        # Add report_summarizer if not already included
+        if 'report_summarizer' not in selected_agents:
+            selected_agents = selected_agents + ['report_summarizer']
         
         # Validate selected agents
         invalid_agents = [agent for agent in selected_agents if agent not in self.available_agents]
