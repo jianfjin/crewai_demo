@@ -1867,8 +1867,8 @@ class LangGraphDashboard:
             self._render_context_quality(result)
         
         with tab6:
-            self._render_rag_management()
-    
+            self._render_rag_management(context=context_key)
+
     def _render_executive_summary(self, result: Dict[str, Any], context_key: str = "default"):
         """Render a comprehensive executive summary combining all agent results."""
         st.subheader("📋 Executive Summary & Final Report")
@@ -3209,8 +3209,8 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         # Show RAG Management Interface in chat mode
         if DASHBOARD_ENHANCEMENTS_AVAILABLE and rag_document_monitor:
             with st.expander("📚 RAG Management", expanded=False):
-                self._render_rag_management()
-        
+                self._render_rag_management(context="chat_mode")
+
         # Show previous results if available
         self._render_previous_results()
     
@@ -3420,8 +3420,8 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         # Show RAG Management Interface in manual mode
         if DASHBOARD_ENHANCEMENTS_AVAILABLE and rag_document_monitor:
             with st.expander("📚 RAG Management", expanded=False):
-                self._render_rag_management()
-        
+                self._render_rag_management(context="manual_mode")
+
         # Show previous results if available (for both modes)
         self._render_previous_results()
     
@@ -3460,11 +3460,18 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 return
         
         # Display RAG Management Interface
-        self._render_rag_management()
+        self._render_rag_management(context="management_mode")
 
-    def _render_rag_management(self):
+    def _render_rag_management(self, context="default"):
         """Render the RAG management interface."""
         global rag_document_monitor
+        
+        # Generate unique identifier for this render session with context
+        render_id_key = f"rag_render_id_{context}"
+        if render_id_key not in st.session_state:
+            st.session_state[render_id_key] = str(uuid.uuid4())[:8]
+        
+        render_id = f"{context}_{st.session_state[render_id_key]}"
         
         # Initialize session state variables if they don't exist
         session_vars = [
@@ -3501,23 +3508,23 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         st.subheader("👁️ File Monitoring")
         
         if monitor_status["monitoring"]:
-            # if st.button("🛑 Stop File Monitoring", key="stop_file_monitoring_btn"):
-            rag_document_monitor.stop_monitoring()
-            st.success("Stopped file monitoring")
-            st.rerun()
-            
+            if st.button("🛑 Stop File Monitoring", key=f"stop_file_monitoring_btn_{render_id}"):
+                rag_document_monitor.stop_monitoring()
+                st.success("Stopped file monitoring")
+                st.rerun()
+                
             if monitor_status["watched_directories"]:
                 st.markdown("**📁 Watched Directories:**")
                 for directory in monitor_status["watched_directories"]:
                     st.markdown(f"- `{directory}`")
         else:
-            # if st.button("👁️ Start File Monitoring", key="start_file_monitoring_unique"):
-            success = rag_document_monitor.start_monitoring()
-            if success:
-                st.success("Started file monitoring")
-            else:
-                st.error("Failed to start file monitoring")
-            st.rerun()
+            if st.button("👁️ Start File Monitoring", key=f"start_file_monitoring_btn_{render_id}"):
+                success = rag_document_monitor.start_monitoring()
+                if success:
+                    st.success("Started file monitoring")
+                else:
+                    st.error("Failed to start file monitoring")
+                st.rerun()
         
         # Document discovery
         st.subheader("🔍 Document Discovery")
@@ -3526,7 +3533,8 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         base_directory = st.text_input(
             "Base Directory for Discovery", 
             value=".", 
-            help="Enter the directory path to discover documents"
+            help="Enter the directory path to discover documents",
+            key=f"base_directory_input_{render_id}"
         )
         
         # Initialize session state for document discovery
@@ -3535,7 +3543,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         if "selected_docs_for_rag" not in st.session_state:
             st.session_state.selected_docs_for_rag = []
             
-        if st.button("📄 Discover Documents", key="discover_docs_btn"):
+        if st.button("📄 Discover Documents", key=f"discover_docs_btn_{render_id}"):
             if not base_directory:
                 st.error("❌ Please provide a directory path")
             elif not os.path.exists(base_directory):
@@ -3564,7 +3572,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 options=[doc["path"] for doc in st.session_state.discovered_docs_list],
                 default=st.session_state.selected_docs_for_rag,
                 format_func=lambda x: f"{os.path.basename(x)} ({x})",
-                key="rag_document_selector"
+                key=f"rag_document_selector_{render_id}"
             )
             
             # Update selection state
@@ -3575,7 +3583,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 st.info(f"Selected {len(selected_paths)} document(s)")
             
             # Add documents button
-            if st.button("📥 Add Selected Documents to RAG Knowledge Base", key="add_selected_docs_to_rag_btn"):
+            if st.button("📥 Add Selected Documents to RAG Knowledge Base", key=f"add_selected_docs_to_rag_btn_{render_id}"):
                 if st.session_state.selected_docs_for_rag:
                     with st.spinner(f"Adding {len(st.session_state.selected_docs_for_rag)} documents to RAG..."):
                         success_count = 0
@@ -3599,7 +3607,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🔄 Update Knowledge Base", key="update_kb_btn"):
+            if st.button("🔄 Update Knowledge Base", key=f"update_kb_btn_{render_id}"):
                 with st.spinner("Updating knowledge base..."):
                     result = rag_document_monitor.update_rag_knowledge_base()
                 
@@ -3609,7 +3617,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     st.success(f"✅ Knowledge base updated: {result.get('files_indexed', 0)} files indexed")
         
         with col2:
-            if st.button("🧨 Force Rebuild Knowledge Base", key="rebuild_kb_btn"):
+            if st.button("🧨 Force Rebuild Knowledge Base", key=f"rebuild_kb_btn_{render_id}"):
                 with st.spinner("Rebuilding knowledge base..."):
                     result = rag_document_monitor.update_rag_knowledge_base(force_rebuild=True)
                 
@@ -3624,7 +3632,8 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         uploaded_file = st.file_uploader(
             "Upload a document to add to RAG knowledge base",
             type=["md", "txt", "py", "yaml", "yml", "json"],
-            help="Supported formats: Markdown (.md), Text (.txt), Python (.py), YAML (.yaml, .yml), JSON (.json)"
+            help="Supported formats: Markdown (.md), Text (.txt), Python (.py), YAML (.yaml, .yml), JSON (.json)",
+            key=f"file_uploader_{render_id}"
         )
         
         if uploaded_file is not None:
