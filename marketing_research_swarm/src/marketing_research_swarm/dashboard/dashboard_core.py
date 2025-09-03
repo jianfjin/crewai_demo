@@ -410,54 +410,46 @@ try:
     if current_dir not in sys.path:
         sys.path.insert(0, current_dir)
     
-    # Try to import the real LangGraph workflow first, fallback to mock if needed
+    # Force use of OptimizedMarketingWorkflow only - no fallbacks
     try:
-        from marketing_research_swarm.langgraph_workflow.workflow import MarketingResearchWorkflow as RealMarketingResearchWorkflow
         from marketing_research_swarm.langgraph_workflow.optimized_workflow import OptimizedMarketingWorkflow as RealOptimizedMarketingWorkflow
         
-        # Test instantiation to make sure they work
+        # Test instantiation to ensure it works
         test_workflow = RealOptimizedMarketingWorkflow()
         
-        # Use the optimized workflows since they don't have numpy dependencies
-        MarketingResearchWorkflow = RealMarketingResearchWorkflow
+        # Force use of ONLY the optimized workflow
+        MarketingResearchWorkflow = RealOptimizedMarketingWorkflow
         OptimizedMarketingWorkflow = RealOptimizedMarketingWorkflow
-        logger.info("✅ Using real optimized LangGraph workflows (numpy-free)")
-        st.info("✅ Using optimized LangGraph workflows with advanced features")
+        
+        logger.info("✅ FORCED: Using ONLY OptimizedMarketingWorkflow - all fallbacks removed")
+        st.success("✅ OPTIMIZED WORKFLOW ONLY: Advanced features guaranteed")
         
     except Exception as workflow_import_error:
-        logger.warning(f"Real LangGraph workflows not available: {workflow_import_error}")
+        logger.error(f"❌ CRITICAL: OptimizedMarketingWorkflow not available: {workflow_import_error}")
+        st.error("❌ CRITICAL ERROR: OptimizedMarketingWorkflow required but not available!")
+        st.error("Please ensure the optimized workflow is properly installed.")
         
-        # Import mock workflow classes
-        try:
-            from marketing_research_swarm.dashboard.components.mock_workflow import MockLangGraphWorkflow
-            from marketing_research_swarm.dashboard.components.optimized_workflow import OptimizedWorkflowWrapper
-            
-            # Try to use optimized workflow instead of mock
-            try:
-                from marketing_research_swarm.langgraph_workflow.optimized_workflow import OptimizedMarketingWorkflow
-                MarketingResearchWorkflow = OptimizedWorkflowWrapper
-                logger.info("✅ Using optimized LangGraph workflow (REAL ANALYSIS)")
-                st.info("✅ LangGraph components loaded successfully (using optimized REAL workflow)")
-                
-            except Exception as optimized_workflow_error:
-                logger.error(f"Failed to load optimized workflow: {optimized_workflow_error}")
-                
-                # Final fallback to mock
-                MarketingResearchWorkflow = MockLangGraphWorkflow
-                logger.info("✅ Using enhanced mock LangGraph workflows")
-                
-        except ImportError as component_error:
-            logger.error(f"Failed to import workflow components: {component_error}")
-            
-            # Import fallback classes inline if imports fail
-            from marketing_research_swarm.dashboard.components.mock_workflow import MockLangGraphWorkflow
-            from marketing_research_swarm.dashboard.components.optimized_workflow import OptimizedWorkflowWrapper
-            
-            MarketingResearchWorkflow = OptimizedWorkflowWrapper
-            logger.info("✅ Using inline workflow classes as fallback")
+        # Show installation instructions instead of fallback
+        st.markdown("""
+        **To fix this issue:**
+        1. Ensure `src/marketing_research_swarm/langgraph_workflow/optimized_workflow.py` exists
+        2. Check that all dependencies are installed: `pip install langgraph langchain-openai`
+        3. Verify the OptimizedMarketingWorkflow class is properly defined
+        
+        **No fallback workflows will be used to ensure optimization guarantees.**
+        """)
+        
+        # Set to None to prevent execution with suboptimal workflows
+        MarketingResearchWorkflow = None
+        OptimizedMarketingWorkflow = None
     
-    LANGGRAPH_AVAILABLE = True
-    logger.info("✅ LangGraph components loaded successfully (using mock workflow)")
+    # Set LANGGRAPH_AVAILABLE based on whether OptimizedMarketingWorkflow is available
+    LANGGRAPH_AVAILABLE = MarketingResearchWorkflow is not None
+    
+    if LANGGRAPH_AVAILABLE:
+        logger.info("✅ LangGraph components loaded successfully - OptimizedMarketingWorkflow ONLY")
+    else:
+        logger.error("❌ LangGraph components UNAVAILABLE - OptimizedMarketingWorkflow required")
 except ImportError as e:
     logger.warning(f"LangGraph components not available: {e}")
     LANGGRAPH_AVAILABLE = False
@@ -601,11 +593,15 @@ class LangGraphDashboard:
                 continue
             
             available = ares.get("tools_available", []) or []
-            # Prepare tool parameter basis
+            # Prepare tool parameter basis - FIXED: Ensure data_path is always set correctly
             base_params = {
-                "data_path": config.get("data_file_path", default_data),
+                "data_path": default_data,  # Use resolved data path directly
+                "data_file_path": default_data,  # Also set alias for compatibility
                 "forecast_periods": config.get("forecast_periods", 30),
             }
+            
+            # Log the data path being used
+            logger.info(f"🔧 Using data path for tools: {default_data}")
             
             # ENHANCED: Agent-specific comprehensive tool sets
             desired_tools = []
@@ -990,6 +986,48 @@ class LangGraphDashboard:
             os.environ["LANGCHAIN_TRACING_V2"] = "true"
             if not os.environ.get("LANGCHAIN_PROJECT"):
                 os.environ["LANGCHAIN_PROJECT"] = "marketing-research-swarm"
+
+    
+    def _normalize_agent_names(self, selected_agents: List[str]) -> List[str]:
+        """Normalize agent names from dashboard format to workflow format."""
+        # Mapping from dashboard display names to workflow internal names
+        agent_name_mapping = {
+            # Dashboard format -> Workflow format
+            "Market Research Analyst": "market_research_analyst",
+            "Data Analyst": "data_analyst", 
+            "Brand Performance Analyst": "brand_performance_specialist",
+            "Sales Forecast Analyst": "forecasting_specialist",
+            "ROI Analysis Expert": "forecasting_specialist",
+            "Report Summarizer": "report_summarizer",
+            "Competitive Analyst": "competitive_analyst",
+            "Content Strategist": "content_strategist",
+            "Creative Copywriter": "creative_copywriter",
+            "Campaign Optimizer": "campaign_optimizer",
+            
+            # Also handle underscore format (pass through)
+            "market_research_analyst": "market_research_analyst",
+            "data_analyst": "data_analyst",
+            "brand_performance_specialist": "brand_performance_specialist", 
+            "forecasting_specialist": "forecasting_specialist",
+            "report_summarizer": "report_summarizer",
+            "competitive_analyst": "competitive_analyst",
+            "content_strategist": "content_strategist",
+            "creative_copywriter": "creative_copywriter",
+            "campaign_optimizer": "campaign_optimizer"
+        }
+        
+        normalized_agents = []
+        for agent in selected_agents:
+            if agent in agent_name_mapping:
+                normalized_name = agent_name_mapping[agent]
+                if normalized_name not in normalized_agents:  # Avoid duplicates
+                    normalized_agents.append(normalized_name)
+                    logger.info(f"🔄 Mapped agent: {agent} -> {normalized_name}")
+            else:
+                logger.warning(f"⚠️ Unknown agent name: {agent}")
+        
+        logger.info(f"✅ Normalized agents: {normalized_agents}")
+        return normalized_agents
 
     def render_sidebar(self):
         """Render the sidebar configuration."""
@@ -1382,9 +1420,19 @@ class LangGraphDashboard:
                 callback_manager = enhanced_langsmith_monitor.create_run_tracer(workflow_id)
                 logger.info(f"🔍 Created LangSmith tracer for workflow: {workflow_id}")
             
-            # Always use the optimized workflow wrapper with smart tools enabled
-            workflow = MarketingResearchWorkflow()  # This is actually OptimizedWorkflowWrapper
-            logger.info(f"Using optimized LangGraph workflow with smart tool selection and optimization level: {optimization_level}")
+            # Ensure we only use the OptimizedMarketingWorkflow - no compromises
+            if MarketingResearchWorkflow is None:
+                logger.error("❌ CRITICAL: Cannot run analysis - OptimizedMarketingWorkflow not available")
+                return {
+                    "success": False, 
+                    "error": "OptimizedMarketingWorkflow required but not available. Please check installation.",
+                    "workflow_type": "FAILED - Optimized workflow required"
+                }
+            
+            # Create the ONLY allowed workflow - OptimizedMarketingWorkflow
+            workflow = MarketingResearchWorkflow()  # This is GUARANTEED to be OptimizedMarketingWorkflow
+            logger.info(f"✅ EXECUTING: OptimizedMarketingWorkflow ONLY with optimization level: {optimization_level}")
+            logger.info(f"✅ CONFIRMED: Using {workflow.__class__.__module__}.{workflow.__class__.__name__}")
             
             # Apply optimization strategies
             optimized_config = self._apply_optimization_strategies(config)
@@ -1444,7 +1492,7 @@ class LangGraphDashboard:
                 
                 # Execute workflow with ALL parameters
                 result = workflow.execute_workflow(
-                    selected_agents=optimized_config["selected_agents"],
+                    selected_agents=self._normalize_agent_names(optimized_config["selected_agents"]),
                     target_audience=optimized_config["target_audience"],
                     campaign_type=optimized_config["campaign_type"],
                     budget=optimized_config["budget"],
@@ -1471,7 +1519,7 @@ class LangGraphDashboard:
                 # Fallback: try with inputs dictionary format
                 try:
                     inputs_dict = {
-                        'selected_agents': optimized_config["selected_agents"],
+                        'selected_agents': self._normalize_agent_names(optimized_config["selected_agents"]),
                         'target_audience': optimized_config["target_audience"],
                         'campaign_type': optimized_config["campaign_type"],
                         'budget': optimized_config["budget"],
@@ -1849,7 +1897,7 @@ class LangGraphDashboard:
             self._render_executive_summary(result, context_key=context_key)
         
         with tab1:
-            self._render_analysis_results(result)
+            self._render_analysis_results(result, context_key=context_key)
         
         with tab_tools:
             self._render_all_tool_results(result)
@@ -2163,7 +2211,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         
         return "\n".join(report_lines)
 
-    def _render_analysis_results(self, result: Dict[str, Any]):
+    def _render_analysis_results(self, result: Dict[str, Any], context_key: str = "default"):
         """Render the main analysis results."""
         st.subheader("📊 Individual Agent Results")
         
@@ -2286,14 +2334,14 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     # Export functionality
                     col_export1, col_export2 = st.columns([3, 1])
                     with col_export2:
-                        if st.button("📄 Export to Markdown", key="export_summary"):
+                        if st.button("📄 Export to Markdown", key=f"export_summary_{context_key}"):
                             markdown_content = self._generate_markdown_export(summary_data, result)
                             st.download_button(
                                 label="💾 Download Report",
                                 data=markdown_content,
                                 file_name=f"marketing_analysis_report_{summary_data.get('timestamp', '').replace(':', '-')[:19]}.md",
                                 mime="text/markdown",
-                                key="download_summary"
+                                key=f"download_summary_{context_key}"
                             )
                     
                     # Show additional metadata in an expander

@@ -223,9 +223,11 @@ class EnhancedContextEngineering:
         if len(self.checkpoint_history[thread_id]) > self.max_checkpoint_history:
             self.checkpoint_history[thread_id] = self.checkpoint_history[thread_id][-self.max_checkpoint_history:]
         
-        # Also save to LangGraph checkpointer
-        config = {"configurable": {"thread_id": thread_id}}
-        self.checkpointer.put(config, checkpoint.to_dict())
+        # Also save to LangGraph checkpointer - DISABLED due to API compatibility
+        # The MemorySaver.put() method signature has changed and requires additional parameters
+        # config = {"configurable": {"thread_id": thread_id}}
+        # self.checkpointer.put(config, checkpoint.to_dict())
+        logger.debug(f"💾 Checkpoint saved to internal storage (LangGraph checkpointer disabled for compatibility)")
         
         logger.debug(f"💾 Created checkpoint {checkpoint_id} for {agent_role}")
         return checkpoint

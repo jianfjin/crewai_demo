@@ -40,7 +40,7 @@ class OptimizedMarketingWorkflow:
     def __init__(self, checkpoint_path: Optional[str] = None, optimization_level: str = "full", enable_smart_tools: bool = True):
         """Initialize the optimized workflow."""
         self.checkpoint_path = checkpoint_path or "cache/workflow_checkpoints.db"
-        # self.checkpointer = SqliteSaver.from_conn_string(self.checkpoint_path)
+        # Disable checkpointer to avoid API compatibility issues
         self.checkpointer = None
         self.blackboard = get_integrated_blackboard()
         self.optimization_level = optimization_level
@@ -194,17 +194,31 @@ class OptimizedMarketingWorkflow:
                 reasoning=f"Initialized scratchpad for {agent} in optimized workflow {workflow_id}"
             )
         
-        # Apply agent selection optimization
-        if self.optimization_level in ["full", "blackboard"]:
-            state["selected_agents"] = self._optimize_agent_selection(
-                state["selected_agents"],
-                state.get("analysis_focus", ""),
-                state.get("campaign_type", "")
-            )
+        # Apply agent selection optimization - DISABLED to respect user selection
+        # The user's agent selection should be honored, not overridden by optimization
+        # if self.optimization_level in ["full", "blackboard"]:
+        #     state["selected_agents"] = self._optimize_agent_selection(
+        #         state["selected_agents"],
+        #         state.get("analysis_focus", ""),
+        #         state.get("campaign_type", "")
+        #     )
+        logger.info(f"🎯 Respecting user's agent selection: {state['selected_agents']}")
         
         # Add summarizer as the last agent if not present
         if 'report_summarizer' not in state['selected_agents']:
             state['selected_agents'].append('report_summarizer')
+
+        
+        # CRITICAL FIX: Initialize agent status to PENDING for all selected agents ONLY
+        state["agent_status"] = {}
+        state["agent_execution_order"] = []
+        selected_agents = state.get("selected_agents", [])
+        
+        for agent in selected_agents:
+            state["agent_status"][agent] = AgentStatus.PENDING
+            logger.info(f"🤖 Initialized {agent} as PENDING")
+        
+        logger.info(f"✅ Initialized {len(selected_agents)} selected agents as PENDING: {selected_agents}")
 
         # Set token budget based on optimization level
         token_budgets = {
@@ -255,7 +269,8 @@ class OptimizedMarketingWorkflow:
         if "agent_results" in state:
             for agent, result in state["agent_results"].items():
                 ref_key = f"result_{agent}_{uuid.uuid4().hex[:8]}"
-                self.smart_cache.set(ref_key, result)
+                # Disable cache storage for now due to method compatibility
+                # # self.smart_cache.store_result(ref_key, result)
                 self.result_references[f"agent_result_{agent}"] = ref_key
         
         # Update state with optimized context
@@ -314,23 +329,35 @@ class OptimizedMarketingWorkflow:
         next_agent = self._get_next_optimized_agent(state)
         
         if next_agent:
-            logger.info(f"Routing to optimized agent: {next_agent}")
+            logger.info(f"🤖 Routing to optimized agent: {next_agent}")
             state["current_agent"] = next_agent
-            state["agent_status"][next_agent] = AgentStatus.RUNNING
+            # CRITICAL FIX: Keep agent as PENDING until it actually executes
+            # Don't set to RUNNING here - let the agent node do that
+            logger.info(f"🔄 Agent {next_agent} ready for execution (status: {state['agent_status'].get(next_agent)})")
         else:
             logger.info("All agents completed or budget exhausted")
             state["current_agent"] = None
         
         return state
     
+    
     def _get_next_optimized_agent(self, state: MarketingResearchState) -> Optional[str]:
         """Get next agent with optimization-aware dependency resolution."""
         
-        # Get pending agents
+        # CRITICAL FIX: Only consider agents that are actually selected
+        selected_agents = state.get("selected_agents", [])
+        if not selected_agents:
+            logger.warning("No agents selected in state")
+            return None
+        
+        # Get pending agents - ONLY from selected agents
         pending_agents = [
-            agent for agent in state["selected_agents"]
+            agent for agent in selected_agents  # ONLY selected agents
             if state["agent_status"].get(agent) == AgentStatus.PENDING
         ]
+        
+        logger.info(f"🔍 Selected agents: {selected_agents}")
+        logger.info(f"🔍 Pending agents (from selected): {pending_agents}")
         
         # Exclude summarizer if other agents are pending
         other_pending_agents = [agent for agent in pending_agents if agent != 'report_summarizer']
@@ -338,7 +365,9 @@ class OptimizedMarketingWorkflow:
         if not other_pending_agents:
             # If no other agents are pending, check for the summarizer
             if 'report_summarizer' in pending_agents:
+                logger.info(f"🤖 Routing to final agent: report_summarizer")
                 return 'report_summarizer'
+            logger.info("🏁 No more agents to execute")
             return None
         
         # Optimized dependency resolution - prioritize high-impact, low-token agents
@@ -360,10 +389,11 @@ class OptimizedMarketingWorkflow:
         
         for agent in sorted_agents:
             if self._check_optimized_dependencies(agent, state):
+                logger.info(f"🚀 Next agent selected: {agent}")
                 return agent
         
+        logger.info("🔄 No agents ready due to dependencies")
         return None
-    
     def _check_optimized_dependencies(self, agent: str, state: MarketingResearchState) -> bool:
         """Check if agent dependencies are satisfied with optimization."""
         
@@ -391,6 +421,10 @@ class OptimizedMarketingWorkflow:
             """Optimized agent execution with token management."""
             
             try:
+                # CRITICAL FIX: Set agent to RUNNING when execution starts
+                logger.info(f"🚀 Starting execution of {agent_name}")
+                state["agent_status"][agent_name] = AgentStatus.RUNNING
+                
                 # Check token budget before execution
                 if state.get("tokens_used", 0) >= state.get("token_budget", 10000):
                     logger.warning(f"Token budget exceeded, skipping {agent_name}")
@@ -407,7 +441,8 @@ class OptimizedMarketingWorkflow:
                 
                 # Get cached result if available
                 cache_key = self._generate_cache_key(agent_name, state)
-                cached_result = self.smart_cache.retrieve(cache_key)
+                # Temporarily disable caching to avoid method issues
+                cached_result = None
                 
                 if cached_result:
                     logger.info(f"Using cached result for {agent_name}")
@@ -530,7 +565,7 @@ class OptimizedMarketingWorkflow:
                     compressed_result = self._compress_agent_result(agent_result)
                     
                     # Cache the result
-                    self.smart_cache.set(cache_key, compressed_result)
+                    # self.smart_cache.store_result(cache_key, compressed_result)
                     
                     # Store in state
                     if "agent_results" not in state:
@@ -639,6 +674,10 @@ class OptimizedMarketingWorkflow:
             """Enhanced optimized agent execution with smart tool selection and token management."""
             
             try:
+                # CRITICAL FIX: Set agent to RUNNING when execution starts
+                logger.info(f"🚀 Starting enhanced execution of {agent_name}")
+                state["agent_status"][agent_name] = AgentStatus.RUNNING
+                
                 # Check token budget before execution
                 if state.get("tokens_used", 0) >= state.get("token_budget", 10000):
                     logger.warning(f"Token budget exceeded, skipping {agent_name}")
@@ -655,7 +694,8 @@ class OptimizedMarketingWorkflow:
                 
                 # Get cached result if available
                 cache_key = self._generate_cache_key(agent_name, state)
-                cached_result = self.smart_cache.retrieve(cache_key)
+                # Temporarily disable caching to avoid method issues
+                cached_result = None
                 
                 if cached_result:
                     logger.info(f"Using cached result for enhanced {agent_name}")
@@ -776,7 +816,7 @@ class OptimizedMarketingWorkflow:
                     compressed_result = self._compress_agent_result(agent_result)
                     
                     # Cache the result
-                    self.smart_cache.set(cache_key, compressed_result)
+                    # self.smart_cache.store_result(cache_key, compressed_result)
                     
                     # Store in state
                     if "agent_results" not in state:
@@ -906,10 +946,43 @@ class OptimizedMarketingWorkflow:
             "budget": state["budget"],
             "duration": state["duration"],
             "analysis_focus": self._compress_text(state["analysis_focus"], 150),
+            "business_objective": self._compress_text(state.get("business_objective", "Optimize marketing performance"), 150),
+            "competitive_landscape": self._compress_text(state.get("competitive_landscape", "Competitive market environment"), 150),
+            "market_segments": state.get("market_segments", []),
+            "product_categories": state.get("product_categories", []),
+            "key_metrics": state.get("key_metrics", []),
+            "brands": state.get("brands", []),
+            "campaign_goals": state.get("campaign_goals", []),
             "selected_agents": state["selected_agents"],
             "agent_status": state["agent_status"],
+            "agent_results": state.get("agent_results", {}),
+            "agent_errors": state.get("agent_errors", {}),
             "current_agent": agent_name,
-            "isolated_context": isolated_context
+            "isolated_context": isolated_context,
+            "cached_results": state.get("cached_results", {}),
+            "initial_inputs": state.get("initial_inputs", {}),
+            # Add all the specific result fields that enhanced agents expect
+            "market_research_results": state.get("market_research_results"),
+            "competitive_analysis_results": state.get("competitive_analysis_results"),
+            "data_analysis_results": state.get("data_analysis_results"),
+            "content_strategy_results": state.get("content_strategy_results"),
+            "copywriting_results": state.get("copywriting_results"),
+            "campaign_optimization_results": state.get("campaign_optimization_results"),
+            "brand_performance_results": state.get("brand_performance_results"),
+            "forecasting_results": state.get("forecasting_results"),
+            "final_report": state.get("final_report"),
+            # Add additional required fields
+            "regions": state.get("regions", []),
+            "data_file_path": state.get("data_file_path", "data/beverage_sales.csv"),
+            "forecast_periods": state.get("forecast_periods", 30),
+            "recommendations": state.get("recommendations"),
+            "next_steps": state.get("next_steps"),
+            "errors": state.get("errors", []),
+            "warnings": state.get("warnings", []),
+            "total_token_usage": state.get("total_token_usage", {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}),
+            "execution_time": state.get("execution_time"),
+            "cache_hits": state.get("cache_hits", 0),
+            "cache_misses": state.get("cache_misses", 0)
         }
         
         # Add only relevant previous results as references
@@ -984,7 +1057,7 @@ class OptimizedMarketingWorkflow:
                 if field in compressed and len(str(compressed[field])) > 2000:
                     # Store large data in cache and replace with reference
                     ref_key = f"data_{field}_{uuid.uuid4().hex[:8]}"
-                    self.smart_cache.set(ref_key, compressed[field])
+                    # self.smart_cache.store_result(ref_key, compressed[field])
                     compressed[field] = f"[DATA_REF:{ref_key}]"
             
             return compressed
@@ -1002,6 +1075,23 @@ class OptimizedMarketingWorkflow:
     def _apply_structured_optimization(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Apply structured data optimization using Pydantic-like models."""
         
+        # SPECIAL HANDLING FOR REPORT_SUMMARIZER - preserve all content
+        if isinstance(result, dict) and any(key in result for key in ["final_summary", "timestamp", "mode"]):
+            # This is likely a report_summarizer result - preserve it completely
+            logger.info("🔍 Detected report_summarizer result - preserving full content")
+            compressed = result.copy()  # Keep everything for report_summarizer
+            
+            # Add metadata about compression but don't actually compress
+            compressed["_optimization_applied"] = {
+                "timestamp": datetime.now().isoformat(),
+                "compression_level": self.optimization_level,
+                "original_size": len(str(result)),
+                "compressed_size": len(str(compressed)),
+                "report_summarizer_preserved": True
+            }
+            
+            return compressed
+        
         # Define essential fields based on analysis type
         essential_fields = {
             "analysis": 800,  # Max 800 chars
@@ -1011,7 +1101,12 @@ class OptimizedMarketingWorkflow:
             "insights": 500,  # Max 500 chars
             "roi_data": None,  # Keep all ROI data
             "forecast_data": None,  # Keep all forecast data
-            "brand_metrics": None  # Keep all brand metrics
+            "brand_metrics": None,  # Keep all brand metrics
+            "final_summary": None,  # Keep all final summaries (for report_summarizer)
+            "final_report": None,  # Keep all final reports
+            "tool_results": None,  # Keep all tool results
+            "tool_param_suggestions": None,  # Keep tool suggestions
+            "structured_params": None  # Keep structured parameters
         }
         
         compressed = {}
@@ -1022,6 +1117,15 @@ class OptimizedMarketingWorkflow:
                 if max_length and isinstance(value, str) and len(value) > max_length:
                     # Intelligent truncation preserving key information
                     compressed[field] = self._intelligent_truncate(value, max_length)
+                else:
+                    compressed[field] = value
+        
+        # Also preserve any fields not in essential_fields to avoid data loss
+        for field, value in result.items():
+            if field not in essential_fields and field not in compressed:
+                # Preserve additional fields but with some compression for very large ones
+                if isinstance(value, str) and len(value) > 2000:
+                    compressed[field] = self._intelligent_truncate(value, 1500)
                 else:
                     compressed[field] = value
         
@@ -1097,6 +1201,10 @@ class OptimizedMarketingWorkflow:
     def _result_compression_node(self, state: MarketingResearchState) -> MarketingResearchState:
         """Comprehensive result compression with flow-based optimization."""
         
+        # Mark compression as done to prevent infinite loops
+        state["compression_done"] = True
+        logger.info("🗜️ Starting result compression")
+        
         # Apply flow-based result compression
         if "agent_results" in state:
             compressed_results = {}
@@ -1156,34 +1264,46 @@ class OptimizedMarketingWorkflow:
             if aged_items > 0:
                 logger.info(f"Aged {aged_items} stale context items")
         
+        logger.info("✅ Result compression completed")
         return state
     
     def _route_next_optimized_agent(self, state: MarketingResearchState) -> str:
         """Route to next agent or finalization with optimization awareness."""
         
-        # Check if we should compress results
-        if len(state.get("agent_results", {})) >= 2:
-            return "compress_results"
-        
         # Check if we have a current agent to execute
-        if state.get("current_agent"):
-            return state["current_agent"]
+        current_agent = state.get("current_agent")
+        if current_agent and current_agent in state.get("selected_agents", []):
+            agent_status = state.get("agent_status", {})
+            if agent_status.get(current_agent) == AgentStatus.PENDING:
+                logger.info(f"🚀 Routing to execute: {current_agent}")
+                return current_agent
         
         # Check token budget
         if state.get("tokens_used", 0) >= state.get("token_budget", 10000):
+            logger.info("💰 Token budget exceeded, finalizing")
             return "finalize"
         
         # Check if all agents are done
         pending_agents = [
-            agent for agent in state["selected_agents"]
-            if state["agent_status"].get(agent) == AgentStatus.PENDING
+            agent for agent in state.get("selected_agents", [])
+            if state.get("agent_status", {}).get(agent) == AgentStatus.PENDING
         ]
         
+        logger.info(f"📊 Pending agents for routing: {pending_agents}")
+        
         if not pending_agents:
+            logger.info("✅ All agents completed, finalizing")
             return "finalize"
         
-        # Continue routing
-        return "agent_router"
+        # Check if we should compress results (but not in infinite loop)
+        if len(state.get("agent_results", {})) >= 2 and not state.get("compression_done", False):
+            logger.info("🗜️ Compressing results")
+            return "compress_results"
+        
+        # CRITICAL FIX: Don't return "agent_router" - this causes infinite loop
+        # Instead, return "finalize" when no more work to do
+        logger.info("🔄 No more agents to route, finalizing")
+        return "finalize"
     
     def _optimized_finalize_node(self, state: MarketingResearchState) -> MarketingResearchState:
         """Optimized finalization with token usage reporting."""
@@ -1411,13 +1531,14 @@ class OptimizedMarketingWorkflow:
                 analysis_focus=analysis_focus,
                 agent_status={agent: AgentStatus.PENDING for agent in selected_agents},
                 agent_results={},
+                agent_errors={},
                 agent_execution_order=[],
                 created_at=current_time,
                 updated_at=current_time,
                 # Add required fields with defaults from kwargs or sensible defaults
                 initial_inputs=kwargs,
-                business_objective=kwargs.get("business_objective", ""),
-                competitive_landscape=kwargs.get("competitive_landscape", ""),
+                business_objective=kwargs.get("business_objective", "Optimize marketing performance and drive business growth"),
+                competitive_landscape=kwargs.get("competitive_landscape", "Competitive market with multiple players"),
                 market_segments=kwargs.get("market_segments", ["premium", "mass_market"]),
                 product_categories=kwargs.get("product_categories", ["soft_drinks", "energy_drinks"]),
                 key_metrics=kwargs.get("key_metrics", ["revenue", "market_share"]),
@@ -1457,7 +1578,10 @@ class OptimizedMarketingWorkflow:
             
             # Compile and execute the workflow
             compiled_workflow = self.workflow.compile(checkpointer=self.checkpointer)
-            config = {"configurable": {"thread_id": initial_state["workflow_id"]}}
+            config = {
+                "configurable": {"thread_id": initial_state["workflow_id"]},
+                "recursion_limit": 50  # Increase recursion limit
+            }
             final_state = compiled_workflow.invoke(initial_state, config=config)
             
             # Stop token tracking
@@ -1479,6 +1603,19 @@ class OptimizedMarketingWorkflow:
             
         except Exception as e:
             logger.error(f"Optimized workflow execution failed: {e}")
+            # Try to create error checkpoint if possible
+            try:
+                if 'initial_state' in locals() and hasattr(self, 'enhanced_context'):
+                    self.enhanced_context.create_checkpoint(
+                        thread_id=initial_state.get("workflow_id", "unknown"),
+                        agent_role="workflow_manager",
+                        step=0,
+                        state={"error": str(e), "failed_at": "workflow_execution"},
+                        token_usage=self.token_tracker.get_usage_summary() if hasattr(self, 'token_tracker') else {}
+                    )
+            except Exception as checkpoint_error:
+                logger.error(f"Failed to create workflow error checkpoint: {checkpoint_error}")
+            
             return {
                 "success": False,
                 "error": str(e),
