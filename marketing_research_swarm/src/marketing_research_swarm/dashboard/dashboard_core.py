@@ -413,16 +413,14 @@ try:
     # Try to import the real LangGraph workflow first, fallback to mock if needed
     try:
         from marketing_research_swarm.langgraph_workflow.workflow import MarketingResearchWorkflow as RealMarketingResearchWorkflow
-        from marketing_research_swarm.langgraph_workflow.optimized_workflow import OptimizedMarketingWorkflow as RealOptimizedMarketingWorkflow
         
-        # Test instantiation to make sure they work
-        test_workflow = RealOptimizedMarketingWorkflow()
+        # Test instantiation to make sure it works
+        test_workflow = RealMarketingResearchWorkflow()
         
-        # Use the optimized workflows since they don't have numpy dependencies
+        # Use only the regular workflow
         MarketingResearchWorkflow = RealMarketingResearchWorkflow
-        OptimizedMarketingWorkflow = RealOptimizedMarketingWorkflow
-        logger.info("✅ Using real optimized LangGraph workflows (numpy-free)")
-        st.info("✅ Using optimized LangGraph workflows with advanced features")
+        logger.info("✅ Using real regular LangGraph workflow")
+        st.info("✅ Using regular LangGraph workflow")
         
     except Exception as workflow_import_error:
         logger.warning(f"Real LangGraph workflows not available: {workflow_import_error}")
@@ -430,17 +428,16 @@ try:
         # Import mock workflow classes
         try:
             from marketing_research_swarm.dashboard.components.mock_workflow import MockLangGraphWorkflow
-            from marketing_research_swarm.dashboard.components.optimized_workflow import OptimizedWorkflowWrapper
             
-            # Try to use optimized workflow instead of mock
+            # Try to use regular workflow instead of mock
             try:
-                from marketing_research_swarm.langgraph_workflow.optimized_workflow import OptimizedMarketingWorkflow
-                MarketingResearchWorkflow = OptimizedWorkflowWrapper
-                logger.info("✅ Using optimized LangGraph workflow (REAL ANALYSIS)")
-                st.info("✅ LangGraph components loaded successfully (using optimized REAL workflow)")
+                from marketing_research_swarm.langgraph_workflow.workflow import MarketingResearchWorkflow as RegularWorkflow
+                MarketingResearchWorkflow = RegularWorkflow
+                logger.info("✅ Using regular LangGraph workflow (REAL ANALYSIS)")
+                st.info("✅ LangGraph components loaded successfully (using regular REAL workflow)")
                 
-            except Exception as optimized_workflow_error:
-                logger.error(f"Failed to load optimized workflow: {optimized_workflow_error}")
+            except Exception as regular_workflow_error:
+                logger.error(f"Failed to load regular workflow: {regular_workflow_error}")
                 
                 # Final fallback to mock
                 MarketingResearchWorkflow = MockLangGraphWorkflow
@@ -451,10 +448,9 @@ try:
             
             # Import fallback classes inline if imports fail
             from marketing_research_swarm.dashboard.components.mock_workflow import MockLangGraphWorkflow
-            from marketing_research_swarm.dashboard.components.optimized_workflow import OptimizedWorkflowWrapper
             
-            MarketingResearchWorkflow = OptimizedWorkflowWrapper
-            logger.info("✅ Using inline workflow classes as fallback")
+            MarketingResearchWorkflow = MockLangGraphWorkflow
+            logger.info("✅ Using mock workflow as final fallback")
     
     LANGGRAPH_AVAILABLE = True
     logger.info("✅ LangGraph components loaded successfully (using mock workflow)")
@@ -1382,9 +1378,9 @@ class LangGraphDashboard:
                 callback_manager = enhanced_langsmith_monitor.create_run_tracer(workflow_id)
                 logger.info(f"🔍 Created LangSmith tracer for workflow: {workflow_id}")
             
-            # Always use the optimized workflow wrapper with smart tools enabled
-            workflow = MarketingResearchWorkflow()  # This is actually OptimizedWorkflowWrapper
-            logger.info(f"Using optimized LangGraph workflow with smart tool selection and optimization level: {optimization_level}")
+            # Use the regular workflow
+            workflow = MarketingResearchWorkflow()  # This is the regular MarketingResearchWorkflow
+            logger.info(f"Using regular LangGraph workflow with optimization level: {optimization_level}")
             
             # Apply optimization strategies
             optimized_config = self._apply_optimization_strategies(config)
@@ -2859,18 +2855,43 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     class MinimalStateGraphVisualizer:
                         def __init__(self):
                             self.available = True
+                            # Add agent dependencies for proper workflow visualization
+                            self.agent_dependencies = {
+                                "market_research_analyst": [],
+                                "competitive_analyst": ["market_research_analyst"],
+                                "data_analyst": [],
+                                "content_strategist": ["market_research_analyst", "competitive_analyst"],
+                                "creative_copywriter": ["content_strategist"],
+                                "brand_performance_specialist": ["market_research_analyst", "data_analyst"],
+                                "forecasting_specialist": ["data_analyst"],
+                                "campaign_optimizer": ["data_analyst", "forecasting_specialist"]
+                            }
                         
                         def draw_ascii_graph(self, agents):
                             return f"Workflow: {' -> '.join(agents)}"
                         
                         def create_mermaid_graph(self, agents):
                             lines = ["graph TD"]
-                            for i, agent in enumerate(agents):
-                                if i == 0:
-                                    lines.append(f"    START --> {agent.upper()}")
-                                else:
-                                    lines.append(f"    {agents[i-1].upper()} --> {agent.upper()}")
-                            lines.append(f"    {agents[-1].upper()} --> END")
+                            lines.append("    START([Start Analysis])")
+                            
+                            # Add agent nodes
+                            for agent in agents:
+                                agent_name = agent.replace('_', ' ').title()
+                                lines.append(f"    {agent.upper()}[{agent_name}]")
+                            
+                            # Add connections
+                            lines.append(f"    START --> {agents[0].upper()}")
+                            for i, agent in enumerate(agents[1:], 1):
+                                lines.append(f"    {agents[i-1].upper()} --> {agent.upper()}")
+                            lines.append(f"    {agents[-1].upper()} --> END([Complete])")
+                            
+                            # Add styling
+                            lines.append("    classDef agentNode fill:#e1f5fe,stroke:#01579b,stroke-width:2px")
+                            lines.append("    classDef startEnd fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px")
+                            for agent in agents:
+                                lines.append(f"    class {agent.upper()} agentNode")
+                            lines.append("    class START,END startEnd")
+                            
                             return "\n".join(lines)
                         
                         def create_workflow_graph(self, agents, analysis_type):
