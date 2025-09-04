@@ -410,7 +410,7 @@ try:
     if current_dir not in sys.path:
         sys.path.insert(0, current_dir)
     
-    # Try to import the real LangGraph workflow first, fallback to mock if needed
+    # Force use of OptimizedMarketingWorkflow only - no fallbacks
     try:
         from marketing_research_swarm.langgraph_workflow.workflow import MarketingResearchWorkflow as RealMarketingResearchWorkflow
         from marketing_research_swarm.langgraph_workflow.enhanced_workflow import EnhancedMarketingWorkflow as RealEnhancedMarketingWorkflow
@@ -601,11 +601,15 @@ class LangGraphDashboard:
                 continue
             
             available = ares.get("tools_available", []) or []
-            # Prepare tool parameter basis
+            # Prepare tool parameter basis - FIXED: Ensure data_path is always set correctly
             base_params = {
-                "data_path": config.get("data_file_path", default_data),
+                "data_path": default_data,  # Use resolved data path directly
+                "data_file_path": default_data,  # Also set alias for compatibility
                 "forecast_periods": config.get("forecast_periods", 30),
             }
+            
+            # Log the data path being used
+            logger.info(f"🔧 Using data path for tools: {default_data}")
             
             # ENHANCED: Agent-specific comprehensive tool sets
             desired_tools = []
@@ -990,6 +994,48 @@ class LangGraphDashboard:
             os.environ["LANGCHAIN_TRACING_V2"] = "true"
             if not os.environ.get("LANGCHAIN_PROJECT"):
                 os.environ["LANGCHAIN_PROJECT"] = "marketing-research-swarm"
+
+    
+    def _normalize_agent_names(self, selected_agents: List[str]) -> List[str]:
+        """Normalize agent names from dashboard format to workflow format."""
+        # Mapping from dashboard display names to workflow internal names
+        agent_name_mapping = {
+            # Dashboard format -> Workflow format
+            "Market Research Analyst": "market_research_analyst",
+            "Data Analyst": "data_analyst", 
+            "Brand Performance Analyst": "brand_performance_specialist",
+            "Sales Forecast Analyst": "forecasting_specialist",
+            "ROI Analysis Expert": "forecasting_specialist",
+            "Report Summarizer": "report_summarizer",
+            "Competitive Analyst": "competitive_analyst",
+            "Content Strategist": "content_strategist",
+            "Creative Copywriter": "creative_copywriter",
+            "Campaign Optimizer": "campaign_optimizer",
+            
+            # Also handle underscore format (pass through)
+            "market_research_analyst": "market_research_analyst",
+            "data_analyst": "data_analyst",
+            "brand_performance_specialist": "brand_performance_specialist", 
+            "forecasting_specialist": "forecasting_specialist",
+            "report_summarizer": "report_summarizer",
+            "competitive_analyst": "competitive_analyst",
+            "content_strategist": "content_strategist",
+            "creative_copywriter": "creative_copywriter",
+            "campaign_optimizer": "campaign_optimizer"
+        }
+        
+        normalized_agents = []
+        for agent in selected_agents:
+            if agent in agent_name_mapping:
+                normalized_name = agent_name_mapping[agent]
+                if normalized_name not in normalized_agents:  # Avoid duplicates
+                    normalized_agents.append(normalized_name)
+                    logger.info(f"🔄 Mapped agent: {agent} -> {normalized_name}")
+            else:
+                logger.warning(f"⚠️ Unknown agent name: {agent}")
+        
+        logger.info(f"✅ Normalized agents: {normalized_agents}")
+        return normalized_agents
 
     def render_sidebar(self):
         """Render the sidebar configuration."""
@@ -1470,7 +1516,7 @@ class LangGraphDashboard:
                 
                 # Execute the workflow with enhanced context engineering
                 result = workflow.execute_workflow(
-                    selected_agents=optimized_config["selected_agents"],
+                    selected_agents=self._normalize_agent_names(optimized_config["selected_agents"]),
                     target_audience=optimized_config["target_audience"],
                     campaign_type=optimized_config["campaign_type"],
                     budget=optimized_config["budget"],
@@ -1498,7 +1544,7 @@ class LangGraphDashboard:
                 # Fallback: try with inputs dictionary format using enhanced context strategy
                 try:
                     inputs_dict = {
-                        'selected_agents': optimized_config["selected_agents"],
+                        'selected_agents': self._normalize_agent_names(optimized_config["selected_agents"]),
                         'target_audience': optimized_config["target_audience"],
                         'campaign_type': optimized_config["campaign_type"],
                         'budget': optimized_config["budget"],
@@ -1877,7 +1923,7 @@ class LangGraphDashboard:
             self._render_executive_summary(result, context_key=context_key)
         
         with tab1:
-            self._render_analysis_results(result)
+            self._render_analysis_results(result, context_key=context_key)
         
         with tab_tools:
             self._render_all_tool_results(result)
@@ -2191,7 +2237,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         
         return "\n".join(report_lines)
 
-    def _render_analysis_results(self, result: Dict[str, Any]):
+    def _render_analysis_results(self, result: Dict[str, Any], context_key: str = "default"):
         """Render the main analysis results."""
         st.subheader("📊 Individual Agent Results")
         
@@ -2214,14 +2260,12 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
             st.subheader("🤖 Agent Results")
             
             agent_results = result.get("agent_results", {})
-            if "report_summarizer" in agent_results:
-                summary_data = agent_results["report_summarizer"]
-                if isinstance(summary_data, dict) and "final_summary" in summary_data:
-                    st.markdown(summary_data["final_summary"])
-                else:
-                    st.write(summary_data)
-            else:
-                for agent, agent_result in result["agent_results"].items():
+            
+            # First, display all agents EXCEPT report_summarizer
+            other_agents = {k: v for k, v in agent_results.items() if k != "report_summarizer"}
+            
+            if other_agents:
+                for agent, agent_result in other_agents.items():
                     with st.expander(f"📋 {agent.replace('_', ' ').title()}"):
                         if isinstance(agent_result, dict):
                             if "analysis" in agent_result:
@@ -2287,6 +2331,183 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                                 self._render_tool_results(agent, agent_result["tool_results"]) 
                         else:
                             st.write(str(agent_result))
+            
+            # Finally, display report_summarizer at the bottom with special formatting
+            if "report_summarizer" in agent_results:
+                st.markdown("---")  # Add a separator line
+                st.subheader("📋 Final Report Summary")
+                
+                summary_data = agent_results["report_summarizer"]
+                if isinstance(summary_data, dict) and "final_summary" in summary_data:
+                    # Show metadata if available
+                    if summary_data.get("mode"):
+                        mode_badge = "🤖 Chat Mode" if summary_data["mode"] == "chat" else "⚙️ Manual Mode"
+                        st.markdown(f"**Analysis Mode:** {mode_badge}")
+                    
+                    if summary_data.get("user_query"):
+                        st.markdown(f"**User Query:** _{summary_data['user_query']}_")
+                    
+                    # Show analysis completeness metrics if available
+                    if "analysis_completeness" in summary_data:
+                        completeness = summary_data["analysis_completeness"]
+                        st.progress(completeness / 100)
+                        st.caption(f"Analysis Completeness: {completeness:.1f}% ({summary_data.get('agents_analyzed', 0)} agents)")
+                    
+                    # Display the main summary content
+                    st.markdown("### Summary Report")
+                    st.markdown(summary_data["final_summary"])
+                    
+                    # Export functionality
+                    col_export1, col_export2 = st.columns([3, 1])
+                    with col_export2:
+                        if st.button("📄 Export to Markdown", key=f"export_summary_{context_key}"):
+                            markdown_content = self._generate_markdown_export(summary_data, result)
+                            st.download_button(
+                                label="💾 Download Report",
+                                data=markdown_content,
+                                file_name=f"marketing_analysis_report_{summary_data.get('timestamp', '').replace(':', '-')[:19]}.md",
+                                mime="text/markdown",
+                                key=f"download_summary_{context_key}"
+                            )
+                    
+                    # Show additional metadata in an expander
+                    if any(key in summary_data for key in ["total_insights", "total_recommendations", "timestamp"]):
+                        with st.expander("📊 Report Metadata"):
+                            col1, col2, col3 = st.columns(3)
+                            if "total_insights" in summary_data:
+                                col1.metric("Total Insights", summary_data["total_insights"])
+                            if "total_recommendations" in summary_data:
+                                col2.metric("Total Recommendations", summary_data["total_recommendations"])
+                            if "timestamp" in summary_data:
+                                col3.metric("Generated", summary_data["timestamp"][:19].replace("T", " "))
+                else:
+                    st.markdown(str(summary_data))
+    
+    def _generate_markdown_export(self, summary_data: Dict[str, Any], result: Dict[str, Any]) -> str:
+        """Generate markdown content for export"""
+        from datetime import datetime
+        
+        # Get basic information
+        timestamp = summary_data.get('timestamp', datetime.now().isoformat())
+        mode = summary_data.get('mode', 'unknown')
+        user_query = summary_data.get('user_query', '')
+        final_summary = summary_data.get('final_summary', '')
+        
+        # Get workflow information
+        workflow_id = result.get('workflow_id', 'N/A')
+        agent_results = result.get('agent_results', {})
+        
+        # Start building markdown content
+        markdown_lines = [
+            "# Marketing Research Analysis Report",
+            "",
+            f"**Generated:** {timestamp.replace('T', ' ')[:19]}",
+            f"**Workflow ID:** {workflow_id}",
+            f"**Analysis Mode:** {'🤖 Chat Mode' if mode == 'chat' else '⚙️ Manual Configuration Mode'}",
+            ""
+        ]
+        
+        # Add user query if in chat mode
+        if user_query:
+            markdown_lines.extend([
+                "## User Query",
+                "",
+                f"> {user_query}",
+                ""
+            ])
+        
+        # Add analysis completeness
+        if "analysis_completeness" in summary_data:
+            completeness = summary_data["analysis_completeness"]
+            agents_analyzed = summary_data.get("agents_analyzed", 0)
+            markdown_lines.extend([
+                "## Analysis Overview",
+                "",
+                f"- **Completeness:** {completeness:.1f}%",
+                f"- **Agents Analyzed:** {agents_analyzed}",
+                f"- **Total Insights:** {summary_data.get('total_insights', 0)}",
+                f"- **Total Recommendations:** {summary_data.get('total_recommendations', 0)}",
+                ""
+            ])
+        
+        # Add individual agent results
+        if agent_results:
+            markdown_lines.extend([
+                "## Individual Agent Analysis",
+                ""
+            ])
+            
+            for agent_name, agent_result in agent_results.items():
+                if agent_name == "report_summarizer":
+                    continue  # Skip summarizer as it's included in the main summary
+                    
+                agent_title = agent_name.replace('_', ' ').title()
+                markdown_lines.extend([
+                    f"### {agent_title}",
+                    ""
+                ])
+                
+                if isinstance(agent_result, dict):
+                    if "analysis" in agent_result:
+                        markdown_lines.extend([
+                            "**Analysis:**",
+                            "",
+                            str(agent_result["analysis"]),
+                            ""
+                        ])
+                    
+                    if "recommendations" in agent_result:
+                        recommendations = agent_result["recommendations"]
+                        markdown_lines.extend([
+                            "**Recommendations:**",
+                            ""
+                        ])
+                        
+                        if isinstance(recommendations, list):
+                            for i, rec in enumerate(recommendations, 1):
+                                markdown_lines.append(f"{i}. {str(rec).strip()}")
+                        else:
+                            markdown_lines.append(str(recommendations))
+                        
+                        markdown_lines.append("")
+                    
+                    if "key_insights" in agent_result:
+                        insights = agent_result["key_insights"]
+                        markdown_lines.extend([
+                            "**Key Insights:**",
+                            ""
+                        ])
+                        
+                        if isinstance(insights, list):
+                            for insight in insights:
+                                markdown_lines.append(f"- {str(insight).strip()}")
+                        else:
+                            markdown_lines.append(f"- {str(insights)}")
+                        
+                        markdown_lines.append("")
+                else:
+                    markdown_lines.extend([
+                        str(agent_result),
+                        ""
+                    ])
+        
+        # Add main summary
+        markdown_lines.extend([
+            "## Executive Summary",
+            "",
+            final_summary,
+            ""
+        ])
+        
+        # Add footer
+        markdown_lines.extend([
+            "---",
+            "",
+            "*This report was generated by the Marketing Research AI System*",
+            f"*Report ID: {workflow_id}*"
+        ])
+        
+        return "\n".join(markdown_lines)
     
     def _render_optimization_metrics(self, result: Dict[str, Any]):
         """Render optimization performance metrics."""

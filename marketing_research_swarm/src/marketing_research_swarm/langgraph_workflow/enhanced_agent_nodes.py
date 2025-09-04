@@ -491,7 +491,7 @@ def enhanced_forecasting_specialist_node(state: MarketingResearchState) -> Marke
 
 
 def enhanced_report_summarizer_node(state: MarketingResearchState) -> MarketingResearchState:
-    """Enhanced Report Summarizer node to generate the final report."""
+    """Enhanced Report Summarizer node to generate intelligent, context-aware final reports."""
     agent_role = 'report_summarizer'
     
     try:
@@ -501,86 +501,195 @@ def enhanced_report_summarizer_node(state: MarketingResearchState) -> MarketingR
         
         agent = create_enhanced_agent_from_config(agent_role, agent_config)
         
-        # Consolidate all previous agent results into a comprehensive summary
+        # Extract configuration and context information
+        initial_inputs = state.get('initial_inputs', {})
+        target_audience = state.get('target_audience', '')
+        campaign_type = state.get('campaign_type', '')
+        budget = state.get('budget', 0)
+        duration = state.get('duration', '')
+        analysis_focus = state.get('analysis_focus', '')
+        business_objective = state.get('business_objective', '')
+        competitive_landscape = state.get('competitive_landscape', '')
+        campaign_goals = state.get('campaign_goals', [])
+        brands = state.get('brands', [])
+        market_segments = state.get('market_segments', [])
+        product_categories = state.get('product_categories', [])
+        
+        # Check if this is chat mode by looking for user query in initial inputs
+        is_chat_mode = 'user_query' in initial_inputs or 'query' in initial_inputs
+        user_query = initial_inputs.get('user_query', initial_inputs.get('query', ''))
+        
+        # Consolidate all previous agent results
         all_results = state.get('agent_results', {})
         agent_errors = state.get('agent_errors', {})
         
-        summary_of_results = ""
+        # Build detailed analysis summary
+        detailed_analysis = ""
+        key_insights = []
+        recommendations = []
+        
         for agent_name, result in all_results.items():
-            # Handle both dictionary and string results
-            summary_of_results += f"### {agent_name.replace('_', ' ').title()} Analysis\n"
+            detailed_analysis += f"### {agent_name.replace('_', ' ').title()} Analysis\n"
             
             if isinstance(result, dict):
-                # Handle dictionary results
                 analysis = result.get('analysis', 'N/A')
                 if isinstance(analysis, dict):
-                    # If analysis is a dict, convert to string
                     analysis = str(analysis)
-                summary_of_results += f"- **Analysis**: {analysis}\n"
+                detailed_analysis += f"- **Analysis**: {analysis}\n"
                 
-                # Extract key insights if available
+                # Collect insights and recommendations
                 if 'key_insights' in result:
                     insights = result['key_insights']
                     if isinstance(insights, list):
-                        summary_of_results += f"- **Key Insights**: {', '.join(str(i) for i in insights[:5])}\n"
+                        key_insights.extend(insights)
+                        detailed_analysis += f"- **Key Insights**: {', '.join(str(i) for i in insights[:3])}\n"
                     else:
-                        summary_of_results += f"- **Key Insights**: {insights}\n"
+                        key_insights.append(str(insights))
+                        detailed_analysis += f"- **Key Insights**: {insights}\n"
                         
-                # Extract recommendations if available
                 if 'recommendations' in result:
-                    recommendations = result['recommendations']
-                    if isinstance(recommendations, list):
-                        summary_of_results += f"- **Recommendations**: {', '.join(str(r) for r in recommendations[:5])}\n"
+                    recs = result['recommendations']
+                    if isinstance(recs, list):
+                        recommendations.extend(recs)
+                        detailed_analysis += f"- **Recommendations**: {', '.join(str(r) for r in recs[:3])}\n"
                     else:
-                        summary_of_results += f"- **Recommendations**: {recommendations}\n"
+                        recommendations.append(str(recs))
+                        detailed_analysis += f"- **Recommendations**: {recs}\n"
             elif isinstance(result, str):
-                # Handle string results
-                summary_of_results += f"- **Analysis**: {result[:500]}{'...' if len(result) > 500 else ''}\n"
-            else:
-                # Handle other result types
-                summary_of_results += f"- **Result**: {str(result)}\n"
+                detailed_analysis += f"- **Analysis**: {result[:300]}{'...' if len(result) > 300 else ''}\n"
             
-            summary_of_results += "\n"
+            detailed_analysis += "\n"
         
-        # Add any agent errors to the summary
+        # Add error information if any
         if agent_errors:
-            summary_of_results += "### Agent Execution Issues\n"
+            detailed_analysis += "### Analysis Limitations\n"
             for agent_name, error in agent_errors.items():
-                summary_of_results += f"- **{agent_name.replace('_', ' ').title()}**: {error}\n"
-            summary_of_results += "\n"
-
-        task_description = f"""
-        Synthesize all the provided analysis results into a single, comprehensive final report.
+                detailed_analysis += f"- **{agent_name.replace('_', ' ').title()}**: {error}\n"
+            detailed_analysis += "\n"
         
-        **Analysis Summary from All Agents**:
-        {summary_of_results}
+        # Create context-aware task description
+        if is_chat_mode and user_query:
+            # Chat mode: Answer the specific user query
+            task_description = f"""
+            You are an expert marketing research analyst tasked with providing a comprehensive answer to the user's specific query based on the analysis results from multiple specialized agents.
+            
+            **USER QUERY**: "{user_query}"
+            
+            **ANALYSIS RESULTS FROM SPECIALIZED AGENTS**:
+            {detailed_analysis}
+            
+            **YOUR TASK**: 
+            Provide a direct, insightful answer to the user's query. Do NOT just summarize the agent results - instead:
+            
+            1. **Direct Answer**: Start with a clear, direct response to what the user asked
+            2. **Supporting Evidence**: Use the agent analysis results as evidence to support your answer
+            3. **Key Insights**: Highlight the most relevant insights that address the user's specific question
+            4. **Actionable Recommendations**: Provide specific, actionable recommendations related to the query
+            5. **Next Steps**: Suggest concrete next steps the user should consider
+            
+            **IMPORTANT**: 
+            - Focus on answering the user's specific question, not providing a generic report
+            - If the query asks for comparisons, provide detailed comparative analysis
+            - If the query asks for forecasts, provide specific predictions with supporting data
+            - If the query asks for performance analysis, focus on metrics and performance indicators
+            - Be specific, actionable, and insightful - go beyond just combining the agent results
+            
+            Your response should feel like an expert consultant directly answering the user's question with deep insights.
+            """
+        else:
+            # Manual configuration mode: Check against configuration parameters
+            config_summary = f"""
+            **TASK CONFIGURATION**:
+            - Target Audience: {target_audience}
+            - Campaign Type: {campaign_type}
+            - Budget: ${budget:,.2f} if budget else 'Not specified'
+            - Duration: {duration}
+            
+            **ANALYSIS FOCUS**:
+            - Business Objective: {business_objective}
+            - Competitive Landscape: {competitive_landscape}
+            - Analysis Focus: {analysis_focus}
+            
+            **ADVANCED PARAMETERS**:
+            - Campaign Goals: {', '.join(campaign_goals) if campaign_goals else 'Not specified'}
+            - Target Brands: {', '.join(brands) if brands else 'Not specified'}
+            - Market Segments: {', '.join(market_segments) if market_segments else 'Not specified'}
+            - Product Categories: {', '.join(product_categories) if product_categories else 'Not specified'}
+            """
+            
+            task_description = f"""
+            You are an expert marketing research analyst tasked with creating a comprehensive final report that validates whether the analysis results satisfy the specified configuration parameters and objectives.
+            
+            {config_summary}
+            
+            **ANALYSIS RESULTS FROM SPECIALIZED AGENTS**:
+            {detailed_analysis}
+            
+            **YOUR TASK**: 
+            Create a comprehensive final report that:
+            
+            1. **Executive Summary**: Provide a high-level overview of whether the analysis meets the specified objectives
+            2. **Configuration Alignment**: Explicitly assess how well the analysis results align with:
+               - The target audience requirements
+               - The campaign type and goals
+               - The budget constraints and expectations
+               - The specified business objectives
+               - The competitive landscape analysis needs
+            3. **Integrated Insights**: Synthesize insights from all agents into a cohesive narrative
+            4. **Gap Analysis**: Identify any gaps between what was requested and what was delivered
+            5. **Strategic Recommendations**: Provide actionable recommendations that specifically address the configuration parameters
+            6. **Success Metrics**: Define how success should be measured based on the campaign goals and business objectives
+            7. **Next Steps**: Outline specific next steps that align with the campaign duration and budget
+            
+            **CRITICAL REQUIREMENTS**:
+            - Validate that the analysis addresses the specified target audience
+            - Ensure recommendations fit within the specified budget and duration
+            - Confirm that the competitive landscape analysis meets the requirements
+            - Verify that the business objectives are adequately addressed
+            - Provide specific, measurable recommendations aligned with campaign goals
+            
+            Your report should demonstrate clear value and ROI for the specified budget and objectives.
+            """
         
-        **Final Report Requirements**:
-        - **Executive Summary**: Start with a high-level overview of the key findings and strategic recommendations.
-        - **Integrated Insights**: Combine insights from all agents to tell a cohesive story about the market, competition, and brand performance.
-        - **Strategic Recommendations**: Provide a consolidated list of actionable recommendations based on the entire body of research.
-        - **Conclusion**: End with a concluding paragraph that summarizes the overall outlook and next steps.
-        
-        Your final output should be a polished, professional report ready for executive review.
-        """
-        
-        # Since this agent has no tools, we call the LLM directly with the consolidated context
+        # Generate the intelligent response
         from langchain.schema import SystemMessage, HumanMessage
         
-        system_message = SystemMessage(content=f"You are a {agent.role} with the goal to {agent.goal}. Your backstory is: {agent.backstory}")
+        enhanced_system_prompt = f"""You are an expert marketing research analyst and strategic consultant with deep expertise in:
+        - Market analysis and competitive intelligence
+        - Brand performance optimization
+        - Sales forecasting and revenue prediction
+        - Campaign strategy and ROI optimization
+        - Consumer behavior and market segmentation
+        
+        Your role is to provide intelligent, actionable insights that go beyond simple data aggregation. You synthesize complex information into clear, strategic recommendations that drive business results.
+        
+        Your goal: {agent.goal}
+        Your expertise: {agent.backstory}"""
+        
+        system_message = SystemMessage(content=enhanced_system_prompt)
         human_message = HumanMessage(content=task_description)
         
         response = agent.llm.invoke([system_message, human_message])
         
+        # Create enhanced final report with metadata
         final_report = {
             'final_summary': response.content,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'mode': 'chat' if is_chat_mode else 'manual',
+            'user_query': user_query if is_chat_mode else None,
+            'configuration_validated': not is_chat_mode,
+            'total_insights': len(key_insights),
+            'total_recommendations': len(recommendations),
+            'agents_analyzed': len(all_results),
+            'analysis_completeness': len(all_results) / max(len(state.get('selected_agents', [])), 1) * 100
         }
         
         state = store_agent_result(state, agent_role, final_report)
         state['final_report'] = final_report
         
-        logger.info(f"Enhanced {agent_role} completed and generated the final report.")
+        logger.info(f"Enhanced {agent_role} completed - Mode: {'Chat' if is_chat_mode else 'Manual'}, "
+                   f"Query: {user_query[:50] if user_query else 'N/A'}, "
+                   f"Insights: {len(key_insights)}, Recommendations: {len(recommendations)}")
         
     except Exception as e:
         logger.error(f"Error in enhanced {agent_role} node: {e}")

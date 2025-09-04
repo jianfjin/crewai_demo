@@ -188,10 +188,19 @@ class SharedDataCache:
     
     def _load_data_from_source(self, data_path: str = None, **kwargs) -> pd.DataFrame:
         """Load data from the actual source."""
-        if not data_path:
+        # FIXED: Check if data_path exists before falling back to sample data
+        if not data_path or not os.path.exists(data_path):
+            if data_path:
+                logger.warning(f"⚠️ Data file not found: {data_path}")
+                logger.info("🔄 Falling back to sample data")
+            else:
+                logger.info("🔄 No data path provided, using sample data")
             return self._create_sample_beverage_data()
         
         try:
+            # FIXED: Always try to load the actual file first
+            logger.info(f"📁 Attempting to load data from: {data_path}")
+            
             if data_path.endswith('.csv'):
                 df = pd.read_csv(data_path)
             elif data_path.endswith('.json'):
@@ -205,11 +214,11 @@ class SharedDataCache:
                 except:
                     df = pd.read_json(data_path)
             
-            logger.info(f"📁 Loaded data from {data_path}: {df.shape}")
+            logger.info(f"✅ Successfully loaded data from {data_path}: {df.shape}")
             return df
             
         except Exception as e:
-            logger.warning(f"⚠️ Error loading data from {data_path}: {e}")
+            logger.error(f"❌ Error loading data from {data_path}: {e}")
             logger.info("🔄 Falling back to sample data")
             return self._create_sample_beverage_data()
     

@@ -135,8 +135,12 @@ class BeverageMarketAnalysisTool(BaseTool):
     def _run(self, data_path: str = None, **kwargs) -> str:
         """Analyze beverage market structure and dynamics"""
         try:
+            # FIXED: Ensure data_path parameter is passed correctly
+            # Check for data_path in kwargs as well for compatibility
+            actual_data_path = data_path or kwargs.get('data_file_path') or kwargs.get('data_path')
+            
             # Load data using cached approach with fallback
-            df = get_cached_data(data_path)
+            df = get_cached_data(actual_data_path)
             
             if df.empty:
                 return json.dumps({
@@ -198,8 +202,11 @@ class AnalyzeBrandPerformanceTool(BaseTool):
     def _run(self, data_path: str = None, **kwargs) -> str:
         """Analyze brand performance metrics"""
         try:
+            # FIXED: Ensure data_path parameter is passed correctly
+            actual_data_path = data_path or kwargs.get('data_file_path') or kwargs.get('data_path')
+            
             # Load data using cached approach with fallback
-            df = get_cached_data(data_path)
+            df = get_cached_data(actual_data_path)
             
             if df.empty:
                 return json.dumps({
@@ -283,8 +290,11 @@ class ProfitabilityAnalysisTool(BaseTool):
     def _run(self, data_path: str = None, analysis_dimension: str = "brand", **kwargs) -> str:
         """Analyze profitability by specified dimension"""
         try:
+            # FIXED: Ensure data_path parameter is passed correctly
+            actual_data_path = data_path or kwargs.get('data_file_path') or kwargs.get('data_path')
+            
             # Load data using cached approach with fallback
-            df = get_cached_data(data_path)
+            df = get_cached_data(actual_data_path)
             
             if df.empty:
                 return json.dumps({
@@ -380,8 +390,11 @@ class CrossSectionalAnalysisTool(BaseTool):
     def _run(self, data_path: str = None, segment_column: str = None, value_column: str = None, **kwargs) -> str:
         """Perform cross-sectional analysis"""
         try:
+            # FIXED: Ensure data_path parameter is passed correctly
+            actual_data_path = data_path or kwargs.get('data_file_path') or kwargs.get('data_path')
+            
             # Load data using cached approach with fallback
-            df = get_cached_data(data_path)
+            df = get_cached_data(actual_data_path)
             
             # Set default parameters if not provided
             if not segment_column:
@@ -489,8 +502,11 @@ class TimeSeriesAnalysisTool(BaseTool):
     def _run(self, data_path: str = None, date_column: str = None, value_column: str = None, **kwargs) -> str:
         """Perform time series analysis with parameter defaults"""
         try:
+            # FIXED: Ensure data_path parameter is passed correctly
+            actual_data_path = data_path or kwargs.get('data_file_path') or kwargs.get('data_path')
+            
             # Load data using cached approach with fallback
-            df = get_cached_data(data_path)
+            df = get_cached_data(actual_data_path)
             
             if df.empty:
                 return json.dumps({
@@ -607,8 +623,11 @@ class ForecastSalesTool(BaseTool):
     def _run(self, data_path: str = None, periods: int = 30, forecast_column: str = "sales", **kwargs) -> str:
         """Forecast sales for specified periods"""
         try:
+            # FIXED: Ensure data_path parameter is passed correctly
+            actual_data_path = data_path or kwargs.get('data_file_path') or kwargs.get('data_path')
+            
             # Load data using cached approach with fallback
-            df = get_cached_data(data_path)
+            df = get_cached_data(actual_data_path)
             
             if df.empty:
                 return json.dumps({
@@ -726,8 +745,11 @@ class AnalyzeKPIsTool(BaseTool):
     def _run(self, data_path: str = None, **kwargs) -> str:
         """Analyze KPIs from data"""
         try:
+            # FIXED: Ensure data_path parameter is passed correctly
+            actual_data_path = data_path or kwargs.get('data_file_path') or kwargs.get('data_path')
+            
             # Load data using cached approach with fallback
-            df = get_cached_data(data_path)
+            df = get_cached_data(actual_data_path)
             
             if df.empty:
                 return json.dumps({

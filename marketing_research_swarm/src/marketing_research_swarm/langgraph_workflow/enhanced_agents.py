@@ -306,7 +306,27 @@ class EnhancedLangGraphAgent(LangGraphAgent):
             if tool_name in self.available_tools:
                 tool_func = self.available_tools[tool_name]
                 
-                result = tool_func(**tool_params)
+                # Filter parameters to only include those the tool accepts
+                import inspect
+                tool_signature = inspect.signature(tool_func)
+                valid_params = {k: v for k, v in tool_params.items() if k in tool_signature.parameters}
+                
+                # Execute the tool with proper method and config
+                if hasattr(tool_func, '_run'):
+                    # Add config parameter for StructuredTool._run()
+                    try:
+                        result = tool_func._run(**valid_params, config={})
+                    except TypeError:
+                        result = tool_func._run(**valid_params)
+                elif hasattr(tool_func, 'invoke'):
+                    result = tool_func.invoke(valid_params)
+                elif hasattr(tool_func, 'run'):
+                    try:
+                        result = tool_func.run(**valid_params)
+                    except TypeError:
+                        result = tool_func.run(valid_params)
+                else:
+                    result = tool_func(**valid_params)
                 
                 success = True
                 logger.debug(f"Successfully executed {tool_name}")
@@ -336,9 +356,9 @@ class EnhancedLangGraphAgent(LangGraphAgent):
         market_segments = context.get('market_segments', [])
         product_categories = context.get('product_categories', [])
         
-        # Tool-specific parameter mapping
+        # Base parameters - use correct parameter names for tools
         tool_params = {
-            'data_path': data_file,
+            'file_path': data_file,  # Most tools expect 'file_path', not 'data_path'
             'brands': brands if brands else None,
             'market_segments': market_segments if market_segments else None,
             'product_categories': product_categories if product_categories else None
