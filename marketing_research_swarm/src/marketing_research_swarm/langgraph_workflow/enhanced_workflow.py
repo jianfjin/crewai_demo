@@ -232,11 +232,16 @@ class EnhancedMarketingWorkflow:
         if next_agent:
             logger.info(f"🎯 Routing to agent: {next_agent}")
             state["current_agent"] = next_agent
-            state["agent_status"][next_agent] = AgentStatus.RUNNING
+            # Don't set to RUNNING here - let the agent node do that when it actually starts
+            # This ensures the routing logic can continue to find the agent as PENDING
             
             # Increment step for this agent
+            if "agent_steps" not in state:
+                state["agent_steps"] = {}
+            if next_agent not in state["agent_steps"]:
+                state["agent_steps"][next_agent] = 0
             state["agent_steps"][next_agent] += 1
-            state["current_step"] += 1
+            state["current_step"] = state.get("current_step", 0) + 1
             
         else:
             logger.info("✅ All agents completed, preparing to finalize")
@@ -274,7 +279,8 @@ class EnhancedMarketingWorkflow:
                 "campaign_optimizer": ["data_analyst", "content_strategist"],
             }
             
-            # Find agents whose dependencies are satisfied
+            # Find agents whose dependencies are satisfied, prioritized by execution order
+            ready_agents = []
             for agent in other_pending_agents:
                 dependencies = agent_dependencies.get(agent, [])
                 
@@ -288,8 +294,13 @@ class EnhancedMarketingWorkflow:
                 if dependencies_met:
                     # Additional context-based prioritization
                     agent_priority = self._calculate_agent_priority(agent, state)
+                    ready_agents.append((agent, agent_priority))
                     logger.debug(f"Agent {agent} priority: {agent_priority}")
-                    return agent
+            
+            # Return the highest priority ready agent
+            if ready_agents:
+                ready_agents.sort(key=lambda x: x[1], reverse=True)
+                return ready_agents[0][0]
             
             # If no dependencies are met, return the first pending agent
             # (this handles cases where dependencies aren't selected)
@@ -337,6 +348,9 @@ class EnhancedMarketingWorkflow:
             try:
                 workflow_id = state["workflow_id"]
                 current_step = state["agent_steps"][agent_name]
+                
+                # Set agent status to RUNNING when execution actually starts
+                state["agent_status"][agent_name] = AgentStatus.RUNNING
                 
                 logger.info(f"🤖 Executing {agent_name} (step {current_step})")
                 
@@ -579,17 +593,22 @@ class EnhancedMarketingWorkflow:
         # Check if all agents are done
         pending_agents = [
             agent for agent in state["selected_agents"]
-            if state["agent_status"].get(agent) == AgentStatus.PENDING
+            if state["agent_status"].get(agent) in [AgentStatus.PENDING, "pending"]
         ]
         
+        logger.info(f"🔍 Routing check - Pending agents: {pending_agents}")
+        
         if not pending_agents:
+            logger.info("✅ All agents completed, routing to finalize")
             return "finalize"
         
         # Get the next agent to execute
         next_agent = self._get_next_agent_with_context(state)
         if next_agent:
+            logger.info(f"🎯 Routing to next agent: {next_agent}")
             return next_agent
         else:
+            logger.info("🔄 No ready agents, routing to finalize")
             return "finalize"
     
     def _enhanced_finalize_node(self, state: MarketingResearchState) -> MarketingResearchState:

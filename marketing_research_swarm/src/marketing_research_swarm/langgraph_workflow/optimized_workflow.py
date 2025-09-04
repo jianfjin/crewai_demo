@@ -387,10 +387,20 @@ class OptimizedMarketingWorkflow:
             key=lambda x: agent_priorities.get(x, 10)
         )
         
+        # Find all ready agents and return the highest priority one
+        ready_agents = []
         for agent in sorted_agents:
             if self._check_optimized_dependencies(agent, state):
-                logger.info(f"🚀 Next agent selected: {agent}")
-                return agent
+                priority = agent_priorities.get(agent, 10)
+                ready_agents.append((agent, priority))
+                logger.debug(f"Agent {agent} ready with priority: {priority}")
+        
+        if ready_agents:
+            # Sort by priority (lower number = higher priority)
+            ready_agents.sort(key=lambda x: x[1])
+            selected_agent = ready_agents[0][0]
+            logger.info(f"🚀 Next agent selected: {selected_agent}")
+            return selected_agent
         
         logger.info("🔄 No agents ready due to dependencies")
         return None
