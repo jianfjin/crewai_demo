@@ -3005,9 +3005,9 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
             
             with tab1:
                 st.subheader("Interactive Workflow Graph")
-                if local_visualizer.available:
+                if state_graph_visualizer.available:
                     # Create and display the interactive graph
-                    fig = local_visualizer.create_workflow_graph(selected_agents, analysis_type)
+                    fig = state_graph_visualizer.create_workflow_graph(selected_agents, analysis_type)
                     
                     if fig:
                         st.plotly_chart(fig, use_container_width=True, key=f"workflow_graph_visualization_{datetime.now().strftime('%H%M%S%f')}")
@@ -3021,11 +3021,11 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 st.markdown("**LangGraph-style ASCII representation:**")
                 
                 # Generate ASCII diagram
-                ascii_diagram = local_visualizer.draw_ascii_graph(selected_agents)
+                ascii_diagram = state_graph_visualizer.draw_ascii_graph(selected_agents)
                 st.code(ascii_diagram, language="text")
                 
                 # Show execution order
-                execution_order = local_visualizer.get_execution_order(selected_agents)
+                execution_order = state_graph_visualizer.get_execution_order(selected_agents)
                 st.subheader("🔄 Execution Order")
                 
                 for layer_idx, layer in enumerate(execution_order):
@@ -3039,7 +3039,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 st.subheader("Mermaid Diagram")
                 
                 # Generate Mermaid diagram
-                mermaid_diagram = local_visualizer.create_mermaid_graph(selected_agents)
+                mermaid_diagram = state_graph_visualizer.create_mermaid_graph(selected_agents)
                 
                 # Create sub-tabs for PNG and code
                 mermaid_tab1, mermaid_tab2 = st.tabs(["🖼️ PNG Image", "📝 Mermaid Code"])
@@ -3111,242 +3111,6 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     
                     st.markdown("💡 **Tip:** Copy the above code to [mermaid.live](https://mermaid.live) for interactive editing")
             
-            with tab4:
-                st.subheader("📋 Execution Analysis")
-                
-                # Agent Dependencies Analysis
-                st.subheader("🔗 Agent Dependencies")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write("**Selected Agents:**")
-                    for agent in selected_agents:
-                        dependencies = local_visualizer.agent_dependencies.get(agent, [])
-                        if dependencies:
-                            deps_in_selection = [dep for dep in dependencies if dep in selected_agents]
-                            if deps_in_selection:
-                                deps_str = ", ".join([dep.replace('_', ' ').title() for dep in deps_in_selection])
-                                st.write(f"• **{agent.replace('_', ' ').title()}** ← {deps_str}")
-                            else:
-                                st.write(f"• **{agent.replace('_', ' ').title()}** (dependencies not selected)")
-                        else:
-                            st.write(f"• **{agent.replace('_', ' ').title()}** (no dependencies)")
-                
-                with col2:
-                    st.write("**Execution Layers:**")
-                    execution_order = local_visualizer.get_execution_order(selected_agents)
-                    
-                    for layer_idx, layer in enumerate(execution_order):
-                        if len(layer) == 1:
-                            st.write(f"**{layer_idx + 1}.** {layer[0].replace('_', ' ').title()}")
-                        else:
-                            st.write(f"**{layer_idx + 1}.** Parallel execution:")
-                            for agent in layer:
-                                st.write(f"   • {agent.replace('_', ' ').title()}")
-                
-                # Handoff Analysis
-                st.subheader("🔄 Agent Handoffs")
-                
-                handoffs = []
-                for agent in selected_agents:
-                    dependencies = local_visualizer.agent_dependencies.get(agent, [])
-                    for dep in dependencies:
-                        if dep in selected_agents:
-                            handoffs.append(f"{dep.replace('_', ' ').title()} → {agent.replace('_', ' ').title()}")
-                
-                if handoffs:
-                    st.write("**Data handoffs between agents:**")
-                    for handoff in handoffs:
-                        st.write(f"• {handoff}")
-                else:
-                    st.write("**No direct handoffs** - All selected agents can run independently")
-                
-                # Optimization Impact
-                st.subheader("⚡ Optimization Impact")
-                
-                execution_order = local_visualizer.get_execution_order(selected_agents)
-                parallel_layers = sum(1 for layer in execution_order if len(layer) > 1)
-                sequential_layers = len(execution_order) - parallel_layers
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Layers", len(execution_order))
-                with col2:
-                    st.metric("Parallel Layers", parallel_layers)
-                with col3:
-                    st.metric("Sequential Layers", sequential_layers)
-                
-                if parallel_layers > 0:
-                    st.success(f"✅ **Optimized execution**: {parallel_layers} layers can run in parallel")
-                else:
-                    st.info("ℹ️ **Sequential execution**: All agents run one after another")
-            
-            with tab2:
-                st.subheader("ASCII Workflow Diagram")
-                st.markdown("**LangGraph-style ASCII representation:**")
-                
-                # Generate ASCII diagram
-                ascii_diagram = local_visualizer.draw_ascii_graph(selected_agents)
-                st.code(ascii_diagram, language="text")
-                
-                # Show execution order
-                execution_order = local_visualizer.get_execution_order(selected_agents)
-                st.subheader("🔄 Execution Order")
-                
-                for layer_idx, layer in enumerate(execution_order):
-                    if len(layer) == 1:
-                        st.write(f"**Layer {layer_idx + 1}:** {layer[0].replace('_', ' ').title()}")
-                    else:
-                        agents_str = ", ".join([agent.replace('_', ' ').title() for agent in layer])
-                        st.write(f"**Layer {layer_idx + 1} (Parallel):** {agents_str}")
-            
-            with tab3:
-                st.subheader("Mermaid Diagram")
-                
-                # Generate Mermaid diagram
-                mermaid_diagram = local_visualizer.create_mermaid_graph(selected_agents)
-                
-                # Create sub-tabs for PNG and code
-                mermaid_tab1, mermaid_tab2 = st.tabs(["🖼️ PNG Image", "📝 Mermaid Code"])
-                
-                with mermaid_tab1:
-                    st.markdown("**Visual PNG representation (like LangGraph's draw_mermaid_png()):**")
-                    
-                    try:
-                        # Generate PNG URL using mermaid.ink service
-                        import base64
-                        import urllib.parse
-                        
-                        # Try multiple encoding methods for better compatibility
-                        try:
-                            # Method 1: Base64 encoding with pako format
-                            encoded_bytes = base64.b64encode(mermaid_diagram.encode('utf-8'))
-                            encoded_diagram = encoded_bytes.decode('utf-8')
-                            png_url = f"https://mermaid.ink/img/pako:{encoded_diagram}"
-                            
-                            # Test the URL by making a quick request
-                            import requests
-                            test_response = requests.head(png_url, timeout=5)
-                            if test_response.status_code != 200:
-                                raise Exception("Pako format failed")
-                                
-                        except Exception:
-                            # Method 2: Simple base64 encoding
-                            encoded_bytes = base64.b64encode(mermaid_diagram.encode('utf-8'))
-                            encoded_diagram = encoded_bytes.decode('utf-8')
-                            png_url = f"https://mermaid.ink/img/{encoded_diagram}"
-                        
-                        # Display the image at 50% size
-                        st.image(png_url, caption="Workflow StateGraph", width=400)
-                        
-                        # Try to download PNG data for download button
-                        try:
-                            import requests
-                            response = requests.get(png_url, timeout=10)
-                            if response.status_code == 200:
-                                png_data = response.content
-                                st.download_button(
-                                    label="📥 Download PNG",
-                                    data=png_data,
-                                    file_name=f"workflow_graph_{analysis_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
-                                    mime="image/png"
-                                )
-                            else:
-                                st.markdown(f"**Direct PNG URL:** [Download PNG]({png_url})")
-                        except Exception:
-                            st.markdown(f"**Direct PNG URL:** [Download PNG]({png_url})")
-                        
-                        # Show URL for manual access
-                        with st.expander("🔗 Direct PNG URL"):
-                            st.code(png_url)
-                            
-                    except Exception as e:
-                        st.error(f"❌ PNG generation failed: {e}")
-                        st.markdown("**Please use the Mermaid Code tab below**")
-                
-                with mermaid_tab2:
-                    st.markdown("**Mermaid.js code:**")
-                    st.code(mermaid_diagram, language="text")
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.markdown("[🔗 Open in Mermaid Live](https://mermaid.live)")
-                    with col2:
-                        st.markdown("[🖼️ View PNG](https://mermaid.ink)")
-                    
-                    st.markdown("💡 **Tip:** Copy the above code to [mermaid.live](https://mermaid.live) for interactive editing")
-            
-            with tab4:
-                st.subheader("📋 Execution Analysis")
-                
-                # Agent Dependencies Analysis
-                st.subheader("🔗 Agent Dependencies")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write("**Selected Agents:**")
-                    for agent in selected_agents:
-                        dependencies = local_visualizer.agent_dependencies.get(agent, [])
-                        if dependencies:
-                            deps_in_selection = [dep for dep in dependencies if dep in selected_agents]
-                            if deps_in_selection:
-                                deps_str = ", ".join([dep.replace('_', ' ').title() for dep in deps_in_selection])
-                                st.write(f"• **{agent.replace('_', ' ').title()}** ← {deps_str}")
-                            else:
-                                st.write(f"• **{agent.replace('_', ' ').title()}** (dependencies not selected)")
-                        else:
-                            st.write(f"• **{agent.replace('_', ' ').title()}** (no dependencies)")
-                
-                with col2:
-                    st.write("**Execution Layers:**")
-                    execution_order = local_visualizer.get_execution_order(selected_agents)
-                    
-                    for layer_idx, layer in enumerate(execution_order):
-                        if len(layer) == 1:
-                            st.write(f"**{layer_idx + 1}.** {layer[0].replace('_', ' ').title()}")
-                        else:
-                            st.write(f"**{layer_idx + 1}.** Parallel execution:")
-                            for agent in layer:
-                                st.write(f"   • {agent.replace('_', ' ').title()}")
-                
-                # Handoff Analysis
-                st.subheader("🔄 Agent Handoffs")
-                
-                handoffs = []
-                for agent in selected_agents:
-                    dependencies = local_visualizer.agent_dependencies.get(agent, [])
-                    for dep in dependencies:
-                        if dep in selected_agents:
-                            handoffs.append(f"{dep.replace('_', ' ').title()} → {agent.replace('_', ' ').title()}")
-                
-                if handoffs:
-                    st.write("**Data handoffs between agents:**")
-                    for handoff in handoffs:
-                        st.write(f"• {handoff}")
-                else:
-                    st.write("**No direct handoffs** - All selected agents can run independently")
-                
-                # Optimization Impact
-                st.subheader("⚡ Optimization Impact")
-                
-                execution_order = local_visualizer.get_execution_order(selected_agents)
-                parallel_layers = sum(1 for layer in execution_order if len(layer) > 1)
-                sequential_layers = len(execution_order) - parallel_layers
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Layers", len(execution_order))
-                with col2:
-                    st.metric("Parallel Layers", parallel_layers)
-                with col3:
-                    st.metric("Sequential Layers", sequential_layers)
-                
-                if parallel_layers > 0:
-                    st.success(f"✅ **Optimized execution**: {parallel_layers} layers can run in parallel")
-                else:
-                    st.info("ℹ️ **Sequential execution**: All agents run one after another")
         else:
             if not selected_agents:
                 st.info("Select agents to view the workflow graph")
