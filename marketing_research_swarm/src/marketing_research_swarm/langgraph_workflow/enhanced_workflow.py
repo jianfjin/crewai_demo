@@ -251,43 +251,55 @@ class EnhancedMarketingWorkflow:
         # Get agents that haven't been executed yet
         pending_agents = [
             agent for agent in state["selected_agents"]
-            if state["agent_status"].get(agent) == AgentStatus.PENDING
+            if state["agent_status"].get(agent) in [AgentStatus.PENDING, "pending"]
         ]
         
         if not pending_agents:
             return None
         
-        # Enhanced dependency resolution with context awareness
-        agent_dependencies = {
-            "market_research_analyst": [],
-            "competitive_analyst": [],
-            "data_analyst": [],
-            "content_strategist": ["market_research_analyst"],
-            "creative_copywriter": ["content_strategist"],
-            "brand_performance_specialist": ["competitive_analyst", "data_analyst"],
-            "forecasting_specialist": ["market_research_analyst", "data_analyst"],
-            "campaign_optimizer": ["data_analyst", "content_strategist"]
-        }
+        # Exclude report_summarizer from initial execution - it should run last
+        other_pending_agents = [agent for agent in pending_agents if agent != 'report_summarizer']
         
-        # Find agents whose dependencies are satisfied
-        for agent in pending_agents:
-            dependencies = agent_dependencies.get(agent, [])
+        # If there are other agents pending, prioritize them
+        if other_pending_agents:
+            # Enhanced dependency resolution with context awareness
+            agent_dependencies = {
+                "market_research_analyst": [],
+                "competitive_analyst": [],
+                "data_analyst": [],
+                "content_strategist": ["market_research_analyst"],
+                "creative_copywriter": ["content_strategist"],
+                "brand_performance_specialist": ["competitive_analyst", "data_analyst"],
+                "forecasting_specialist": ["market_research_analyst", "data_analyst"],
+                "campaign_optimizer": ["data_analyst", "content_strategist"],
+            }
             
-            # Check if all dependencies are completed
-            dependencies_met = all(
-                state["agent_status"].get(dep) == AgentStatus.COMPLETED
-                for dep in dependencies
-                if dep in state["selected_agents"]
-            )
+            # Find agents whose dependencies are satisfied
+            for agent in other_pending_agents:
+                dependencies = agent_dependencies.get(agent, [])
+                
+                # Check if all dependencies are completed
+                dependencies_met = all(
+                    state["agent_status"].get(dep) == AgentStatus.COMPLETED
+                    for dep in dependencies
+                    if dep in state["selected_agents"]
+                )
+                
+                if dependencies_met:
+                    # Additional context-based prioritization
+                    agent_priority = self._calculate_agent_priority(agent, state)
+                    logger.debug(f"Agent {agent} priority: {agent_priority}")
+                    return agent
             
-            if dependencies_met:
-                # Additional context-based prioritization
-                agent_priority = self._calculate_agent_priority(agent, state)
-                logger.debug(f"Agent {agent} priority: {agent_priority}")
-                return agent
+            # If no dependencies are met, return the first pending agent
+            # (this handles cases where dependencies aren't selected)
+            return other_pending_agents[0] if other_pending_agents else None
         
-        # If no dependencies are met, return the first pending agent
-        return pending_agents[0] if pending_agents else None
+        # If only report_summarizer is pending, return it
+        elif 'report_summarizer' in pending_agents:
+            return 'report_summarizer'
+        
+        return None
     
     def _calculate_agent_priority(self, agent: str, state: MarketingResearchState) -> float:
         """Calculate agent priority based on context and workflow state."""
@@ -573,8 +585,12 @@ class EnhancedMarketingWorkflow:
         if not pending_agents:
             return "finalize"
         
-        # Continue routing
-        return "agent_router"
+        # Get the next agent to execute
+        next_agent = self._get_next_agent_with_context(state)
+        if next_agent:
+            return next_agent
+        else:
+            return "finalize"
     
     def _enhanced_finalize_node(self, state: MarketingResearchState) -> MarketingResearchState:
         """Enhanced finalization with context engineering summary."""
@@ -697,6 +713,10 @@ class EnhancedMarketingWorkflow:
                 agent_results={},
                 agent_errors={},
                 agent_token_usage={},
+                # Enhanced workflow tracking (for context engineering)
+                current_step=0,
+                agent_steps={agent: 0 for agent in selected_agents},
+                context_strategy=kwargs.get("context_strategy", self.context_strategy),
                 shared_data={},
                 shared_context={},
                 cached_results={},
@@ -789,6 +809,13 @@ class EnhancedMarketingWorkflow:
             logger.warning(f"Persistent restore failed: {e}")
         
         return None
+    
+    def execute_workflow(self, **kwargs) -> Dict[str, Any]:
+        """
+        Compatibility method that calls execute_enhanced_workflow.
+        This ensures the dashboard can call workflow.execute_workflow() successfully.
+        """
+        return self.execute_enhanced_workflow(**kwargs)
     
     def get_workflow_context_stats(self, workflow_id: str) -> Dict[str, Any]:
         """Get context engineering statistics for a specific workflow."""

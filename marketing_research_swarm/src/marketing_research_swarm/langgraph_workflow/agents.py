@@ -1183,6 +1183,86 @@ def forecasting_specialist_node(state: MarketingResearchState) -> MarketingResea
     return state
 
 
+def report_summarizer_node(state: MarketingResearchState) -> MarketingResearchState:
+    """Report Summarizer node."""
+    agent_role = 'report_summarizer'
+    
+    try:
+        config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'agents.yaml')
+        agent_configs = load_agent_configs(config_path)
+        agent_config = agent_configs.get(agent_role, {})
+        
+        agent = create_agent_from_config(agent_role, agent_config)
+        
+        # Consolidate all previous agent results
+        all_results = state.get('agent_results', {})
+        agent_errors = state.get('agent_errors', {})
+        
+        summary_of_results = ""
+        for agent_name, result in all_results.items():
+            summary_of_results += f"### {agent_name.replace('_', ' ').title()} Analysis\n"
+            
+            if isinstance(result, dict):
+                analysis = result.get('analysis', 'N/A')
+                summary_of_results += f"- **Analysis**: {str(analysis)[:500]}{'...' if len(str(analysis)) > 500 else ''}\n"
+                
+                if 'key_insights' in result:
+                    insights = result['key_insights']
+                    if isinstance(insights, list):
+                        summary_of_results += f"- **Key Insights**: {', '.join(str(i) for i in insights[:3])}\n"
+                    else:
+                        summary_of_results += f"- **Key Insights**: {insights}\n"
+                        
+                if 'recommendations' in result:
+                    recommendations = result['recommendations']
+                    if isinstance(recommendations, list):
+                        summary_of_results += f"- **Recommendations**: {', '.join(str(r) for r in recommendations[:3])}\n"
+                    else:
+                        summary_of_results += f"- **Recommendations**: {recommendations}\n"
+            else:
+                summary_of_results += f"- **Analysis**: {str(result)[:500]}{'...' if len(str(result)) > 500 else ''}\n"
+            
+            summary_of_results += "\n"
+        
+        if agent_errors:
+            summary_of_results += "### Agent Execution Issues\n"
+            for agent_name, error in agent_errors.items():
+                summary_of_results += f"- **{agent_name.replace('_', ' ').title()}**: {error}\n"
+            summary_of_results += "\n"
+
+        task_description = f"""
+        Create a comprehensive final report that synthesizes all the analysis results from the marketing research workflow.
+        
+        **Campaign Context**:
+        - Target audience: {state['target_audience']}
+        - Campaign type: {state.get('campaign_type', 'marketing campaign')}
+        - Budget: ${state.get('budget', 0):,} over {state.get('duration', 'campaign period')}
+        - Brands analyzed: {', '.join(state.get('brands', ['selected brands']))}
+        - Market segments: {', '.join(state.get('market_segments', ['target segments']))}
+        
+        **Analysis Summary from All Agents**:
+        {summary_of_results}
+        
+        **Final Report Requirements**:
+        - **Executive Summary**: High-level overview of key findings and strategic recommendations
+        - **Integrated Insights**: Combine insights from all agents into a cohesive narrative
+        - **Strategic Recommendations**: Consolidated actionable recommendations
+        - **Conclusion**: Overall outlook and next steps
+        
+        Create a polished, professional report ready for executive review.
+        """
+        
+        result = agent.execute_task(state, task_description)
+        state = store_agent_result(state, agent_role, result)
+        state['final_report'] = result
+        
+    except Exception as e:
+        logger.error(f"Error in {agent_role} node: {e}")
+        state = store_agent_error(state, agent_role, str(e))
+    
+    return state
+
+
 # Agent node mapping for easy access
 AGENT_NODES = {
     'market_research_analyst': market_research_analyst_node,
@@ -1193,4 +1273,16 @@ AGENT_NODES = {
     'campaign_optimizer': campaign_optimizer_node,
     'brand_performance_specialist': brand_performance_specialist_node,
     'forecasting_specialist': forecasting_specialist_node,
+    'report_summarizer': lambda state: _import_and_execute_report_summarizer(state),
 }
+
+
+def _import_and_execute_report_summarizer(state: MarketingResearchState) -> MarketingResearchState:
+    """Import and execute the enhanced report summarizer from enhanced_agent_nodes"""
+    try:
+        from .enhanced_agent_nodes import enhanced_report_summarizer_node
+        return enhanced_report_summarizer_node(state)
+    except ImportError as e:
+        logger.error(f"Failed to import enhanced report summarizer: {e}")
+        # Fallback to the simple summarizer we defined above
+        return report_summarizer_node(state)

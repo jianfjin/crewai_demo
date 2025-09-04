@@ -7,6 +7,7 @@ from .monitoring.enhanced_langsmith_monitor import EnhancedLangSmithMonitor, cre
 from .visualization.state_graph_visualizer import StateGraphVisualizer
 from .mock_optimization_manager import MockOptimizationManager
 from .components.rag_document_monitor import RAGDocumentMonitor
+from .utils.dashboard_utils import monitor_langsmith_runs
 
 # Utility functions
 def load_agents_config():
@@ -121,6 +122,7 @@ __all__ = [
     'MockOptimizationManager',
     'RAGDocumentMonitor',
     'create_langsmith_tracer',
+    'monitor_langsmith_runs',
     'load_agents_config',
     'create_custom_task_config',
     'initialize_components',

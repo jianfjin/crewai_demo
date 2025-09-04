@@ -72,6 +72,11 @@ class MarketingResearchState(TypedDict):
     agent_errors: Dict[str, str]
     agent_token_usage: Dict[str, Dict[str, int]]
     
+    # Enhanced workflow tracking (for context engineering)
+    current_step: int
+    agent_steps: Dict[str, int]
+    context_strategy: str
+    
     # Shared data and context
     shared_data: Dict[str, Any]
     shared_context: Dict[str, Any]
@@ -188,6 +193,11 @@ def create_initial_state(
         agent_results={},
         agent_errors={},
         agent_token_usage={},
+        
+        # Enhanced workflow tracking (for context engineering)
+        current_step=0,
+        agent_steps={agent: 0 for agent in selected_agents},
+        context_strategy=inputs.get('context_strategy', 'smart'),
         
         # Shared data and context
         shared_data={},
