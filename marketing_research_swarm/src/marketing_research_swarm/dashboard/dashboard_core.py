@@ -129,7 +129,7 @@ except ImportError as e:
     except ImportError:
         logger.warning("⚠️ monitor_langsmith_runs not available")
         # Create a mock function
-        def monitor_langsmith_runs(project_name: str = "marketing-research-dashboard"):
+        def monitor_langsmith_runs(project_name: str = "marketing-research-swarm"):
             pass
 
 # Import RAG knowledge base
@@ -297,6 +297,103 @@ optimization_manager = None
 token_tracker = None
 smart_cache = None
 rag_document_monitor = None
+
+def get_langsmith_run_url(run_id: str) -> str:
+    """Generate LangSmith run URL for monitoring."""
+    try:
+        # Import here to avoid circular imports
+        LANGSMITH_API_KEY = os.getenv("LANGCHAIN_API_KEY")
+        if LANGSMITH_API_KEY and run_id:
+            return f"https://smith.langchain.com/o/default/projects/p/default/r/{run_id}"
+    except:
+        pass
+    return ""
+
+def create_langsmith_tracer(project_name: str = "marketing-research-dashboard"):
+    """Create LangSmith tracer for monitoring."""
+    try:
+        from langchain.callbacks.tracers import LangChainTracer
+        from langchain.callbacks.manager import CallbackManager
+        
+        LANGSMITH_API_KEY = os.getenv("LANGCHAIN_API_KEY")
+        if not LANGSMITH_API_KEY:
+            return None
+        
+        # Set environment variables for LangSmith
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGCHAIN_PROJECT"] = project_name
+        
+        # Create tracer
+        tracer = LangChainTracer(project_name=project_name)
+        callback_manager = CallbackManager([tracer])
+        
+        return callback_manager
+    except Exception as e:
+        logger.error(f"Failed to create LangSmith tracer: {e}")
+        return None
+
+def monitor_langsmith_runs(project_name: str = "marketing-research-dashboard"):
+    """Display recent LangSmith runs in the dashboard."""
+    try:
+        from langsmith import Client
+        
+        LANGSMITH_API_KEY = os.getenv("LANGCHAIN_API_KEY")
+        if not LANGSMITH_API_KEY:
+            st.warning("LANGCHAIN_API_KEY not found")
+            return
+            
+        client = Client(api_key=LANGSMITH_API_KEY)
+        
+        # Get recent runs from LangSmith
+        runs = client.list_runs(
+            project_name=project_name,
+            limit=10,
+            order="desc"
+        )
+        
+        if runs:
+            st.subheader("🔍 Recent LangSmith Runs")
+            
+            runs_data = []
+            for run in runs:
+                runs_data.append({
+                    "Run ID": run.id[:8] + "...",
+                    "Name": run.name or "Unknown",
+                    "Status": "✅ Success" if run.status == "success" else "❌ Error" if run.status == "error" else "🔄 Running",
+                    "Start Time": run.start_time.strftime("%H:%M:%S") if run.start_time else "N/A",
+                    "Duration": f"{run.total_time:.2f}s" if run.total_time else "N/A",
+                    "Tokens": run.total_tokens if hasattr(run, 'total_tokens') else "N/A",
+                    "URL": get_langsmith_run_url(run.id)
+                })
+            
+            if PANDAS_AVAILABLE:
+                df = pd.DataFrame(runs_data)
+                
+                # Display as interactive table
+                for idx, row in df.iterrows():
+                    with st.expander(f"🔗 {row['Name']} - {row['Status']}"):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Duration", row['Duration'])
+                        with col2:
+                            st.metric("Start Time", row['Start Time'])
+                        with col3:
+                            st.metric("Tokens", row['Tokens'])
+                        
+                        if row['URL']:
+                            st.markdown(f"[🔗 View in LangSmith]({row['URL']})")
+            else:
+                # Fallback display without pandas
+                for run_data in runs_data:
+                    with st.expander(f"🔗 {run_data['Name']} - {run_data['Status']}"):
+                        st.write(f"**Duration:** {run_data['Duration']}")
+                        st.write(f"**Start Time:** {run_data['Start Time']}")
+                        st.write(f"**Tokens:** {run_data['Tokens']}")
+                        if run_data['URL']:
+                            st.markdown(f"[🔗 View in LangSmith]({run_data['URL']})")
+                            
+    except Exception as e:
+        st.warning(f"Could not fetch LangSmith runs: {e}")
 
 # RAG availability flags
 DASHBOARD_COMPONENTS_AVAILABLE = False
@@ -1582,7 +1679,7 @@ class LangGraphDashboard:
                 result["token_usage"] = token_stats
                 result["langsmith_monitoring"] = {
                     "enabled": self.langsmith_available and enhanced_langsmith_monitor.available if DASHBOARD_ENHANCEMENTS_AVAILABLE else self.langsmith_available,
-                    "project": enhanced_langsmith_monitor.project_name if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_langsmith_monitor else "marketing-research-dashboard",
+                    "project": enhanced_langsmith_monitor.project_name if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_langsmith_monitor else "marketing-research-swarm",
                     "run_metadata": run_metadata
                 }
                 result["context_engineering_applied"] = {
@@ -1924,6 +2021,7 @@ class LangGraphDashboard:
         
         with tab1:
             self._render_analysis_results(result, context_key=context_key)
+            self._render_analysis_results(result, context_key=context_key)
         
         with tab_tools:
             self._render_all_tool_results(result)
@@ -2238,6 +2336,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         return "\n".join(report_lines)
 
     def _render_analysis_results(self, result: Dict[str, Any], context_key: str = "default"):
+    def _render_analysis_results(self, result: Dict[str, Any], context_key: str = "default"):
         """Render the main analysis results."""
         st.subheader("📊 Individual Agent Results")
         
@@ -2361,12 +2460,14 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     col_export1, col_export2 = st.columns([3, 1])
                     with col_export2:
                         if st.button("📄 Export to Markdown", key=f"export_summary_{context_key}"):
+                        if st.button("📄 Export to Markdown", key=f"export_summary_{context_key}"):
                             markdown_content = self._generate_markdown_export(summary_data, result)
                             st.download_button(
                                 label="💾 Download Report",
                                 data=markdown_content,
                                 file_name=f"marketing_analysis_report_{summary_data.get('timestamp', '').replace(':', '-')[:19]}.md",
                                 mime="text/markdown",
+                                key=f"download_summary_{context_key}"
                                 key=f"download_summary_{context_key}"
                             )
                     
@@ -2933,18 +3034,43 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     class MinimalStateGraphVisualizer:
                         def __init__(self):
                             self.available = True
+                            # Add agent dependencies for proper workflow visualization
+                            self.agent_dependencies = {
+                                "market_research_analyst": [],
+                                "competitive_analyst": ["market_research_analyst"],
+                                "data_analyst": [],
+                                "content_strategist": ["market_research_analyst", "competitive_analyst"],
+                                "creative_copywriter": ["content_strategist"],
+                                "brand_performance_specialist": ["market_research_analyst", "data_analyst"],
+                                "forecasting_specialist": ["data_analyst"],
+                                "campaign_optimizer": ["data_analyst", "forecasting_specialist"]
+                            }
                         
                         def draw_ascii_graph(self, agents):
                             return f"Workflow: {' -> '.join(agents)}"
                         
                         def create_mermaid_graph(self, agents):
                             lines = ["graph TD"]
-                            for i, agent in enumerate(agents):
-                                if i == 0:
-                                    lines.append(f"    START --> {agent.upper()}")
-                                else:
-                                    lines.append(f"    {agents[i-1].upper()} --> {agent.upper()}")
-                            lines.append(f"    {agents[-1].upper()} --> END")
+                            lines.append("    START([Start Analysis])")
+                            
+                            # Add agent nodes
+                            for agent in agents:
+                                agent_name = agent.replace('_', ' ').title()
+                                lines.append(f"    {agent.upper()}[{agent_name}]")
+                            
+                            # Add connections
+                            lines.append(f"    START --> {agents[0].upper()}")
+                            for i, agent in enumerate(agents[1:], 1):
+                                lines.append(f"    {agents[i-1].upper()} --> {agent.upper()}")
+                            lines.append(f"    {agents[-1].upper()} --> END([Complete])")
+                            
+                            # Add styling
+                            lines.append("    classDef agentNode fill:#e1f5fe,stroke:#01579b,stroke-width:2px")
+                            lines.append("    classDef startEnd fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px")
+                            for agent in agents:
+                                lines.append(f"    class {agent.upper()} agentNode")
+                            lines.append("    class START,END startEnd")
+                            
                             return "\n".join(lines)
                         
                         def create_workflow_graph(self, agents, analysis_type):
@@ -2966,7 +3092,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     fig = state_graph_visualizer.create_workflow_graph(selected_agents, analysis_type)
                     
                     if fig:
-                        st.plotly_chart(fig, use_container_width=True, key=f"workflow_graph_visualization_{datetime.now().strftime('%H%M%S')}")
+                        st.plotly_chart(fig, use_container_width=True, key=f"workflow_graph_visualization_{datetime.now().strftime('%H%M%S%f')}")
                     else:
                         st.error("Failed to generate interactive graph")
                 else:
@@ -3067,76 +3193,6 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     
                     st.markdown("💡 **Tip:** Copy the above code to [mermaid.live](https://mermaid.live) for interactive editing")
             
-            with tab4:
-                st.subheader("📋 Execution Analysis")
-                
-                # Agent Dependencies Analysis
-                st.subheader("🔗 Agent Dependencies")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write("**Selected Agents:**")
-                    for agent in selected_agents:
-                        dependencies = state_graph_visualizer.agent_dependencies.get(agent, [])
-                        if dependencies:
-                            deps_in_selection = [dep for dep in dependencies if dep in selected_agents]
-                            if deps_in_selection:
-                                deps_str = ", ".join([dep.replace('_', ' ').title() for dep in deps_in_selection])
-                                st.write(f"• **{agent.replace('_', ' ').title()}** ← {deps_str}")
-                            else:
-                                st.write(f"• **{agent.replace('_', ' ').title()}** (dependencies not selected)")
-                        else:
-                            st.write(f"• **{agent.replace('_', ' ').title()}** (no dependencies)")
-                
-                with col2:
-                    st.write("**Execution Layers:**")
-                    execution_order = state_graph_visualizer.get_execution_order(selected_agents)
-                    
-                    for layer_idx, layer in enumerate(execution_order):
-                        if len(layer) == 1:
-                            st.write(f"**{layer_idx + 1}.** {layer[0].replace('_', ' ').title()}")
-                        else:
-                            st.write(f"**{layer_idx + 1}.** Parallel execution:")
-                            for agent in layer:
-                                st.write(f"   • {agent.replace('_', ' ').title()}")
-                
-                # Handoff Analysis
-                st.subheader("🔄 Agent Handoffs")
-                
-                handoffs = []
-                for agent in selected_agents:
-                    dependencies = state_graph_visualizer.agent_dependencies.get(agent, [])
-                    for dep in dependencies:
-                        if dep in selected_agents:
-                            handoffs.append(f"{dep.replace('_', ' ').title()} → {agent.replace('_', ' ').title()}")
-                
-                if handoffs:
-                    st.write("**Data handoffs between agents:**")
-                    for handoff in handoffs:
-                        st.write(f"• {handoff}")
-                else:
-                    st.write("**No direct handoffs** - All selected agents can run independently")
-                
-                # Optimization Impact
-                st.subheader("⚡ Optimization Impact")
-                
-                execution_order = state_graph_visualizer.get_execution_order(selected_agents)
-                parallel_layers = sum(1 for layer in execution_order if len(layer) > 1)
-                sequential_layers = len(execution_order) - parallel_layers
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Layers", len(execution_order))
-                with col2:
-                    st.metric("Parallel Layers", parallel_layers)
-                with col3:
-                    st.metric("Sequential Layers", sequential_layers)
-                
-                if parallel_layers > 0:
-                    st.success(f"✅ **Optimized execution**: {parallel_layers} layers can run in parallel")
-                else:
-                    st.info("ℹ️ **Sequential execution**: All agents run one after another")
         else:
             if not selected_agents:
                 st.info("Select agents to view the workflow graph")
@@ -3572,8 +3628,9 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 with col2:
                     project_name = st.text_input(
                         "Project Name", 
-                        value="marketing-research-dashboard",
-                        help="LangSmith project name for monitoring"
+                        value="marketing-research-swarm",
+                        help="LangSmith project name for monitoring",
+                        key="langsmith_project_name_manual"
                     )
                 
                 # Display recent runs
