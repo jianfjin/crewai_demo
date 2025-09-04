@@ -2336,7 +2336,6 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         return "\n".join(report_lines)
 
     def _render_analysis_results(self, result: Dict[str, Any], context_key: str = "default"):
-    def _render_analysis_results(self, result: Dict[str, Any], context_key: str = "default"):
         """Render the main analysis results."""
         st.subheader("📊 Individual Agent Results")
         
@@ -2460,14 +2459,12 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     col_export1, col_export2 = st.columns([3, 1])
                     with col_export2:
                         if st.button("📄 Export to Markdown", key=f"export_summary_{context_key}"):
-                        if st.button("📄 Export to Markdown", key=f"export_summary_{context_key}"):
                             markdown_content = self._generate_markdown_export(summary_data, result)
                             st.download_button(
                                 label="💾 Download Report",
                                 data=markdown_content,
                                 file_name=f"marketing_analysis_report_{summary_data.get('timestamp', '').replace(':', '-')[:19]}.md",
                                 mime="text/markdown",
-                                key=f"download_summary_{context_key}"
                                 key=f"download_summary_{context_key}"
                             )
                     
