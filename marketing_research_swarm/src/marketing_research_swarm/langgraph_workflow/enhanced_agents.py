@@ -195,18 +195,22 @@ class EnhancedLangGraphAgent(LangGraphAgent):
     def _fallback_tool_selection(self, task_description: str, context: Dict[str, Any]) -> Dict[str, List[str]]:
         """
         Fallback tool selection based on agent role when smart selector fails.
+        This version uses the actual tool names and roles from the project configuration.
         """
-        # Role-based tool mapping
+        # Role-based tool mapping based on agents.yaml and langgraph_tools.py
         role_tools = {
-            'Market Research Analyst': ['web_search_tool', 'data_analysis_tool', 'market_data_processor'],
-            'Data Analyst': ['data_analysis_tool', 'statistical_analysis_tool', 'visualization_tool'],
-            'Brand Performance Analyst': ['brand_analysis_tool', 'competitive_analysis_tool', 'performance_metrics_tool'],
-            'Sales Forecast Analyst': ['forecasting_tool', 'trend_analysis_tool', 'sales_data_processor'],
-            'ROI Analysis Expert': ['roi_calculator', 'financial_analysis_tool', 'cost_benefit_analyzer']
+            'market_research_analyst': ['beverage_market_analysis', 'time_series_analysis', 'cross_sectional_analysis'],
+            'competitive_analyst': ['beverage_market_analysis', 'calculate_market_share', 'cross_sectional_analysis'],
+            'data_analyst': ['profitability_analysis', 'time_series_analysis', 'cross_sectional_analysis', 'analyze_kpis'],
+            'brand_performance_specialist': ['analyze_brand_performance', 'calculate_market_share', 'beverage_market_analysis'],
+            'forecasting_specialist': ['forecast_sales', 'analyze_kpis'],
+            'campaign_optimizer': ['plan_budget', 'calculate_roi'],
+            'brand_strategist': ['analyze_brand_performance', 'profitability_analysis'],
+            'metadata_agent': ['meta_analysis_tool']
         }
         
-        # Get tools for this agent's role
-        essential_tools = role_tools.get(self.role, ['web_search_tool', 'data_analysis_tool'])
+        # Get tools for this agent's role, with a sensible default of actual tools
+        essential_tools = role_tools.get(self.role, ['beverage_market_analysis', 'analyze_kpis'])
         
         # Ensure tools exist in available tools
         available_essential = [tool for tool in essential_tools if tool in self.available_tools]
