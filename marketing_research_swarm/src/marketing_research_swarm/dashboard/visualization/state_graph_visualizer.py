@@ -34,6 +34,7 @@ class StateGraphVisualizer:
             "brand_performance_specialist": ["competitive_analyst", "data_analyst"],  # Needs competitive and data analysis
             "forecasting_specialist": ["market_research_analyst", "data_analyst"],  # Needs market research and data analysis
             "campaign_optimizer": ["data_analyst", "content_strategist"],  # Needs data and content strategy
+            "report_summarizer": ["market_research_analyst", "competitive_analyst", "data_analyst", "content_strategist", "creative_copywriter", "brand_performance_specialist", "forecasting_specialist", "campaign_optimizer"],  # Needs ALL other agents to complete first
         }
         
     def get_execution_order(self, selected_agents: List[str]) -> List[List[str]]:

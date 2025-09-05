@@ -187,40 +187,56 @@ class SharedDataCache:
             return df, cache_info
     
     def _load_data_from_source(self, data_path: str = None, **kwargs) -> pd.DataFrame:
-        """Load data from the actual source."""
-        # FIXED: Check if data_path exists before falling back to sample data
-        if not data_path or not os.path.exists(data_path):
-            if data_path:
-                logger.warning(f"⚠️ Data file not found: {data_path}")
-                logger.info("🔄 Falling back to sample data")
-            else:
-                logger.info("🔄 No data path provided, using sample data")
-            return self._create_sample_beverage_data()
+        """Load data from the actual source with enhanced path resolution."""
         
-        try:
-            # FIXED: Always try to load the actual file first
-            logger.info(f"📁 Attempting to load data from: {data_path}")
-            
-            if data_path.endswith('.csv'):
-                df = pd.read_csv(data_path)
-            elif data_path.endswith('.json'):
-                df = pd.read_json(data_path)
-            elif data_path.endswith('.parquet'):
-                df = pd.read_parquet(data_path)
-            else:
-                # Try CSV first, then JSON
+        # Enhanced data path resolution with multiple fallback locations
+        data_candidates = []
+        
+        if data_path:
+            data_candidates.append(data_path)
+        
+        # Add standard fallback locations
+        data_candidates.extend([
+            'data/beverage_sales.csv',
+            '/workspaces/crewai_demo/marketing_research_swarm/data/beverage_sales.csv',
+            os.path.join(os.getcwd(), 'data', 'beverage_sales.csv'),
+            os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'beverage_sales.csv')
+        ])
+        
+        # Try each candidate path
+        for candidate_path in data_candidates:
+            if candidate_path and os.path.exists(candidate_path):
                 try:
-                    df = pd.read_csv(data_path)
-                except:
-                    df = pd.read_json(data_path)
-            
-            logger.info(f"✅ Successfully loaded data from {data_path}: {df.shape}")
-            return df
-            
-        except Exception as e:
-            logger.error(f"❌ Error loading data from {data_path}: {e}")
-            logger.info("🔄 Falling back to sample data")
-            return self._create_sample_beverage_data()
+                    logger.info(f"📁 Attempting to load data from: {candidate_path}")
+                    
+                    if candidate_path.endswith('.csv'):
+                        df = pd.read_csv(candidate_path)
+                    elif candidate_path.endswith('.json'):
+                        df = pd.read_json(candidate_path)
+                    elif candidate_path.endswith('.parquet'):
+                        df = pd.read_parquet(candidate_path)
+                    else:
+                        # Try CSV first, then JSON
+                        try:
+                            df = pd.read_csv(candidate_path)
+                        except:
+                            df = pd.read_json(candidate_path)
+                    
+                    logger.info(f"✅ Successfully loaded data from {candidate_path}: {df.shape}")
+                    return df
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ Error loading data from {candidate_path}: {e}")
+                    continue
+        
+        # If no valid data file found, fall back to sample data
+        if data_path:
+            logger.warning(f"⚠️ No valid data file found. Tried: {data_candidates}")
+        else:
+            logger.info("🔄 No data path provided, using sample data")
+        
+        logger.info("🔄 Falling back to sample data")
+        return self._create_sample_beverage_data()
     
     def _create_sample_beverage_data(self) -> pd.DataFrame:
         """Create optimized sample beverage data."""

@@ -354,15 +354,39 @@ class EnhancedLangGraphAgent(LangGraphAgent):
         Get optimized parameters for tool execution based on context.
         """
         
-        # Base parameters
-        data_file = context.get('data_file_path', 'data/beverage_sales.csv')
+        # Base parameters - try multiple possible keys for data file path
+        data_file = (
+            context.get('data_file_path') or 
+            context.get('data_path') or 
+            context.get('input_data', {}).get('data_file_path') or
+            'data/beverage_sales.csv'
+        )
+        
+        # Ensure we have an absolute path if it exists
+        import os
+        if data_file and not os.path.isabs(data_file):
+            # Try to find the file in common locations
+            possible_paths = [
+                data_file,
+                os.path.join(os.getcwd(), data_file),
+                os.path.join(os.getcwd(), 'data', 'beverage_sales.csv'),
+                'data/beverage_sales.csv'
+            ]
+            for path in possible_paths:
+                if os.path.exists(path):
+                    data_file = path
+                    break
+        
+        # Log the data file being used for debugging
+        logger.info(f"🔧 Tool {tool_name} using data file: {data_file} (exists: {os.path.exists(data_file) if data_file else False})")
         brands = context.get('brands', [])
         market_segments = context.get('market_segments', [])
         product_categories = context.get('product_categories', [])
         
         # Base parameters - use correct parameter names for tools
         tool_params = {
-            'file_path': data_file,  # Most tools expect 'file_path', not 'data_path'
+            'data_path': data_file,  # Use data_path as primary parameter
+            'file_path': data_file,  # Also include file_path for compatibility
             'brands': brands if brands else None,
             'market_segments': market_segments if market_segments else None,
             'product_categories': product_categories if product_categories else None
@@ -371,6 +395,7 @@ class EnhancedLangGraphAgent(LangGraphAgent):
         # Add tool-specific parameters
         if tool_name == 'profitability_analysis':
             tool_params.update({
+                'data_path': data_file,  # Ensure data_path is set for this tool
                 'analysis_dimension': 'brand',
                 'brands': brands if brands else None,
                 'market_segments': market_segments if market_segments else None
@@ -680,3 +705,5 @@ Format your response as a comprehensive analysis with these clearly marked secti
             'tool_performance': self.tool_selector.get_tool_performance_summary(),
             'last_execution': self.execution_history[-1] if self.execution_history else None
         }
+
+

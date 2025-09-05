@@ -509,7 +509,7 @@ try:
     
     # Try to import the real LangGraph workflow first, fallback to mock if needed
     try:
-        from marketing_research_swarm.langgraph_workflow.workflow import MarketingResearchWorkflow as RealMarketingResearchWorkflow
+        from marketing_research_swarm.langgraph_workflow.enhanced_workflow import EnhancedMarketingWorkflow as RealMarketingResearchWorkflow
         
         # Test instantiation to make sure it works
         test_workflow = RealMarketingResearchWorkflow()
@@ -523,31 +523,31 @@ try:
         logger.warning(f"Real LangGraph workflows not available: {workflow_import_error}")
         
         # Import mock workflow classes
-        try:
-            from marketing_research_swarm.dashboard.components.mock_workflow import MockLangGraphWorkflow
+        # try:
+        #     from marketing_research_swarm.dashboard.components.mock_workflow import MockLangGraphWorkflow
             
-            # Try to use regular workflow instead of mock
-            try:
-                from marketing_research_swarm.langgraph_workflow.workflow import MarketingResearchWorkflow as RegularWorkflow
-                MarketingResearchWorkflow = RegularWorkflow
-                logger.info("✅ Using regular LangGraph workflow (REAL ANALYSIS)")
-                st.info("✅ LangGraph components loaded successfully (using regular REAL workflow)")
+        #     # Try to use regular workflow instead of mock
+        #     try:
+        #         from marketing_research_swarm.langgraph_workflow.workflow import MarketingResearchWorkflow as RegularWorkflow
+        #         MarketingResearchWorkflow = RegularWorkflow
+        #         logger.info("✅ Using regular LangGraph workflow (REAL ANALYSIS)")
+        #         st.info("✅ LangGraph components loaded successfully (using regular REAL workflow)")
                 
-            except Exception as regular_workflow_error:
-                logger.error(f"Failed to load regular workflow: {regular_workflow_error}")
+        #     except Exception as regular_workflow_error:
+        #         logger.error(f"Failed to load regular workflow: {regular_workflow_error}")
                 
-                # Final fallback to mock
-                MarketingResearchWorkflow = MockLangGraphWorkflow
-                logger.info("✅ Using enhanced mock LangGraph workflows")
+        #         # Final fallback to mock
+        #         MarketingResearchWorkflow = MockLangGraphWorkflow
+        #         logger.info("✅ Using enhanced mock LangGraph workflows")
                 
-        except ImportError as component_error:
-            logger.error(f"Failed to import workflow components: {component_error}")
+        # except ImportError as component_error:
+        #     logger.error(f"Failed to import workflow components: {component_error}")
             
-            # Import fallback classes inline if imports fail
-            from marketing_research_swarm.dashboard.components.mock_workflow import MockLangGraphWorkflow
+        #     # Import fallback classes inline if imports fail
+        #     from marketing_research_swarm.dashboard.components.mock_workflow import MockLangGraphWorkflow
             
-            MarketingResearchWorkflow = MockLangGraphWorkflow
-            logger.info("✅ Using mock workflow as final fallback")
+        #     MarketingResearchWorkflow = MockLangGraphWorkflow
+        #     logger.info("✅ Using mock workflow as final fallback")
     
     LANGGRAPH_AVAILABLE = True
     logger.info("✅ LangGraph components loaded successfully (using mock workflow)")
@@ -1104,7 +1104,8 @@ class LangGraphDashboard:
             "content_strategist",
             "creative_copywriter",
             "brand_performance_specialist",
-            "forecasting_specialist"
+            "forecasting_specialist",
+            "report_summarizer"
         ]
         
         selected_agents = st.sidebar.multiselect(
@@ -1430,14 +1431,14 @@ class LangGraphDashboard:
     def _get_default_agents(self, analysis_type: str) -> List[str]:
         """Get default agents based on analysis type."""
         defaults = {
-            "comprehensive": ["market_research_analyst", "competitive_analyst", "data_analyst", "content_strategist"],
-            "roi_focused": ["data_analyst", "forecasting_specialist"],
-            "content_strategy": ["market_research_analyst", "content_strategist", "creative_copywriter"],
-            "brand_performance": ["competitive_analyst", "brand_performance_specialist"],
-            "sales_forecast": ["data_analyst", "forecasting_specialist"],
-            "quick_insights": ["market_research_analyst", "data_analyst"]
+            "comprehensive": ["market_research_analyst", "competitive_analyst", "data_analyst", "content_strategist", "report_summarizer"],
+            "roi_focused": ["data_analyst", "forecasting_specialist", "report_summarizer"],
+            "content_strategy": ["market_research_analyst", "content_strategist", "creative_copywriter", "report_summarizer"],
+            "brand_performance": ["competitive_analyst", "brand_performance_specialist", "report_summarizer"],
+            "sales_forecast": ["data_analyst", "forecasting_specialist", "report_summarizer"],
+            "quick_insights": ["market_research_analyst", "data_analyst", "report_summarizer"]
         }
-        return defaults.get(analysis_type, ["market_research_analyst", "data_analyst"])
+        return defaults.get(analysis_type, ["market_research_analyst", "data_analyst", "report_summarizer"])
     
     def run_optimized_analysis(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Run analysis with token optimization strategies using available system."""
@@ -1475,9 +1476,9 @@ class LangGraphDashboard:
                 callback_manager = enhanced_langsmith_monitor.create_run_tracer(workflow_id)
                 logger.info(f"🔍 Created LangSmith tracer for workflow: {workflow_id}")
             
-            # Use the regular workflow
-            workflow = MarketingResearchWorkflow()  # This is the regular MarketingResearchWorkflow
-            logger.info(f"Using regular LangGraph workflow with optimization level: {optimization_level}")
+            # Use the enhanced workflow that includes report_summarizer
+            workflow = MarketingResearchWorkflow(context_strategy="smart")  # This is the enhanced MarketingResearchWorkflow
+            logger.info(f"Using enhanced LangGraph workflow with optimization level: {optimization_level}")
             
             # Apply optimization strategies
             optimized_config = self._apply_optimization_strategies(config)
@@ -1535,8 +1536,8 @@ class LangGraphDashboard:
                         cost = (agent_tokens * 0.000000150) + (agent_tokens * 0.0000006)  # Input + output cost
                         enhanced_token_tracker.track_agent_execution(agent, agent_tokens, cost)
                 
-                # Execute workflow with ALL parameters
-                result = workflow.execute_workflow(
+                # Execute enhanced workflow with ALL parameters
+                result = workflow.execute_enhanced_workflow(
                     selected_agents=optimized_config["selected_agents"],
                     target_audience=optimized_config["target_audience"],
                     campaign_type=optimized_config["campaign_type"],

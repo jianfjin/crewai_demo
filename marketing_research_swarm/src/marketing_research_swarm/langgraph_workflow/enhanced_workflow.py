@@ -22,7 +22,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from .state import MarketingResearchState, WorkflowStatus, AgentStatus
-from .agents import AGENT_NODES
+from .enhanced_agent_nodes import ENHANCED_AGENT_NODES
 from ..blackboard.integrated_blackboard import get_integrated_blackboard
 from ..context.enhanced_context_engineering import get_enhanced_context_engineering
 from ..context.persistent_context_storage import get_persistent_storage
@@ -74,7 +74,7 @@ class EnhancedMarketingWorkflow:
         self.budget_manager: Optional[TokenBudgetManager] = None
         
         # Available agent types
-        self.available_agents = list(AGENT_NODES.keys())
+        self.available_agents = list(ENHANCED_AGENT_NODES.keys())
         
         # Build the enhanced workflow graph
         self.workflow = self._build_enhanced_workflow()
@@ -145,6 +145,9 @@ class EnhancedMarketingWorkflow:
             state["agent_status"][agent] = AgentStatus.PENDING
             state["agent_steps"][agent] = 0
         
+        logger.info(f"🔍 Initialized agent status for: {state['selected_agents']}")
+        logger.info(f"🔍 Agent status: {state['agent_status']}")
+        
         # Initialize token tracking
         self.token_tracker.start_tracking(workflow_id=workflow_id)
 
@@ -192,7 +195,11 @@ class EnhancedMarketingWorkflow:
                 "campaign_type": state.get("campaign_type", ""),
                 "budget": state.get("budget", 0),
                 "duration": state.get("duration", ""),
-                "analysis_focus": state.get("analysis_focus", "")
+                "analysis_focus": state.get("analysis_focus", ""),
+                "data_file_path": state.get("data_file_path", "data/beverage_sales.csv"),
+                "brands": state.get("brands", []),
+                "market_segments": state.get("market_segments", []),
+                "product_categories": state.get("product_categories", [])
             },
             "execution_context": {
                 "current_step": state["current_step"],
@@ -259,6 +266,10 @@ class EnhancedMarketingWorkflow:
             if state["agent_status"].get(agent) in [AgentStatus.PENDING, "pending"]
         ]
         
+        logger.info(f"🔍 Selected agents: {state['selected_agents']}")
+        logger.info(f"🔍 Agent status: {state['agent_status']}")
+        logger.info(f"🔍 Pending agents: {pending_agents}")
+        
         if not pending_agents:
             return None
         
@@ -308,7 +319,21 @@ class EnhancedMarketingWorkflow:
         
         # If only report_summarizer is pending, return it
         elif 'report_summarizer' in pending_agents:
+            logger.info("🔄 All other agents completed, executing report_summarizer")
             return 'report_summarizer'
+        
+        # FIXED: Check if all other agents are completed and report_summarizer is in selected_agents
+        elif 'report_summarizer' in state["selected_agents"]:
+            # Check if all non-report_summarizer agents are completed
+            other_agents = [agent for agent in state["selected_agents"] if agent != 'report_summarizer']
+            all_others_completed = all(
+                state["agent_status"].get(agent) == AgentStatus.COMPLETED
+                for agent in other_agents
+            )
+            
+            if all_others_completed and state["agent_status"].get('report_summarizer') != AgentStatus.COMPLETED:
+                logger.info("🔄 All other agents completed, forcing report_summarizer execution as final step")
+                return 'report_summarizer'
         
         return None
     
@@ -453,8 +478,8 @@ class EnhancedMarketingWorkflow:
                 # Track tokens before execution
                 tokens_before = self.token_tracker.get_current_usage()
                 
-                # Execute the original agent with optimized context
-                agent_node = AGENT_NODES[agent_name]
+                # Execute the enhanced agent with optimized context
+                agent_node = ENHANCED_AGENT_NODES[agent_name]
                 
                 # Create a modified state with optimized context
                 enhanced_state = state.copy()
@@ -699,6 +724,11 @@ class EnhancedMarketingWorkflow:
         """Execute the enhanced workflow with context engineering."""
         
         try:
+            # FIXED: Ensure report_summarizer is always included in selected_agents
+            if "report_summarizer" not in selected_agents:
+                selected_agents = selected_agents + ["report_summarizer"]
+                logger.info(f"🔄 Automatically added report_summarizer to selected agents: {selected_agents}")
+            
             # Create initial state as MarketingResearchState object
             workflow_id = str(uuid.uuid4())
             current_time = datetime.now()
