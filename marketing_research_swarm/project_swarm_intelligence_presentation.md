@@ -62,11 +62,13 @@
         *   High-level, role-based framework. Easy to set up collaborative "crews".
         *   **Pro:** Fast prototyping, clear structure.
         *   **Con:** Can be rigid; less control over the workflow.
+        *   **Used by:** PwC, AWS (for Bedrock Agents), and many startups for functions from marketing to internal automation.
     *   **LangGraph:**
         *   **Analogy:** A flexible, dynamic project team mapped on a whiteboard.
         *   Lower-level library for building stateful, graph-based agent workflows.
         *   **Pro:** Highly flexible, supports complex cycles and explicit state management.
         *   **Con:** Steeper learning curve.
+        *   **Used by:** LinkedIn (for SQL bots), Uber (for code migration), Replit (for their dev copilot), and Elastic (for threat detection).
 *   **Our Choice:** We chose **LangGraph** for its flexibility to model the complex, cyclical, and unpredictable nature of in-depth research.
 
 ---
