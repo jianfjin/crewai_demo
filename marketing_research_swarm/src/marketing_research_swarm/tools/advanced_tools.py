@@ -34,51 +34,30 @@ except ImportError:
     # Fallback to simple cache
     _GLOBAL_DATA_CACHE = {}
 
+import requests
+
 def get_cached_data(data_path: str = None) -> pd.DataFrame:
     """
-    Get cached data using optimized shared cache or fallback
+    Fetches data from the backend service, which securely connects to Supabase.
+    The data_path parameter is now used to determine which data to fetch if the backend supports multiple datasets.
     """
-    if _USE_OPTIMIZED_CACHE:
-        # Use optimized shared cache
-        shared_cache = get_shared_cache()
-        df, cache_info = shared_cache.get_or_load_data(data_path)
+    # The backend URL is now the single source of truth for data.
+    # We can extend this to use data_path to fetch different datasets, e.g., /api/v1/data/{data_path}
+    backend_url = "http://127.0.0.1:8000/api/v1/data/beverage_sales"
+    
+    try:
+        response = requests.get(backend_url)
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        data = response.json()
+        df = pd.DataFrame(data)
+        # Convert date columns if they exist
+        if 'sale_date' in df.columns:
+            df['sale_date'] = pd.to_datetime(df['sale_date'], unit='ms')
         return df
-    else:
-        # Fallback to simple cache
-        global _GLOBAL_DATA_CACHE
-        
-        # If no data path provided, return sample data
-        if not data_path:
-            return create_sample_beverage_data()
-        
-        # Generate cache key
-        cache_key = hashlib.md5(data_path.encode()).hexdigest()
-        
-        # Check if data is already cached
-        if cache_key in _GLOBAL_DATA_CACHE:
-            return _GLOBAL_DATA_CACHE[cache_key].copy()
-        
-        # Load and cache data
-        try:
-            if data_path.endswith('.csv'):
-                df = pd.read_csv(data_path)
-            elif data_path.endswith('.json'):
-                df = pd.read_json(data_path)
-            else:
-                # Try CSV first, then JSON
-                try:
-                    df = pd.read_csv(data_path)
-                except:
-                    df = pd.read_json(data_path)
-            
-            # Cache the data
-            _GLOBAL_DATA_CACHE[cache_key] = df.copy()
-            return df
-            
-        except Exception as e:
-            print(f"Error loading data from {data_path}: {e}")
-            # Return sample data as fallback
-            return create_sample_beverage_data()
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching data from backend: {e}")
+        # Fallback to sample data if the backend is unavailable
+        return create_sample_beverage_data()
 
 def create_sample_beverage_data() -> pd.DataFrame:
     """Create sample beverage data for analysis when no data file is available"""

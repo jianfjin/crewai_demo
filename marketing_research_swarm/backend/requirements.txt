@@ -22,3 +22,5 @@ PyYAML>=6.0
 tiktoken>=0.5.0
 langchain-ollama>=0.3.3
 uuid>=1.30
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9

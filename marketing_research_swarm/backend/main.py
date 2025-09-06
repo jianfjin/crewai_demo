@@ -13,9 +13,15 @@ import sys
 import os
 from datetime import datetime
 import json
+from sqlalchemy import create_engine, text
+import pandas as pd
 
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
 
 # Change working directory to project root to fix relative paths
 project_root = os.path.join(os.path.dirname(__file__), '..')
@@ -138,6 +144,29 @@ class AnalysisTypeInfo(BaseModel):
 # Initialize managers
 optimization_manager = OptimizationManager()
 dependency_manager = AgentDependencyManager()
+
+@app.get("/api/v1/data/beverage_sales")
+async def get_beverage_sales_data():
+    """
+    Endpoint to retrieve beverage sales data from the Supabase database.
+    """
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise HTTPException(status_code=500, detail="DATABASE_URL environment variable not set.")
+    
+    try:
+        engine = create_engine(db_url)
+        with engine.connect() as connection:
+            # Assuming the table is named 'beverage_sales'
+            query = text("SELECT * FROM beverage_sales")
+            result = connection.execute(query)
+            df = pd.DataFrame(result.fetchall(), columns=result.keys())
+            
+            # Convert DataFrame to JSON serializable format
+            return json.loads(df.to_json(orient="records"))
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database connection or query failed: {str(e)}")
 
 @app.get("/")
 async def root():
