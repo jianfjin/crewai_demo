@@ -1460,7 +1460,7 @@ class LangGraphDashboard:
         try:
             # Get optimization level
             opt_settings = config.get("optimization_settings", {})
-            optimization_level = opt_settings.get("optimization_level", "none")
+            optimization_level = opt_settings.get("optimization_level", "blackboard")
             
             # Generate workflow ID
             workflow_id = f"langgraph_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"

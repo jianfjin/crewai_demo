@@ -202,7 +202,7 @@ try:
         
         # Create a more realistic mock workflow that actually does some processing
         class MockLangGraphWorkflow:
-            def __init__(self, checkpoint_path=None, optimization_level="full", **kwargs):
+            def __init__(self, checkpoint_path=None, optimization_level="blackboard", **kwargs):
                 self.available_agents = ["market_research_analyst", "data_analyst", "content_strategist", 
                                        "competitive_analyst", "brand_performance_specialist", "forecasting_specialist"]
                 self.checkpoint_path = checkpoint_path
@@ -310,7 +310,7 @@ try:
             from marketing_research_swarm.langgraph_workflow.optimized_workflow import OptimizedMarketingWorkflow
             
             class OptimizedWorkflowWrapper:
-                def __init__(self, checkpoint_path=None, optimization_level="full", **kwargs):
+                def __init__(self, checkpoint_path=None, optimization_level="blackboard", **kwargs):
                     self.workflow = OptimizedMarketingWorkflow(checkpoint_path=checkpoint_path, optimization_level=optimization_level)
                     self.available_agents = ["market_research_analyst", "data_analyst", "content_strategist", 
                                            "competitive_analyst", "brand_performance_specialist", "forecasting_specialist"]
