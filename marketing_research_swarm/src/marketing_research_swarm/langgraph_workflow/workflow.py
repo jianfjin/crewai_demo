@@ -358,7 +358,6 @@ class MarketingResearchWorkflow:
             competitive_landscape=kwargs.get("competitive_landscape", "highly_competitive"),
             
             # Optional fields
-            data_file_path=kwargs.get("data_file_path", "data/beverage_sales.csv"),
             forecast_periods=kwargs.get("forecast_periods", 30),
             
             # Analysis results (all start as None)

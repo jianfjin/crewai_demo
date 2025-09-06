@@ -5,18 +5,23 @@ from typing import Dict, Any, List, Optional
 import json
 import os
 import hashlib
+import requests
+import pyarrow as pa
+import pyarrow.ipc as ipc
+import io
 
 # Global cache for data sharing
 _GLOBAL_DATA_CACHE = {}
 
-def get_cached_data(data_path: str) -> pd.DataFrame:
+def get_cached_data() -> pd.DataFrame:
     """
     Get cached data using the same strategy as optimized tools
     """
     global _GLOBAL_DATA_CACHE
-    
+    backend_url = "http://127.0.0.1:8000/api/v1/data/beverage_sales"
+
     # Generate cache key
-    cache_key = hashlib.md5(data_path.encode()).hexdigest()
+    cache_key = hashlib.md5(backend_url.encode()).hexdigest()
     
     # Check if data is already cached
     if cache_key in _GLOBAL_DATA_CACHE:
@@ -24,23 +29,22 @@ def get_cached_data(data_path: str) -> pd.DataFrame:
     
     # Load and cache data
     try:
-        if data_path.endswith('.csv'):
-            df = pd.read_csv(data_path)
-        elif data_path.endswith('.json'):
-            df = pd.read_json(data_path)
-        else:
-            # Try CSV first, then JSON
-            try:
-                df = pd.read_csv(data_path)
-            except:
-                df = pd.read_json(data_path)
+        response = requests.get(backend_url)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        
+        # Read the Arrow IPC stream from the binary response content
+        with pa.ipc.open_stream(io.BytesIO(response.content)) as reader:
+            table = reader.read_all()
+        
+        # Convert the Arrow Table to a pandas DataFrame
+        df = table.to_pandas()
         
         # Cache the data
         _GLOBAL_DATA_CACHE[cache_key] = df.copy()
         return df
         
-    except Exception as e:
-        print(f"Error loading data from {data_path}: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching data from backend: {e}")
         # Return empty DataFrame with expected columns
         return pd.DataFrame({
             'sale_date': [],

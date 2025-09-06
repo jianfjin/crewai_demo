@@ -35,25 +35,28 @@ except ImportError:
     _GLOBAL_DATA_CACHE = {}
 
 import requests
+import pyarrow as pa
+import io
 
-def get_cached_data(data_path: str = None) -> pd.DataFrame:
+def get_cached_data() -> pd.DataFrame:
     """
     Fetches data from the backend service, which securely connects to Supabase.
-    The data_path parameter is now used to determine which data to fetch if the backend supports multiple datasets.
+    The data is transferred in the efficient Apache Arrow format.
     """
-    # The backend URL is now the single source of truth for data.
-    # We can extend this to use data_path to fetch different datasets, e.g., /api/v1/data/{data_path}
     backend_url = "http://127.0.0.1:8000/api/v1/data/beverage_sales"
     
     try:
         response = requests.get(backend_url)
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-        data = response.json()
-        df = pd.DataFrame(data)
-        # Convert date columns if they exist
-        if 'sale_date' in df.columns:
-            df['sale_date'] = pd.to_datetime(df['sale_date'], unit='ms')
+        response.raise_for_status()  # Raise an exception for bad status codes
+        
+        # Read the Arrow IPC stream from the binary response content
+        with pa.ipc.open_stream(io.BytesIO(response.content)) as reader:
+            table = reader.read_all()
+        
+        # Convert the Arrow Table to a pandas DataFrame
+        df = table.to_pandas()
         return df
+
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data from backend: {e}")
         # Fallback to sample data if the backend is unavailable
@@ -891,33 +894,15 @@ class MetaAnalysisTool(BaseTool):
     name: str = "meta_analysis_tool"
     description: str = "Extract metadata and distinct values from the beverage sales dataset to understand data structure and available options"
     
-    def _run(self, data_file_path: str = "beverage_sales.csv") -> str:
+    def _run(self) -> str:
         """Extract metadata from the beverage sales dataset"""
         try:
             import pandas as pd
             import os
             
-            # Try different possible paths for the data file
-            possible_paths = [
-                data_file_path,
-                f"data/{data_file_path}",
-                f"src/data/{data_file_path}",
-                f"../data/{data_file_path}",
-                "beverage_sales.csv",
-                "data/beverage_sales.csv"
-            ]
-            
-            df = None
-            actual_path = None
-            
-            for path in possible_paths:
-                if os.path.exists(path):
-                    try:
-                        df = pd.read_csv(path)
-                        actual_path = path
-                        break
-                    except Exception as e:
-                        continue
+            # Data is now fetched from the backend via get_cached_data
+            df = get_cached_data()
+            actual_path = "Supabase DB"
             
             if df is None:
                 # Return mock metadata if file not found

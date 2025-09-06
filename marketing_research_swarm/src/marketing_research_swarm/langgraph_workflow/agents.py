@@ -597,45 +597,24 @@ Format your response as a comprehensive analysis with these clearly marked secti
     def _build_tool_param_suggestions(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Create structured tool parameter suggestions per agent role consistent with tool signatures."""
         suggestions = {}
-        data_file = context.get('data_file_path', 'data/beverage_sales.csv')
-        # Resolve to an existing path if possible (prefer absolute workspace path)
-        data_path = data_file
-        try:
-            import os
-            candidates = [
-                data_file,
-                '/workspaces/crewai_demo/marketing_research_swarm/data/beverage_sales.csv',
-                'data/beverage_sales.csv'
-            ]
-            for p in candidates:
-                if p and os.path.exists(p):
-                    data_path = p
-                    break
-        except Exception:
-            pass
-        
-        # Get specific analysis parameters from context
         brands = context.get('brands', [])
         market_segments = context.get('market_segments', [])
         product_categories = context.get('product_categories', [])
         if self.role == 'data_analyst':
             if 'profitability_analysis' in self.tools:
                 suggestions['profitability_analysis'] = {
-                    'data_path': data_path,
                     'analysis_dimension': 'brand',
                     'brands': brands if brands else None,
                     'market_segments': market_segments if market_segments else None
                 }
             if 'cross_sectional_analysis' in self.tools:
                 suggestions['cross_sectional_analysis'] = {
-                    'data_path': data_path,
                     'segment_column': 'brand',
                     'value_column': 'total_revenue',
                     'brands': brands if brands else None
                 }
             if 'time_series_analysis' in self.tools:
                 suggestions['time_series_analysis'] = {
-                    'data_path': data_path,
                     'date_column': 'sale_date',
                     'value_column': 'total_revenue',
                     'brands': brands if brands else None,
@@ -643,20 +622,17 @@ Format your response as a comprehensive analysis with these clearly marked secti
                 }
             if 'analyze_kpis' in self.tools:
                 suggestions['analyze_kpis'] = {
-                    'data_path': data_path,
                     'brands': brands if brands else None,
                     'market_segments': market_segments if market_segments else None
                 }
         elif self.role == 'market_research_analyst' and 'beverage_market_analysis' in self.tools:
             suggestions['beverage_market_analysis'] = {
-                'data_path': data_path,
                 'brands': brands if brands else None,
                 'market_segments': market_segments if market_segments else None,
                 'product_categories': product_categories if product_categories else None
             }
         elif self.role == 'forecasting_specialist' and 'forecast_sales' in self.tools:
             suggestions['forecast_sales'] = {
-                'data_path': data_path,
                 'periods': context.get('forecast_periods', 30),
                 'brands': brands if brands else None,
                 'market_segments': market_segments if market_segments else None
@@ -684,7 +660,6 @@ Format your response as a comprehensive analysis with these clearly marked secti
                 }
             if 'analyze_brand_performance' in self.tools:
                 suggestions['analyze_brand_performance'] = {
-                    'data_path': data_path,
                     'brands': brands if brands else None,
                     'market_segments': market_segments if market_segments else None
                 }
@@ -1142,7 +1117,7 @@ def brand_performance_specialist_node(state: MarketingResearchState) -> Marketin
         agent = create_agent_from_config(agent_role, agent_config)
         
         task_description = f"""
-        Analyze brand performance in the beverage market using comprehensive sales data from {state.get('data_file_path', 'data/beverage_sales.csv')}.
+        Analyze brand performance in the beverage market using comprehensive sales data from our backend.
         
         **Specific Brand Performance Analysis Requirements**:
         - Key brands to analyze: {', '.join(state.get('brands', ['selected brands']))}
@@ -1199,7 +1174,7 @@ def forecasting_specialist_node(state: MarketingResearchState) -> MarketingResea
         agent = create_agent_from_config(agent_role, agent_config)
         
         task_description = f"""
-        Generate accurate sales forecasts and predictive models using data from {state.get('data_file_path', 'data/beverage_sales.csv')}.
+        Generate accurate sales forecasts and predictive models using data from our backend.
         
         **Specific Forecasting Requirements**:
         - Forecast periods: {state.get('forecast_periods', 30)} days

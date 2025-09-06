@@ -3,7 +3,7 @@ FastAPI Backend for Marketing Research Swarm
 Provides REST API endpoints for the CrewAI marketing research platform
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Optional, Any
@@ -15,6 +15,8 @@ from datetime import datetime
 import json
 from sqlalchemy import create_engine, text
 import pandas as pd
+import pyarrow as pa
+import pyarrow.ipc as ipc
 
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -148,7 +150,8 @@ dependency_manager = AgentDependencyManager()
 @app.get("/api/v1/data/beverage_sales")
 async def get_beverage_sales_data():
     """
-    Endpoint to retrieve beverage sales data from the Supabase database.
+    Endpoint to retrieve beverage sales data from the Supabase database
+    in the highly efficient Apache Arrow IPC stream format.
     """
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
@@ -157,13 +160,20 @@ async def get_beverage_sales_data():
     try:
         engine = create_engine(db_url)
         with engine.connect() as connection:
-            # Assuming the table is named 'beverage_sales'
             query = text("SELECT * FROM beverage_sales")
-            result = connection.execute(query)
-            df = pd.DataFrame(result.fetchall(), columns=result.keys())
+            df = pd.read_sql_query(query, connection)
+
+            # Convert DataFrame to Arrow Table
+            table = pa.Table.from_pandas(df, preserve_index=False)
             
-            # Convert DataFrame to JSON serializable format
-            return json.loads(df.to_json(orient="records"))
+            # Serialize the Arrow Table to the IPC stream format in-memory
+            sink = pa.BufferOutputStream()
+            with ipc.new_stream(sink, table.schema) as writer:
+                writer.write_table(table)
+            buf = sink.getvalue()
+            
+            # Return the binary Arrow data in the response
+            return Response(content=buf.to_pybytes(), media_type="application/vnd.apache.arrow.stream")
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database connection or query failed: {str(e)}")

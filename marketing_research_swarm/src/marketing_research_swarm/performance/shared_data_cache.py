@@ -15,6 +15,9 @@ from datetime import datetime, timedelta
 import logging
 import os
 import json
+import requests
+import io
+import pyarrow as pa
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +49,11 @@ class SharedDataCache:
         
         logger.info(f"🚀 SharedDataCache initialized (max_size={max_cache_size}, ttl={cache_ttl_minutes}min)")
     
-    def _generate_cache_key(self, data_path: str, **kwargs) -> str:
-        """Generate a unique cache key for the data request."""
+    def _generate_cache_key(self, **kwargs) -> str:
+        """Generate a unique cache key for the data request from the backend."""
+        backend_url = "http://127.0.0.1:8000/api/v1/data/beverage_sales"
         key_data = {
-            'data_path': data_path or 'sample_data',
+            'source_url': backend_url,
             'kwargs': sorted(kwargs.items()) if kwargs else []
         }
         key_string = json.dumps(key_data, sort_keys=True)
@@ -107,71 +111,54 @@ class SharedDataCache:
             
             logger.info(f"📦 Removed {entries_to_remove} LRU cache entries to enforce size limit")
     
-    def get_or_load_data(self, data_path: str = None, **kwargs) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    def get_or_load_data(self, **kwargs) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         """
-        Get cached data or load it if not cached.
+        Get cached data from the backend or load it if not cached.
         
-        Args:
-            data_path: Path to the data file
-            **kwargs: Additional parameters for data loading
-            
         Returns:
             Tuple of (DataFrame, cache_info)
         """
         start_time = time.time()
-        cache_key = self._generate_cache_key(data_path, **kwargs)
+        cache_key = self._generate_cache_key(**kwargs)
         
         with self._lock:
-            # Check if data is cached and valid
             if cache_key in self._cache and self._is_cache_valid(cache_key):
-                # Cache hit
                 self._access_times[cache_key] = datetime.now()
                 self.cache_hits += 1
-                
                 cached_data = self._cache[cache_key]
-                df = cached_data['dataframe'].copy()  # Return copy to prevent modification
-                
-                # Calculate time saved
+                df = cached_data['dataframe'].copy()
                 original_load_time = self._load_times.get(cache_key, 0)
-                time_saved = original_load_time
-                self.total_load_time_saved += time_saved
+                self.total_load_time_saved += original_load_time
                 
                 cache_info = {
                     'cache_hit': True,
                     'cache_key': cache_key,
                     'data_shape': df.shape,
-                    'time_saved_seconds': time_saved,
+                    'time_saved_seconds': original_load_time,
                     'access_time': time.time() - start_time
                 }
-                
-                logger.info(f"⚡ Cache HIT: {cache_key[:8]}... (saved {time_saved:.3f}s)")
+                logger.info(f"⚡ Cache HIT: {cache_key[:8]}... (saved {original_load_time:.3f}s)")
                 return df, cache_info
             
-            # Cache miss - load data
             self.cache_misses += 1
-            logger.info(f"💾 Cache MISS: Loading data for {cache_key[:8]}...")
+            logger.info(f"💾 Cache MISS: Loading data from backend for {cache_key[:8]}...")
             
-            # Load the data
             load_start = time.time()
-            df = self._load_data_from_source(data_path, **kwargs)
+            df = self._load_data_from_source(**kwargs)
             load_time = time.time() - load_start
             
-            # Cache the data
             self._cache[cache_key] = {
-                'dataframe': df.copy(),  # Store copy to prevent external modification
+                'dataframe': df.copy(),
                 'metadata': {
-                    'data_path': data_path,
+                    'source': 'backend_url',
                     'shape': df.shape,
-                    'columns': list(df.columns),
                     'load_time': load_time,
                     'loaded_at': datetime.now().isoformat()
                 }
             }
-            
             self._access_times[cache_key] = datetime.now()
             self._load_times[cache_key] = load_time
             
-            # Cleanup and enforce limits
             self._cleanup_expired_cache()
             self._enforce_cache_size_limit()
             
@@ -182,61 +169,24 @@ class SharedDataCache:
                 'load_time_seconds': load_time,
                 'access_time': time.time() - start_time
             }
-            
             logger.info(f"📊 Data loaded and cached: {df.shape} in {load_time:.3f}s")
             return df, cache_info
     
-    def _load_data_from_source(self, data_path: str = None, **kwargs) -> pd.DataFrame:
-        """Load data from the actual source with enhanced path resolution."""
-        
-        # Enhanced data path resolution with multiple fallback locations
-        data_candidates = []
-        
-        if data_path:
-            data_candidates.append(data_path)
-        
-        # Add standard fallback locations
-        data_candidates.extend([
-            'data/beverage_sales.csv',
-            '/workspaces/crewai_demo/marketing_research_swarm/data/beverage_sales.csv',
-            os.path.join(os.getcwd(), 'data', 'beverage_sales.csv'),
-            os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'beverage_sales.csv')
-        ])
-        
-        # Try each candidate path
-        for candidate_path in data_candidates:
-            if candidate_path and os.path.exists(candidate_path):
-                try:
-                    logger.info(f"📁 Attempting to load data from: {candidate_path}")
-                    
-                    if candidate_path.endswith('.csv'):
-                        df = pd.read_csv(candidate_path)
-                    elif candidate_path.endswith('.json'):
-                        df = pd.read_json(candidate_path)
-                    elif candidate_path.endswith('.parquet'):
-                        df = pd.read_parquet(candidate_path)
-                    else:
-                        # Try CSV first, then JSON
-                        try:
-                            df = pd.read_csv(candidate_path)
-                        except:
-                            df = pd.read_json(candidate_path)
-                    
-                    logger.info(f"✅ Successfully loaded data from {candidate_path}: {df.shape}")
-                    return df
-                    
-                except Exception as e:
-                    logger.warning(f"⚠️ Error loading data from {candidate_path}: {e}")
-                    continue
-        
-        # If no valid data file found, fall back to sample data
-        if data_path:
-            logger.warning(f"⚠️ No valid data file found. Tried: {data_candidates}")
-        else:
-            logger.info("🔄 No data path provided, using sample data")
-        
-        logger.info("🔄 Falling back to sample data")
-        return self._create_sample_beverage_data()
+    def _load_data_from_source(self, **kwargs) -> pd.DataFrame:
+        """Load data from the backend service using Apache Arrow."""
+        backend_url = "http://127.0.0.1:8000/api/v1/data/beverage_sales"
+        try:
+            logger.info(f"📁 Attempting to load data from backend: {backend_url}")
+            response = requests.get(backend_url, timeout=30)
+            response.raise_for_status()
+            with pa.ipc.open_stream(io.BytesIO(response.content)) as reader:
+                table = reader.read_all()
+            df = table.to_pandas()
+            logger.info(f"✅ Successfully loaded data from backend: {df.shape}")
+            return df
+        except Exception as e:
+            logger.error(f"⚠️ Failed to load data from backend: {e}. Falling back to sample data.")
+            return self._create_sample_beverage_data()
     
     def _create_sample_beverage_data(self) -> pd.DataFrame:
         """Create optimized sample beverage data."""
@@ -332,16 +282,14 @@ class SharedDataCache:
             
             logger.info(f"🗑️ Cleared {cleared_count} cache entries")
     
-    def preload_data(self, data_paths: list, **kwargs):
-        """Preload data into cache for better performance."""
-        logger.info(f"🔄 Preloading {len(data_paths)} datasets...")
-        
-        for data_path in data_paths:
-            try:
-                df, cache_info = self.get_or_load_data(data_path, **kwargs)
-                logger.info(f"✅ Preloaded: {data_path} ({df.shape})")
-            except Exception as e:
-                logger.error(f"❌ Failed to preload {data_path}: {e}")
+    def preload_data(self, **kwargs):
+        """Preload data from the backend into cache."""
+        logger.info(f"🔄 Preloading data from backend...")
+        try:
+            df, cache_info = self.get_or_load_data(**kwargs)
+            logger.info(f"✅ Preloaded data from backend ({df.shape})")
+        except Exception as e:
+            logger.error(f"❌ Failed to preload data from backend: {e}")
 
 # Global shared cache instance
 _global_shared_cache = None

@@ -772,7 +772,6 @@ class EnhancedMarketingWorkflow:
                 completed_at=None,
                 final_summary=None,
                 regions=kwargs.get("regions", ["North", "South"]),
-                data_file_path=kwargs.get("data_file_path", "data/beverage_sales.csv"),
                 forecast_periods=kwargs.get("forecast_periods", 30),
                 market_research_results=None,
                 competitive_analysis_results=None,

@@ -9,6 +9,10 @@ from typing import Dict, Any, List, Optional, Union
 from datetime import datetime, timedelta
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
+import requests
+import pyarrow as pa
+import pyarrow.ipc as ipc
+import io
 
 def make_json_serializable(obj):
     """Convert pandas/numpy objects to JSON-serializable types."""
@@ -38,25 +42,22 @@ except ImportError:
     # Fallback to simple cache
     _GLOBAL_DATA_CACHE = {}
 
-def get_cached_data(data_path: str = None) -> pd.DataFrame:
+def get_cached_data() -> pd.DataFrame:
     """
-    Get cached data using optimized shared cache or fallback
+    Get cached data using the same strategy as optimized tools
     """
     if _USE_OPTIMIZED_CACHE:
         # Use optimized shared cache
         shared_cache = get_shared_cache()
-        df, cache_info = shared_cache.get_or_load_data(data_path)
+        df, cache_info = shared_cache.get_or_load_data()
         return df
     else:
         # Fallback to simple cache
         global _GLOBAL_DATA_CACHE
-        
-        # If no data path provided, return sample data
-        if not data_path:
-            return create_sample_beverage_data()
-        
+        backend_url = "http://127.0.0.1:8000/api/v1/data/beverage_sales"
+
         # Generate cache key
-        cache_key = hashlib.md5(data_path.encode()).hexdigest()
+        cache_key = hashlib.md5(backend_url.encode()).hexdigest()
         
         # Check if data is already cached
         if cache_key in _GLOBAL_DATA_CACHE:
@@ -64,25 +65,23 @@ def get_cached_data(data_path: str = None) -> pd.DataFrame:
         
         # Load and cache data
         try:
-            if data_path.endswith('.csv'):
-                df = pd.read_csv(data_path)
-            elif data_path.endswith('.json'):
-                df = pd.read_json(data_path)
-            else:
-                # Try CSV first, then JSON
-                try:
-                    df = pd.read_csv(data_path)
-                except:
-                    df = pd.read_json(data_path)
+            response = requests.get(backend_url)
+            response.raise_for_status()  # Raise an exception for bad status codes
+            
+            # Read the Arrow IPC stream from the binary response content
+            with pa.ipc.open_stream(io.BytesIO(response.content)) as reader:
+                table = reader.read_all()
+            
+            # Convert the Arrow Table to a pandas DataFrame
+            df = table.to_pandas()
             
             # Cache the data
             _GLOBAL_DATA_CACHE[cache_key] = df.copy()
             return df
             
-        except Exception as e:
-            print(f"Error loading data from {data_path}: {e}")
-            # Return sample data as fallback
-            return create_sample_beverage_data()
+        except requests.exceptions.RequestException as e:
+                # Return sample data as fallback
+                return create_sample_beverage_data()
 
 def create_sample_beverage_data() -> pd.DataFrame:
     """Create sample beverage data for analysis when no data file is available"""
@@ -170,11 +169,11 @@ class MarketShareInput(BaseModel):
     total_market_revenue: Optional[float] = Field(default=None, description="Total market revenue")
 
 @tool(args_schema=BeverageAnalysisInput)
-def beverage_market_analysis(data_path: str = None, analysis_type: str = "comprehensive") -> str:
+def beverage_market_analysis() -> str:
     """Analyze beverage market structure, brand performance, and category dynamics"""
     try:
         # Load data using cached approach with fallback
-        df = get_cached_data(data_path)
+        df = get_cached_data()
         
         if df.empty:
             return json.dumps({
@@ -230,11 +229,11 @@ def beverage_market_analysis(data_path: str = None, analysis_type: str = "compre
         return f"Error in beverage market analysis: {str(e)}"
 
 @tool(args_schema=BrandPerformanceInput)
-def analyze_brand_performance(data_path: str = None, brand_column: str = "brand", metrics: List[str] = ["sales", "market_share"]) -> str:
+def analyze_brand_performance(brand_column: str = "brand", metrics: List[str] = ["sales", "market_share"]) -> str:
     """Analyze individual brand performance metrics and market positioning"""
     try:
         # Load data using cached approach with fallback
-        df = get_cached_data(data_path)
+        df = get_cached_data()
         
         if df.empty:
             return json.dumps({
@@ -320,11 +319,11 @@ def analyze_brand_performance(data_path: str = None, brand_column: str = "brand"
         return f"Error in brand performance analysis: {str(e)}"
 
 @tool(args_schema=ProfitabilityAnalysisInput)
-def profitability_analysis(data_path: str = None, analysis_dimension: str = "brand") -> str:
+def profitability_analysis(analysis_dimension: str = "brand") -> str:
     """Analyze profitability metrics across different dimensions"""
     try:
         # Load data using cached approach with fallback
-        df = get_cached_data(data_path)
+        df = get_cached_data()
         
         if df.empty:
             return json.dumps({
@@ -414,11 +413,11 @@ def profitability_analysis(data_path: str = None, analysis_dimension: str = "bra
         return f"Error in profitability analysis: {str(e)}"
 
 @tool(args_schema=CrossSectionalAnalysisInput)
-def cross_sectional_analysis(data_path: str = None, group_column: str = "brand", value_column: str = "sales") -> str:
+def cross_sectional_analysis(value_column: str = "sales") -> str:
     """Perform cross-sectional analysis across different segments"""
     try:
         # Load data using cached approach with fallback
-        df = get_cached_data(data_path)
+        df = get_cached_data()
         
         # Set default parameters if not provided
         if not segment_column:
@@ -520,11 +519,11 @@ def cross_sectional_analysis(data_path: str = None, group_column: str = "brand",
         return f"Error in cross-sectional analysis: {str(e)}"
 
 @tool(args_schema=TimeSeriesAnalysisInput)
-def time_series_analysis(data_path: str = None, date_column: str = "date", value_column: str = "sales", periods: int = 12) -> str:
+def time_series_analysis(date_column: str = "date", value_column: str = "sales", periods: int = 12) -> str:
     """Perform time series analysis on sales data"""
     try:
         # Load data using cached approach with fallback
-        df = get_cached_data(data_path)
+        df = get_cached_data()
         
         if df.empty:
             return json.dumps({
@@ -635,11 +634,11 @@ def time_series_analysis(data_path: str = None, date_column: str = "date", value
         return f"Error in time series analysis: {str(e)}"
 
 @tool(args_schema=SalesForecastInput)
-def forecast_sales(data_path: str = None, periods: int = 30, forecast_column: str = "sales") -> str:
+def forecast_sales(periods: int = 30, forecast_column: str = "sales") -> str:
     """Forecast future sales based on historical data"""
     try:
         # Load data using cached approach with fallback
-        df = get_cached_data(data_path)
+        df = get_cached_data()
         
         if df.empty:
             return json.dumps({
@@ -746,11 +745,11 @@ def calculate_roi(investment: float, revenue: float) -> str:
         return f"Error calculating ROI: {str(e)}"
 
 @tool(args_schema=KPIAnalysisInput)
-def analyze_kpis(data_path: str = None) -> str:
+def analyze_kpis() -> str:
     """Analyze key performance indicators"""
     try:
         # Load data using cached approach with fallback
-        df = get_cached_data(data_path)
+        df = get_cached_data()
         
         if df.empty:
             return json.dumps({

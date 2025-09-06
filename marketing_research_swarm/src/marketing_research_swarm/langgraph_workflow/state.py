@@ -328,8 +328,7 @@ def get_agent_context(state: MarketingResearchState, agent_role: str) -> Dict[st
         'brands': state['brands'],
         'campaign_goals': state['campaign_goals'],
         'shared_data': state.get('shared_data', {}),
-        'cached_results': state['cached_results'],
-        'data_file_path': state.get('data_file_path', 'data/beverage_sales.csv')
+        'cached_results': state['cached_results']
     }
     
     # Add results from completed agents
