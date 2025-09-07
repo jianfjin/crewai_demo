@@ -1,20 +1,20 @@
-### **PowerPoint Presentation: Project Swarm Intelligence**
+### **Architecting Multi-Agent Framework**
 
 **Target Audience:** Product Owners, Backend/Frontend Developers, Business Intelligence Analysts, Data Engineers, Data Scientists.
 
 ---
 
-#### **Slide 1: Title Slide**
+#### **Title Slide**
 
-*   **Title:** Project Swarm Intelligence: An Autonomous Multi-Agent System for Advanced Marketing Research
-*   **Subtitle:** Leveraging LangGraph, Self-Correcting RAG, and Advanced Context Engineering to Unlock Actionable Business Insights
+*   **Title:** Architecting Intelligence: A Multi-Agent Framework for Marketing Research
+*   **Subtitle:** Powered by AI Agents, Advanced RAG, and Contextual Engineering
 *   **Presenter:** Senior Software Developer & Marketing Intelligence Specialist
-*   **Date:** September 7, 2025
-*   **(Visually appealing graphic of a neural network or abstract agent swarm)**
+*   **Date:** September 11, 2025
+
 
 ---
 
-#### **Slide 2: Agenda**
+#### **Agenda**
 
 1.  **The Opportunity:** Redefining Marketing Research with AI
 2.  **Core Concepts:** A Primer for a Mixed Audience
@@ -30,7 +30,7 @@
 
 ---
 
-#### **Slide 3: The Opportunity: Beyond Traditional Marketing Research**
+#### **The Opportunity: Beyond Traditional Marketing Research**
 
 *   **The Problem:**
     *   Traditional market research is often slow, manual, and costly.
@@ -43,7 +43,7 @@
 
 ---
 
-#### **Slide 4: Core Concept 1: What is an AI Agent?**
+#### **Core Concept 1: What is an AI Agent?**
 
 *   **Definition:** An AI system that uses a Large Language Model (LLM) as its core reasoning engine to perceive its environment, make decisions, and take actions to achieve a goal.
 *   **Key Components:**
@@ -53,10 +53,10 @@
 
 ---
 
-#### **Slide 5: Core Concept 1.1: The Multi-Agent Framework Landscape**
+#### **Core Concept 1.1: The Multi-Agent Framework Landscape**
 
 *   **What is it?** A system where multiple specialized agents work together, communicate, and delegate tasks to solve a problem more complex than any single agent could handle alone.
-*   **Our Choice:** We chose **LangGraph** for its unique flexibility to model the complex, cyclical, and unpredictable nature of in-depth research.
+*   **Our Choice:** We chose **LangGraph** for two key reasons: its flexibility to model complex, cyclical research workflows, and its seamless integration with **LangSmith**, a platform for robust debugging, tracing, and monitoring of agent interactions.
 
 *   **Comparison of Popular Frameworks:**
 
@@ -89,7 +89,7 @@
 
 ---
 
-#### **Slide 6: Core Concept 2: From Standard RAG to Self-Correcting RAG**
+#### **Core Concept 2: From Standard RAG to Self-Correcting RAG**
 
 *   **What is RAG?** Retrieval-Augmented Generation is a technique to make LLMs smarter and more reliable by connecting them to external, private knowledge bases.
 
@@ -104,13 +104,13 @@
 
 ```mermaid
 graph TD
-    A[Start: User Query] --> B{1. Retrieve from Knowledge Base};
-    B --> C{2. Grade Document Relevance};
-    C -- Relevant --> E[3. Generate Answer];
+    A[Start: User Query] --> B{Retrieve from Knowledge Base};
+    B --> C{Grade Document Relevance};
+    C -- Relevant --> E[Generate Answer];
     C -- Irrelevant/Insufficient --> D{Retry Query or Fallback to Web Search};
     D --> B;
-    E --> F{4. Grade for Hallucinations};
-    F -- Grounded --> G{5. Grade for Helpfulness};
+    E --> F{Grade for Hallucinations};
+    F -- Grounded --> G{Grade for Helpfulness};
     F -- Hallucination Detected --> D;
     G -- Helpful --> H[End: Final Answer];
     G -- Not Helpful --> D;
@@ -123,7 +123,7 @@ graph TD
 
 ---
 
-#### **Slide 7: Core Concept 3: Advanced Context Engineering**
+#### **Core Concept 3: Advanced Context Engineering**
 
 *   **What is it?** The science of aggressively optimizing the information (the "context") fed to an LLM to maximize performance and minimize cost. It's about giving each agent exactly what it needs, exactly when it needs it—and nothing more.
 
@@ -143,13 +143,12 @@ graph TD
 | **Checkpointing & Caching** | **Saving Your Progress** | The system saves the state and results of completed tasks. **Enables workflow recovery and provides instant results for repeated queries, saving compute and token costs.** |
 | **Long-Term Memory** | **The Corporate Archives** | Using `Mem0` and `InMemoryStore`, the system retains key insights across different user sessions. **Allows the system to learn and become smarter over time.** |
 
-*   **The Result: Aggressive Token Optimization:** Our baseline analysis required **~75,000 tokens.** With this multi-layered strategy, the same task is completed with **~15,000 tokens**—an **80% reduction.**
+*   **The Result: Aggressive Token Optimization:** Our baseline analysis required **75,000-100,000 tokens.** With this multi-layered strategy, the same task is completed with **10,000-15,000 tokens**—an **75-85% reduction.**
 
 ---
 
-#### **Slide 8: Project Architecture: How It All Fits Together**
+#### **Project Architecture: How It All Fits Together**
 
-*   **(This slide will feature the architecture diagram described below)**
 *   **Diagram Description (to be drawn on the slide):**
 
 ```mermaid
@@ -158,7 +157,7 @@ graph TD
         A[React Dashboard]
     end
 
-    subgraph Backend API (FastAPI)
+    subgraph Backend API 
         B[API Endpoint]
         C{RAG & Agent Selector}
         D[LangGraph Orchestrator]
@@ -180,8 +179,8 @@ graph TD
     end
 
     subgraph Data & Knowledge
-        J[Knowledge Base (Vector DB)];
-        K[Supabase DB (Sales Data)];
+        J[Knowledge Base Vector DB];
+        K[Supabase DB];
         L[Results Cache];
     end
 
@@ -197,15 +196,16 @@ graph TD
     B -- Streams Results --> A;
 ```
 *   **Flow Explanation:**
-    1.  User submits a research query via the **React Dashboard**.
-    2.  The **FastAPI backend** receives the query. The **RAG module** searches the **Knowledge Base** and not only retrieves data but also **recommends the best agents** for the task.
-    3.  The **LangGraph Orchestrator** starts the workflow with the recommended agents and initial context.
-    4.  Agents collaborate using a **Shared State (Blackboard)**, calling **Tools** to analyze live sales data from **Supabase**, and using a **Cache** to store intermediate results.
-    5.  The final, synthesized report is passed back to the dashboard.
+    1.  User submits a research query via the **Streamlit Dashboard**.
+    2.  The **RAG module** searches the **Knowledge Base** and not only retrieves data but also **recommends the best agents** for the task.
+    3.  The **FastAPI backend** retrieves the data from **Supabase**.
+    4.  The **LangGraph Orchestrator** starts the workflow with the recommended agents and initial context.
+    5.  Agents collaborate using a **Shared State (Blackboard)**, calling **Tools** to analyze the data from **Supabase**, and using a **Cache** to store intermediate results.
+    6.  The final, synthesized report is passed back to the dashboard.
 
 ---
 
-#### **Slide 9: Innovation 1: RAG-driven Agent Selection**
+#### **Innovation 1: RAG-driven Agent Selection**
 
 *   **The Problem:** In a complex system, how do you know which specialist (agent) to assign to a new task?
 *   **Our Solution:** We treat our agents' descriptions and capabilities as a part of our knowledge base.
@@ -218,7 +218,7 @@ graph TD
 
 ---
 
-#### **Slide 10: Innovation 2: Context Engineering in Action**
+#### **Innovation 2: Context Engineering in Action**
 
 *   **Shared State (The Blackboard):**
     *   Instead of passing long chat histories between agents, they write key findings to a central blackboard. New agents can get up to speed instantly by reading the blackboard, saving tokens and time.
@@ -230,18 +230,39 @@ graph TD
 
 ---
 
-#### **Slide 11: Summary of Features**
+#### **Innovation 3: Hybrid Tool Selection**
+
+*   **The Problem:** How does an agent choose the right tool for a specific query? 
+    *   **Static Approach (Inefficient):** Always running all assigned tools is wasteful and slow.
+    *   **LLM-Only Approach (Expensive):** Asking the LLM to pick a tool for every query adds latency and significant cost.
+
+*   **Our Solution: A Hybrid, Tiered Selection Strategy**
+    *   We implemented a "Smart Tool Selector" that combines the best of both worlds: rule-based efficiency and query-aware intelligence.
+
+*   **How it Works:**
+    1.  **Query Analysis:** First, the system analyzes the user's query to extract keywords and intent (e.g., "forecast", "profitability", "compare brands").
+    2.  **Tiered Selection:** Tools are then chosen based on a three-tier system:
+        *   **Tier 1 (Essential):** Core tools for an agent's role are always selected (e.g., a `data_analyst` always needs `profitability_analysis`).
+        *   **Tier 2 (Contextual):** Additional tools are selected if their keywords match the query's intent (e.g., `forecast_sales` is only chosen if the query mentions "predict" or "forecast").
+        *   **Tier 3 (Supplementary):** Specialized tools are kept in reserve and are only used if the initial analysis is insufficient.
+
+*   **Benefit: The Right Tool for the Right Job, Every Time.**
+    *   This hybrid model dramatically improves efficiency by avoiding unnecessary tool executions, leading to faster response times and lower token costs, while ensuring the agent has the precise analytical capabilities needed to answer the user's query.
+
+---
+
+#### **Summary of Features**
 
 *   **Autonomous & Collaborative Agents:** A team of specialized agents (Market Analyst, Data Scientist, etc.) that can work together.
 *   **Self-Correcting RAG:** Grounded, accurate, and reliable answers from a knowledge base that can self-heal and verify.
 *   **Advanced Context Engineering:** Aggressive focus on token and cost optimization through caching, shared state, and context pruning.
 *   **Dynamic Agent Selection:** The right team is assembled for every query, on the fly.
+*   **Intelligent & Extensible Toolset:** Agents use a powerful set of tools for analysis and data gathering, with a hybrid selection system that automatically chooses the most relevant tools for each specific query.
 *   **Interactive Dashboard:** A user-friendly interface to launch research tasks, monitor progress, and view results.
-*   **Extensible Toolset:** Agents can use powerful tools like a code interpreter for data analysis and web search for fresh information.
 
 ---
 
-#### **Slide 12: The Business Impact: Your AI Research Partner**
+#### **The Business Impact: Your AI Research Partner**
 
 *   **For Product Owners & Business Leaders:**
     *   **Speed:** Reduce research time from weeks to hours. Get answers to complex business questions on demand.
@@ -255,9 +276,9 @@ graph TD
 
 ---
 
-#### **Slide 13: Thank You & Q&A**
+#### **Thank You & Q&A**
 
-*   **Title:** Questions?
+*   **Questions?**
 *   **Contact Information:**
-    *   [Your Name/Team Name]
-    *   [Your Email/Contact Info]
+    *   Jianfeng Jin/Data Engineering Team
+    *   jianfeng.jin@scanmarqed.com
