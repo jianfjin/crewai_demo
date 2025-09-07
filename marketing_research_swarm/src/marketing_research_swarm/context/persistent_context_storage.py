@@ -14,6 +14,7 @@ from pathlib import Path
 import logging
 import threading
 from contextlib import contextmanager
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -131,10 +132,10 @@ class PersistentContextStorage:
         
         try:
             with self._get_connection() as conn:
-                # Serialize complex data
-                context_blob = pickle.dumps(context_data)
+                # Serialize complex data with enum handling
+                context_blob = pickle.dumps(self._serialize_for_storage(context_data))
                 dependencies_json = json.dumps(dependencies)
-                metadata_json = json.dumps(metadata)
+                metadata_json = json.dumps(self._serialize_for_storage(metadata))
                 now = datetime.now().isoformat()
                 
                 conn.execute("""
@@ -155,6 +156,19 @@ class PersistentContextStorage:
         except Exception as e:
             logger.error(f"Failed to save checkpoint: {e}")
             raise
+    
+    def _serialize_for_storage(self, data: Any) -> Any:
+        """Recursively serialize data, converting enums to their values."""
+        if isinstance(data, Enum):
+            return data.value
+        elif isinstance(data, dict):
+            return {key: self._serialize_for_storage(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            return [self._serialize_for_storage(item) for item in data]
+        elif isinstance(data, tuple):
+            return tuple(self._serialize_for_storage(item) for item in data)
+        else:
+            return data
     
     def load_checkpoint(self, checkpoint_id: str) -> Optional[ContextCheckpoint]:
         """Load a specific checkpoint from storage."""

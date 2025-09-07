@@ -22,6 +22,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from .state import MarketingResearchState, WorkflowStatus, AgentStatus
+from enum import Enum
 from .enhanced_agent_nodes import ENHANCED_AGENT_NODES
 from ..blackboard.integrated_blackboard import get_integrated_blackboard
 from ..context.enhanced_context_engineering import get_enhanced_context_engineering
@@ -577,11 +578,14 @@ class EnhancedMarketingWorkflow:
 
             # Persist to durable storage as well
             try:
+                # Serialize state to handle enums properly
+                serialized_state = self._serialize_state_for_checkpoint(state)
+                
                 self.persistent_storage.save_checkpoint(
                     workflow_id=workflow_id,
                     agent_id=current_agent,
                     context_data={
-                        "state_snapshot": state,
+                        "state_snapshot": serialized_state,
                         "optimized_context": state.get("last_optimized_context", {}).get(current_agent),
                         "compression": state.get("last_context_compression"),
                     },
@@ -591,7 +595,7 @@ class EnhancedMarketingWorkflow:
                     compression_level=state.get("last_context_compression", {}).get("method", "none"),
                     metadata={
                         "step": state["agent_steps"][current_agent],
-                        "status": state["agent_status"].get(current_agent),
+                        "status": state["agent_status"].get(current_agent).value if hasattr(state["agent_status"].get(current_agent), 'value') else str(state["agent_status"].get(current_agent)),
                         "timestamp": datetime.now().isoformat(),
                     },
                 )
@@ -606,6 +610,27 @@ class EnhancedMarketingWorkflow:
             logger.info(f"💾 Created checkpoint after {current_agent} execution")
         
         return state
+    
+    def _serialize_state_for_checkpoint(self, state: MarketingResearchState) -> dict:
+        """Serialize state for checkpoint storage, converting enums to their values."""
+        def serialize_value(value):
+            if isinstance(value, Enum):
+                return value.value
+            elif isinstance(value, dict):
+                return {k: serialize_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [serialize_value(item) for item in value]
+            elif isinstance(value, tuple):
+                return tuple(serialize_value(item) for item in value)
+            else:
+                return value
+        
+        # Create a copy of the state and serialize all enum values
+        serialized_state = {}
+        for key, value in state.items():
+            serialized_state[key] = serialize_value(value)
+        
+        return serialized_state
     
     def _route_next_enhanced_agent(self, state: MarketingResearchState) -> str:
         """Route to next agent or finalization with enhanced logic."""

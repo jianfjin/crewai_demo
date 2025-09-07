@@ -122,7 +122,7 @@ class BeverageMarketAnalysisTool(BaseTool):
             actual_data_path = data_path or kwargs.get('data_file_path') or kwargs.get('data_path')
             
             # Load data using cached approach with fallback
-            df = get_cached_data(actual_data_path)
+            df = get_cached_data()
             
             if df.empty:
                 return json.dumps({

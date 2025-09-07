@@ -26,7 +26,7 @@ content_strategist:
     A creative thinker with expertise in beverage marketing and consumer behavior. The Content Strategist develops content strategies that resonate with beverage consumers, understand lifestyle trends, and align with brand positioning in the competitive beverage market.
   llm: openai/gpt-4o-mini
   allow_delegation: true
-  tools: [search, web_search]
+  tools: [beverage_market_analysis, search, web_search]
 
 creative_copywriter:
   role: "creative_copywriter"
@@ -36,7 +36,7 @@ creative_copywriter:
     A master of words, the Creative Copywriter crafts persuasive and engaging copy for various marketing channels, from social media to email campaigns.
   llm: openai/gpt-4o-mini
   allow_delegation: false
-  tools: [search, web_search]
+  tools: [beverage_market_analysis, search, web_search]
 
 data_analyst:
   role: "data_analyst"

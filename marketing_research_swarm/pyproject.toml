@@ -37,6 +37,7 @@ dependencies = [
     "psycopg2-binary>=2.9.9",
     "python-dotenv>=1.0.0",
     "pyarrow>=15.0.0",
+    "supabase>=2.18.1",
 ]
 
 [project.scripts]
