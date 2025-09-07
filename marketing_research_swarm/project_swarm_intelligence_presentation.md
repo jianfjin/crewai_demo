@@ -53,49 +53,97 @@
 
 ---
 
-#### **Slide 5: Core Concept 1.1: Multi-Agent Systems**
+#### **Slide 5: Core Concept 1.1: The Multi-Agent Framework Landscape**
 
-*   **What is it?** A system where multiple agents work together, communicate, and delegate tasks to solve a problem more complex than any single agent could handle alone.
-*   **Popular Frameworks:**
-    *   **CrewAI:**
-        *   **Analogy:** A well-defined corporate hierarchy.
-        *   High-level, role-based framework. Easy to set up collaborative "crews".
-        *   **Pro:** Fast prototyping, clear structure.
-        *   **Con:** Can be rigid; less control over the workflow.
-        *   **Used by:** PwC, AWS (for Bedrock Agents), and many startups for functions from marketing to internal automation.
-    *   **LangGraph:**
-        *   **Analogy:** A flexible, dynamic project team mapped on a whiteboard.
-        *   Lower-level library for building stateful, graph-based agent workflows.
-        *   **Pro:** Highly flexible, supports complex cycles and explicit state management.
-        *   **Con:** Steeper learning curve.
-        *   **Used by:** LinkedIn (for SQL bots), Uber (for code migration), Replit (for their dev copilot), and Elastic (for threat detection).
-*   **Our Choice:** We chose **LangGraph** for its flexibility to model the complex, cyclical, and unpredictable nature of in-depth research.
+*   **What is it?** A system where multiple specialized agents work together, communicate, and delegate tasks to solve a problem more complex than any single agent could handle alone.
+*   **Our Choice:** We chose **LangGraph** for its unique flexibility to model the complex, cyclical, and unpredictable nature of in-depth research.
+
+*   **Comparison of Popular Frameworks:**
+
+| Provider / Framework | Analogy | Pros | Cons |
+| :--- | :--- | :--- | :--- |
+| **CrewAI** | **A well-defined corporate hierarchy.** | High-level, role-based, and easy to set up. Great for rapid prototyping and clear, hierarchical workflows. | Can be rigid. Less granular control over task execution and agent communication flow. |
+| **LangGraph** | **A flexible project team on a whiteboard.** | Highly flexible, supports complex cycles, branching logic, and explicit state management. Excellent for research and complex problem-solving. | Steeper learning curve; requires more boilerplate code to define the workflow graph. |
+| **Microsoft AutoGen** | **A university research group.** | **Highly Versatile & Research-Oriented:** Excellent for creating complex conversational agents that can self-correct and learn. Great for R&D. | **Complexity:** Can be complex to set up and manage for simple production use cases. Less opinionated, requiring more architectural decisions. |
+| **AWS Bedrock Agents** | **A corporate IT department.** | **Integration & Security:** Deeply integrated with AWS services (Lambda, S3, etc.). Strong focus on enterprise-grade security, governance, and model choice. | **Framework Lock-in:** Primarily designed to work within the AWS ecosystem. Can be less flexible than open-source frameworks. |
+| **Google Vertex AI** | **A corporate data science division.** | **Powerful Grounding & Search:** Leverages Google's world-class search and data infrastructure to ground agents in reliable information, reducing hallucinations. | **Nascent Tooling:** The agent-building ecosystem and tools are powerful but still evolving compared to more mature, specialized frameworks. |
+| **OpenAI Assistants API** | **A highly skilled personal assistant.** | **Simplicity & Power:** Extremely easy to get a powerful, tool-enabled agent running. State management is handled automatically. | **Limited Orchestration:** Natively designed for single-agent use. Creating a true multi-agent system requires building a custom orchestration layer on top. |
+
+*   **Recommendations:**
+
+    *   **For Startups & Rapid Prototyping:**
+        *   **Recommendation:** Start with **CrewAI** or **OpenAI Assistants API**.
+        *   **Why:** Fastest time-to-value. Allows you to validate your core idea without getting bogged down in complex orchestration logic.
+
+    *   **For Academic Research & R&D Teams:**
+        *   **Recommendation:** Use **Microsoft Autogen** or **LangGraph**.
+        *   **Why:** These offer the most flexibility and control to experiment with novel agent designs, communication patterns, and complex, cyclical workflows.
+
+    *   **For Large Enterprises:**
+        *   **Recommendation:** Build on **AWS Bedrock** or **Google Vertex AI**.
+        *   **Why:** These platforms provide the necessary security, scalability, data governance, and integration with existing cloud infrastructure that are critical for enterprise adoption.
+
+    *   **For Complex, Custom Workflows:**
+        *   **Recommendation:** **LangGraph** is the ideal choice.
+        *   **Why:** When your process isn't a simple hierarchy and requires dynamic loops, human-in-the-loop validation, and fine-grained state control, LangGraph provides the necessary power and flexibility.
 
 ---
 
-#### **Slide 6: Core Concept 2: Retrieval-Augmented Generation (RAG)**
+#### **Slide 6: Core Concept 2: From Standard RAG to Self-Correcting RAG**
 
-*   **What is it?** A technique to make LLMs smarter and more reliable by connecting them to external knowledge bases.
-*   **How it Works (Simple Flow):**
-    1.  **Retrieve:** When asked a question, the system first searches a private knowledge base (e.g., vector database of company reports, sales data).
-    2.  **Augment:** The relevant information found is added to the user's original prompt.
-    3.  **Generate:** The LLM generates an answer based on both the original question and the retrieved data.
-*   **Our Innovation: Self-Correcting RAG**
-    *   Our system adds a validation loop. The RAG agent critiques the retrieved documents for relevance. If they are insufficient, it can re-query or even use a web search tool to find better information *before* generating the final answer. This drastically improves accuracy.
+*   **What is RAG?** Retrieval-Augmented Generation is a technique to make LLMs smarter and more reliable by connecting them to external, private knowledge bases.
+
+*   **Standard RAG (The Junior Researcher):** A simple, linear process.
+    1.  **Retrieve:** Finds the first relevant documents it can.
+    2.  **Augment:** Adds them to the prompt without question.
+    3.  **Generate:** Gives an answer based on that initial context.
+    *   ***Limitation:*** *It inherently trusts the initial retrieval. If the documents are irrelevant, outdated, or don't contain the answer, the LLM may guess, "hallucinate," or simply fail.*
+
+*   **Our Innovation: Self-Correcting RAG (The Senior Researcher):**
+    *   Our system introduces a crucial, cyclical validation loop. It doesn't just retrieve; it **assesses, grades, and refines.**
+
+```mermaid
+graph TD
+    A[Start: User Query] --> B{1. Retrieve from Knowledge Base};
+    B --> C{2. Grade Document Relevance};
+    C -- Relevant --> E[3. Generate Answer];
+    C -- Irrelevant/Insufficient --> D{Retry Query or Fallback to Web Search};
+    D --> B;
+    E --> F{4. Grade for Hallucinations};
+    F -- Grounded --> G{5. Grade for Helpfulness};
+    F -- Hallucination Detected --> D;
+    G -- Helpful --> H[End: Final Answer];
+    G -- Not Helpful --> D;
+```
+
+*   **The Key Advantages of Self-Correction:**
+    *   **Accuracy & Reliability:** By grading for hallucinations, the system ensures answers are factually grounded in the provided sources. This moves from "plausible-sounding" to "verifiably accurate."
+    *   **Resilience & Robustness:** It doesn't fail on a poor initial search. The system can autonomously rewrite queries, retry, and even pivot to a web search if the internal knowledge base is insufficient.
+    *   **Expanded Knowledge:** The web search fallback allows the system to answer questions about recent events or topics not covered in the static knowledge base, providing comprehensive and timely insights.
 
 ---
 
-#### **Slide 7: Core Concept 3: Context Engineering**
+#### **Slide 7: Core Concept 3: Advanced Context Engineering**
 
-*   **What is it?** The science of optimizing the information (the "context") fed to an LLM.
+*   **What is it?** The science of aggressively optimizing the information (the "context") fed to an LLM to maximize performance and minimize cost. It's about giving each agent exactly what it needs, exactly when it needs it—and nothing more.
+
 *   **Why it Matters:**
-    *   **Cost:** LLM costs are based on token usage. Sending irrelevant data is expensive.
-    *   **Performance:** LLMs have a finite "attention span" (context window). Filling it with noise degrades reasoning quality.
+    *   **Cost:** LLM costs are based on token usage. A 75-85% reduction in tokens, as achieved in our system, translates directly to massive cost savings.
+    *   **Performance:** LLMs have a finite "attention span" (context window). Filling it with irrelevant noise degrades reasoning quality.
     *   **Accuracy:** The right context leads to the right answer.
-*   **Key Techniques We Use:**
-    *   **Context Pruning & Compression:** Summarizing long documents and conversations.
-    *   **Shared State (Blackboard):** A central place for agents to share findings, avoiding redundant work.
-    *   **Data Caching:** Storing the results of expensive operations (like data analysis) so they don't have to be run again.
+
+*   **Our Multi-Layered Context Strategy:**
+
+| Technique | Analogy | Purpose & Impact |
+| :--- | :--- | :--- |
+| **Blackboard Integration** | **The Project War Room** | A central, shared space where agents post key findings. **Drastically reduces redundant work and inter-agent chat.** |
+| **Context Isolation** | **"Need-to-Know" Briefings** | Each agent receives a tailored context specific to its task. The Data Analyst gets raw data; the Strategist gets the summary. **Keeps agents focused and efficient.** |
+| **Context Compression** | **The Executive Summary** | Advanced, intelligent summarization and pruning of documents and conversations before they are sent to the LLM. **Directly reduces token load.** |
+| **Scratchpads** | **An Agent's Notepad** | Short-term memory for an agent to jot down intermediate thoughts and reasoning steps for a single task. **Improves complex reasoning and avoids token repetition.** |
+| **Checkpointing & Caching** | **Saving Your Progress** | The system saves the state and results of completed tasks. **Enables workflow recovery and provides instant results for repeated queries, saving compute and token costs.** |
+| **Long-Term Memory** | **The Corporate Archives** | Using `Mem0` and `InMemoryStore`, the system retains key insights across different user sessions. **Allows the system to learn and become smarter over time.** |
+
+*   **The Result: Aggressive Token Optimization:** Our baseline analysis required **~75,000 tokens.** With this multi-layered strategy, the same task is completed with **~15,000 tokens**—an **80% reduction.**
 
 ---
 
@@ -133,7 +181,7 @@ graph TD
 
     subgraph Data & Knowledge
         J[Knowledge Base (Vector DB)];
-        K[Data Warehouse / CSVs];
+        K[Supabase DB (Sales Data)];
         L[Results Cache];
     end
 
@@ -152,7 +200,7 @@ graph TD
     1.  User submits a research query via the **React Dashboard**.
     2.  The **FastAPI backend** receives the query. The **RAG module** searches the **Knowledge Base** and not only retrieves data but also **recommends the best agents** for the task.
     3.  The **LangGraph Orchestrator** starts the workflow with the recommended agents and initial context.
-    4.  Agents collaborate using a **Shared State (Blackboard)**, calling **Tools** to analyze data, and using a **Cache** to store intermediate results.
+    4.  Agents collaborate using a **Shared State (Blackboard)**, calling **Tools** to analyze live sales data from **Supabase**, and using a **Cache** to store intermediate results.
     5.  The final, synthesized report is passed back to the dashboard.
 
 ---
