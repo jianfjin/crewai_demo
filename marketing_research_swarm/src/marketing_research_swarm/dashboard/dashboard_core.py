@@ -3110,7 +3110,91 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                         st.markdown("[🖼️ View PNG](https://mermaid.ink)")
                     
                     st.markdown("💡 **Tip:** Copy the above code to [mermaid.live](https://mermaid.live) for interactive editing")
-            
+
+                with tab4:
+                    st.subheader("📋 Execution Analysis")
+                    st.markdown("**Workflow execution analysis and performance metrics:**")
+                    
+                    # Show execution order and dependencies
+                    execution_order = state_graph_visualizer.get_execution_order(selected_agents)
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("**🔄 Execution Flow:**")
+                        for layer_idx, layer in enumerate(execution_order):
+                            if len(layer) == 1:
+                                st.markdown(f"**Step {layer_idx + 1}:** {layer[0].replace('_', ' ').title()}")
+                            else:
+                                agents_str = ", ".join([agent.replace('_', ' ').title() for agent in layer])
+                                st.markdown(f"**Step {layer_idx + 1} (Parallel):** {agents_str}")
+                    
+                    with col2:
+                        st.markdown("**📊 Workflow Metrics:**")
+                        total_agents = len(selected_agents)
+                        parallel_layers = sum(1 for layer in execution_order if len(layer) > 1)
+                        sequential_layers = len(execution_order) - parallel_layers
+                        
+                        st.metric("Total Agents", total_agents)
+                        st.metric("Execution Layers", len(execution_order))
+                        st.metric("Parallel Layers", parallel_layers)
+                        st.metric("Sequential Layers", sequential_layers)
+                    
+                    # Agent dependencies analysis
+                    st.markdown("**🔗 Agent Dependencies:**")
+                    
+                    # Create dependency analysis
+                    dependency_info = []
+                    for agent in selected_agents:
+                        # Find which layer this agent is in
+                        agent_layer = None
+                        for layer_idx, layer in enumerate(execution_order):
+                            if agent in layer:
+                                agent_layer = layer_idx + 1
+                                break
+                        
+                        # Determine dependencies (agents in previous layers)
+                        dependencies = []
+                        if agent_layer and agent_layer > 1:
+                            for prev_layer_idx in range(agent_layer - 1):
+                                dependencies.extend(execution_order[prev_layer_idx])
+                        
+                        dependency_info.append({
+                            "Agent": agent.replace('_', ' ').title(),
+                            "Layer": agent_layer,
+                            "Dependencies": ", ".join([dep.replace('_', ' ').title() for dep in dependencies]) if dependencies else "None",
+                            "Can Run in Parallel": "Yes" if len(execution_order[agent_layer - 1]) > 1 else "No"
+                        })
+                    
+                    # Display as a table
+                    import pandas as pd
+                    df_deps = pd.DataFrame(dependency_info)
+                    st.dataframe(df_deps, use_container_width=True)
+                    
+                    # Performance insights
+                    st.markdown("**⚡ Performance Insights:**")
+                    
+                    if parallel_layers > 0:
+                        st.success(f"✅ **Optimized Workflow**: {parallel_layers} parallel execution layers detected")
+                        st.markdown(f"• Agents can run simultaneously in {parallel_layers} layers")
+                        st.markdown(f"• Estimated speedup: ~{parallel_layers * 1.5:.1f}x faster than sequential execution")
+                    else:
+                        st.info("ℹ️ **Sequential Workflow**: All agents run one after another")
+                        st.markdown("• Consider adding parallel-capable agents for better performance")
+                    
+                    # Execution time estimation
+                    estimated_time_per_agent = 30  # seconds
+                    sequential_time = total_agents * estimated_time_per_agent
+                    parallel_time = len(execution_order) * estimated_time_per_agent
+                    
+                    time_col1, time_col2, time_col3 = st.columns(3)
+                    with time_col1:
+                        st.metric("Sequential Time", f"{sequential_time}s", help="If all agents ran one after another")
+                    with time_col2:
+                        st.metric("Optimized Time", f"{parallel_time}s", help="With parallel execution")
+                    with time_col3:
+                        speedup = sequential_time / parallel_time if parallel_time > 0 else 1
+                        st.metric("Speedup", f"{speedup:.1f}x", help="Performance improvement")
         else:
             if not selected_agents:
                 st.info("Select agents to view the workflow graph")
