@@ -744,15 +744,19 @@ class EnhancedMarketingWorkflow:
         budget: float,
         duration: str,
         analysis_focus: str,
+        callback_manager=None,
         **kwargs
     ) -> Dict[str, Any]:
         """Execute the enhanced workflow with context engineering."""
         
         try:
-            # FIXED: Ensure report_summarizer is always included in selected_agents
+            # Only add report_summarizer if user hasn't explicitly excluded it
+            # Check if this is a manual configuration where user deliberately excluded it
             if "report_summarizer" not in selected_agents:
+                # Add report_summarizer by default, but log it clearly for transparency
                 selected_agents = selected_agents + ["report_summarizer"]
-                logger.info(f"🔄 Automatically added report_summarizer to selected agents: {selected_agents}")
+                logger.info(f"🔄 Automatically added report_summarizer for final report generation: {selected_agents}")
+                logger.info("💡 To exclude report_summarizer, ensure it's not in your agent selection")
             
             # Create initial state as MarketingResearchState object
             workflow_id = str(uuid.uuid4())
@@ -821,6 +825,12 @@ class EnhancedMarketingWorkflow:
             
             # Execute the workflow
             config = {"configurable": {"thread_id": initial_state["workflow_id"]}}
+            
+            # Add LangSmith callback manager if provided
+            if callback_manager:
+                config["callbacks"] = callback_manager
+                logger.info(f"🔍 LangSmith tracing enabled for workflow: {initial_state['workflow_id']}")
+            
             final_state = self.workflow.invoke(initial_state, config=config)
             
             # Return comprehensive result

@@ -1074,9 +1074,9 @@ class LangGraphDashboard:
     """
     """LangGraph Marketing Research Dashboard class."""
 
-    def __init__(self, langsmith_available: bool = False):
+    def __init__(self):
         """Initialize the dashboard."""
-        self.langsmith_available = langsmith_available
+        self.langsmith_available = LANGSMITH_AVAILABLE
         
         # Ensure LangSmith environment variables are set for tracing
         if LANGSMITH_AVAILABLE:
@@ -1473,8 +1473,13 @@ class LangGraphDashboard:
             # Create enhanced LangSmith tracer
             callback_manager = None
             if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_langsmith_monitor and enhanced_langsmith_monitor.available:
+                # Enhanced LangSmith monitor is available, use it
                 callback_manager = enhanced_langsmith_monitor.create_run_tracer(workflow_id)
-                logger.info(f"🔍 Created LangSmith tracer for workflow: {workflow_id}")
+                logger.info(f"🔍 Created enhanced LangSmith tracer for workflow: {workflow_id}")
+            elif LANGSMITH_AVAILABLE and self.langsmith_available:
+                # Fallback to basic LangSmith tracer
+                callback_manager = create_langsmith_tracer(LANGSMITH_PROJECT)
+                logger.info(f"🔍 Created basic LangSmith tracer for workflow: {workflow_id}")
             
             # Use the enhanced workflow that includes report_summarizer
             workflow = MarketingResearchWorkflow(context_strategy="smart")  # This is the enhanced MarketingResearchWorkflow
@@ -1536,28 +1541,53 @@ class LangGraphDashboard:
                         cost = (agent_tokens * 0.000000150) + (agent_tokens * 0.0000006)  # Input + output cost
                         enhanced_token_tracker.track_agent_execution(agent, agent_tokens, cost)
                 
-                # Execute enhanced workflow with ALL parameters
-                result = workflow.execute_enhanced_workflow(
-                    selected_agents=optimized_config["selected_agents"],
-                    target_audience=optimized_config["target_audience"],
-                    campaign_type=optimized_config["campaign_type"],
-                    budget=optimized_config["budget"],
-                    duration=optimized_config["duration"],
-                    analysis_focus=optimized_config["analysis_focus"],
-                    business_objective=optimized_config.get("business_objective", ""),
-                    competitive_landscape=optimized_config.get("competitive_landscape", ""),
-                    market_segments=optimized_config.get("market_segments", []),
-                    product_categories=optimized_config.get("product_categories", []),
-                    key_metrics=optimized_config.get("key_metrics", []),
-                    brands=optimized_config.get("brands", []),
-                    campaign_goals=optimized_config.get("campaign_goals", []),
-                    forecast_periods=optimized_config.get("forecast_periods", 30),
-                    expected_revenue=optimized_config.get("expected_revenue", 25000),
-                    brand_metrics=optimized_config.get("brand_metrics", {}),
-                    competitive_analysis=optimized_config.get("competitive_analysis", True),
-                    market_share_analysis=optimized_config.get("market_share_analysis", True),
-                    optimization_level=optimization_level
-                )
+                # Execute enhanced workflow with ALL parameters including callback manager
+                if hasattr(workflow, 'execute_enhanced_workflow'):
+                    result = workflow.execute_enhanced_workflow(
+                        selected_agents=optimized_config["selected_agents"],
+                        target_audience=optimized_config["target_audience"],
+                        campaign_type=optimized_config["campaign_type"],
+                        budget=optimized_config["budget"],
+                        duration=optimized_config["duration"],
+                        analysis_focus=optimized_config["analysis_focus"],
+                        callback_manager=callback_manager,  # Pass LangSmith callback manager
+                        business_objective=optimized_config.get("business_objective", ""),
+                        competitive_landscape=optimized_config.get("competitive_landscape", ""),
+                        market_segments=optimized_config.get("market_segments", []),
+                        product_categories=optimized_config.get("product_categories", []),
+                        key_metrics=optimized_config.get("key_metrics", []),
+                        brands=optimized_config.get("brands", []),
+                        campaign_goals=optimized_config.get("campaign_goals", []),
+                        forecast_periods=optimized_config.get("forecast_periods", 30),
+                        expected_revenue=optimized_config.get("expected_revenue", 25000),
+                        brand_metrics=optimized_config.get("brand_metrics", {}),
+                        competitive_analysis=optimized_config.get("competitive_analysis", True),
+                        market_share_analysis=optimized_config.get("market_share_analysis", True),
+                        optimization_level=optimization_level
+                    )
+                else:
+                    # Fallback to execute_workflow method
+                    result = workflow.execute_workflow(
+                        selected_agents=optimized_config["selected_agents"],
+                        target_audience=optimized_config["target_audience"],
+                        campaign_type=optimized_config["campaign_type"],
+                        budget=optimized_config["budget"],
+                        duration=optimized_config["duration"],
+                        analysis_focus=optimized_config["analysis_focus"],
+                        business_objective=optimized_config.get("business_objective", ""),
+                        competitive_landscape=optimized_config.get("competitive_landscape", ""),
+                        market_segments=optimized_config.get("market_segments", []),
+                        product_categories=optimized_config.get("product_categories", []),
+                        key_metrics=optimized_config.get("key_metrics", []),
+                        brands=optimized_config.get("brands", []),
+                        campaign_goals=optimized_config.get("campaign_goals", []),
+                        forecast_periods=optimized_config.get("forecast_periods", 30),
+                        expected_revenue=optimized_config.get("expected_revenue", 25000),
+                        brand_metrics=optimized_config.get("brand_metrics", {}),
+                        competitive_analysis=optimized_config.get("competitive_analysis", True),
+                        market_share_analysis=optimized_config.get("market_share_analysis", True),
+                        optimization_level=optimization_level
+                    )
                 logger.info(f"✅ Workflow executed successfully with optimization level: {optimization_level}")
                 
             except Exception as workflow_error:
@@ -1571,6 +1601,7 @@ class LangGraphDashboard:
                         'budget': optimized_config["budget"],
                         'duration': optimized_config["duration"],
                         'analysis_focus': optimized_config["analysis_focus"],
+                        'callback_manager': callback_manager,  # Pass LangSmith callback manager
                         'business_objective': optimized_config.get("business_objective", ""),
                         'competitive_landscape': optimized_config.get("competitive_landscape", ""),
                         'market_segments': optimized_config.get("market_segments", []),
@@ -1901,12 +1932,26 @@ class LangGraphDashboard:
         if opt_settings.get("optimization_level"):
             optimized_config["optimization_level"] = opt_settings["optimization_level"]
             
-            # Agent selection optimization for higher levels
+            # Agent selection optimization for higher levels - but only if using default agents
+            # Don't override manually selected agents in manual configuration mode
             if opt_settings["optimization_level"] in ["full", "blackboard"]:
-                optimized_config["selected_agents"] = self._optimize_agent_selection(
-                    config["selected_agents"], 
-                    config["analysis_type"]
-                )
+                # Check if this is manual configuration mode by looking at the source
+                # In manual mode, we should respect user's agent selection
+                default_agents_for_type = self._get_default_agents(config["analysis_type"])
+                user_selected_agents = config["selected_agents"]
+                
+                # Only apply optimization if user is using default agents or hasn't customized
+                if set(user_selected_agents) == set(default_agents_for_type):
+                    # User is using defaults, safe to optimize
+                    optimized_config["selected_agents"] = self._optimize_agent_selection(
+                        config["selected_agents"], 
+                        config["analysis_type"]
+                    )
+                    logger.info(f"🎯 Applied agent optimization: {user_selected_agents} -> {optimized_config['selected_agents']}")
+                else:
+                    # User has manually customized agents, respect their choice
+                    logger.info(f"🎯 Respecting manual agent selection: {user_selected_agents}")
+                    # Keep the user's selection unchanged
         
         return optimized_config
     
@@ -1979,9 +2024,18 @@ class LangGraphDashboard:
         with col2:
             st.metric("Agents Executed", summary.get("completed_agents", len(agent_results)))
         with col3:
-            st.metric("Execution Time", f"{summary.get('execution_time', 0):.1f}s")
+            # Fix execution time display - check multiple possible locations
+            exec_time = (summary.get("execution_time", 0) or 
+                        result.get("execution_time", 0) or 
+                        result.get("token_usage", {}).get("duration_seconds", 0) or
+                        result.get("optimization_metrics", {}).get("execution_metrics", {}).get("execution_time", 0))
+            st.metric("Execution Time", f"{exec_time:.1f}s")
         with col4:
-            tokens_used = result.get("token_usage", {}).get("total_tokens", 0)
+            # Fix token usage display - check multiple possible locations
+            tokens_used = (result.get("token_usage", {}).get("total_tokens", 0) or
+                          summary.get("total_tokens", 0) or
+                          result.get("optimization_metrics", {}).get("token_optimization", {}).get("optimized_tokens", 0) or
+                          result.get("optimization_metrics", {}).get("execution_metrics", {}).get("total_tokens", 0))
             st.metric("Tokens Used", f"{tokens_used:,}")
         
         # Generate comprehensive summary
@@ -3620,7 +3674,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
         if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_langsmith_monitor:
             with st.expander("🔍 Enhanced LangSmith Monitoring", expanded=False):
                 self._render_enhanced_langsmith_monitoring()
-        elif self.langsmith_available:
+        elif LANGSMITH_AVAILABLE:
             with st.expander("🔍 LangSmith Monitoring", expanded=False):
                 st.markdown("**Real-time analysis monitoring with LangSmith**")
                 
@@ -3632,7 +3686,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 with col2:
                     project_name = st.text_input(
                         "Project Name", 
-                        value="marketing-research-swarm",
+                        value=LANGSMITH_PROJECT,
                         help="LangSmith project name for monitoring",
                         key="langsmith_project_name_manual"
                     )
@@ -3685,7 +3739,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 status_text = st.empty()
                 
                 # LangSmith monitoring status
-                if self.langsmith_available:
+                if LANGSMITH_AVAILABLE:
                     langsmith_status = st.empty()
                     langsmith_status.info("🔍 **LangSmith Monitoring**: Analysis will be tracked in real-time")
                 
@@ -3694,23 +3748,23 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                     progress_bar.progress(i + 1)
                     if i < 20:
                         status_text.text("🔧 Initializing workflow...")
-                        if self.langsmith_available and i == 10:
+                        if LANGSMITH_AVAILABLE and i == 10:
                             langsmith_status.info("🔍 **LangSmith**: Creating trace session...")
                     elif i < 40:
                         status_text.text("⚡ Applying optimization strategies...")
-                        if self.langsmith_available and i == 30:
+                        if LANGSMITH_AVAILABLE and i == 30:
                             langsmith_status.info("🔍 **LangSmith**: Monitoring agent initialization...")
                     elif i < 60:
                         status_text.text("🤖 Executing agents...")
-                        if self.langsmith_available and i == 50:
+                        if LANGSMITH_AVAILABLE and i == 50:
                             langsmith_status.info("🔍 **LangSmith**: Tracking agent execution and token usage...")
                     elif i < 80:
                         status_text.text("📊 Processing results...")
-                        if self.langsmith_available and i == 70:
+                        if LANGSMITH_AVAILABLE and i == 70:
                             langsmith_status.info("🔍 **LangSmith**: Recording performance metrics...")
                     else:
                         status_text.text("✅ Finalizing analysis...")
-                        if self.langsmith_available and i == 90:
+                        if LANGSMITH_AVAILABLE and i == 90:
                             langsmith_status.success("🔍 **LangSmith**: Analysis trace completed!")
                 
                 # Run the actual analysis
@@ -3718,7 +3772,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
                 
                 progress_bar.empty()
                 status_text.empty()
-                if self.langsmith_available:
+                if LANGSMITH_AVAILABLE:
                     langsmith_status.empty()
             
             # Store result in session state

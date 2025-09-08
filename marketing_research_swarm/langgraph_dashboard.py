@@ -652,7 +652,7 @@ except ImportError as e:
 def main():
     """Main function to run the dashboard."""
     try:
-        dashboard = LangGraphDashboard(langsmith_available=LANGSMITH_AVAILABLE)
+        dashboard = LangGraphDashboard()
         dashboard.run()
     except Exception as e:
         logger.error(f"Failed to run dashboard: {e}")
