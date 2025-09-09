@@ -1083,9 +1083,166 @@ class MetaAnalysisTool(BaseTool):
         
         return insights
 
+class CustomerChurnAnalysisTool(BaseTool):
+    name: str = "customer_churn_analysis"
+    description: str = "Analyze customer churn rates and patterns based on sales data trends"
+
+    def _run(self, data_path: str = None, time_period: str = "quarter", **kwargs) -> str:
+        """Analyze customer churn patterns from sales data"""
+        try:
+            # Load data using cached approach with fallback
+            df = get_cached_data()
+            
+            if df.empty:
+                return json.dumps({
+                    'error': 'No data available',
+                    'churn_analysis': {},
+                    'brand_churn_rates': {},
+                    'churn_insights': 'No data available for customer churn analysis'
+                })
+            
+            # Since we don't have direct churn data, we'll analyze sales decline patterns
+            # as a proxy for customer churn (declining sales often indicate customer loss)
+            
+            # Ensure we have required columns
+            if 'sale_date' not in df.columns:
+                return json.dumps({
+                    'error': 'Date column required for churn analysis',
+                    'churn_insights': 'Cannot analyze churn without temporal data'
+                })
+            
+            # Convert date column
+            df['sale_date'] = pd.to_datetime(df['sale_date'])
+            df['year'] = df['sale_date'].dt.year
+            df['quarter'] = df['sale_date'].dt.quarter
+            df['month'] = df['sale_date'].dt.month
+            
+            # Analyze by time period
+            if time_period == "quarter":
+                df['period'] = df['year'].astype(str) + '-Q' + df['quarter'].astype(str)
+                period_col = 'period'
+            else:
+                df['period'] = df['sale_date'].dt.to_period('M').astype(str)
+                period_col = 'period'
+            
+            # Calculate churn indicators by brand
+            brand_churn_analysis = {}
+            
+            if 'brand' in df.columns and 'total_revenue' in df.columns:
+                for brand in df['brand'].unique():
+                    brand_data = df[df['brand'] == brand]
+                    
+                    # Calculate period-over-period revenue changes
+                    period_revenue = brand_data.groupby(period_col)['total_revenue'].sum().sort_index()
+                    
+                    if len(period_revenue) >= 2:
+                        # Calculate period-over-period change
+                        revenue_changes = period_revenue.pct_change().dropna()
+                        
+                        # Churn indicators:
+                        # 1. Consecutive declining periods
+                        declining_periods = (revenue_changes < -0.05).sum()  # More than 5% decline
+                        total_periods = len(revenue_changes)
+                        
+                        # 2. Overall trend
+                        if len(period_revenue) >= 3:
+                            recent_trend = period_revenue.iloc[-3:].pct_change().mean()
+                        else:
+                            recent_trend = revenue_changes.mean()
+                        
+                        # 3. Volatility (high volatility can indicate customer instability)
+                        volatility = revenue_changes.std()
+                        
+                        # 4. Calculate estimated churn rate based on revenue decline
+                        # This is a proxy - actual churn would need customer-level data
+                        severe_declines = (revenue_changes < -0.15).sum()  # 15%+ decline
+                        estimated_churn_rate = (severe_declines / total_periods) * 100 if total_periods > 0 else 0
+                        
+                        # 5. Customer retention proxy (stable/growing revenue indicates retention)
+                        stable_periods = (revenue_changes.abs() < 0.05).sum()  # Within 5% change
+                        retention_proxy = (stable_periods / total_periods) * 100 if total_periods > 0 else 0
+                        
+                        brand_churn_analysis[brand] = {
+                            'estimated_churn_rate': round(estimated_churn_rate, 2),
+                            'retention_proxy': round(retention_proxy, 2),
+                            'declining_periods': int(declining_periods),
+                            'total_periods_analyzed': int(total_periods),
+                            'recent_trend': round(recent_trend * 100, 2),  # Convert to percentage
+                            'revenue_volatility': round(volatility, 3),
+                            'risk_level': self._assess_churn_risk(estimated_churn_rate, recent_trend, volatility),
+                            'latest_revenue': float(period_revenue.iloc[-1]),
+                            'revenue_change_last_period': round(revenue_changes.iloc[-1] * 100, 2) if len(revenue_changes) > 0 else 0
+                        }
+            
+            # Sort brands by estimated churn rate (highest first)
+            sorted_brands = sorted(brand_churn_analysis.items(), 
+                                 key=lambda x: x[1]['estimated_churn_rate'], 
+                                 reverse=True)
+            
+            # Generate insights
+            if sorted_brands:
+                highest_churn_brand = sorted_brands[0][0]
+                highest_churn_rate = sorted_brands[0][1]['estimated_churn_rate']
+                
+                # Identify brands with concerning trends
+                high_risk_brands = [brand for brand, data in sorted_brands 
+                                  if data['risk_level'] in ['High', 'Critical']]
+                
+                churn_insights = f"""Customer Churn Analysis (Based on Revenue Trend Patterns):
+
+HIGHEST CHURN INDICATORS:
+• {highest_churn_brand}: {highest_churn_rate}% estimated churn rate
+• {len(high_risk_brands)} brands showing high churn risk
+
+KEY FINDINGS:
+• Analysis based on {len(brand_churn_analysis)} brands across {time_period} periods
+• Revenue decline patterns used as churn proxy (actual churn requires customer-level data)
+• Brands with consistent revenue declines indicate potential customer loss
+
+HIGH-RISK BRANDS: {', '.join(high_risk_brands[:5]) if high_risk_brands else 'None identified'}
+
+NOTE: This analysis uses revenue trends as a proxy for customer churn. 
+For accurate churn analysis, customer-level retention data would be needed."""
+            else:
+                churn_insights = "Insufficient data for meaningful churn analysis"
+            
+            analysis = {
+                'analysis_method': 'Revenue-trend-based churn proxy',
+                'time_period': time_period,
+                'total_brands_analyzed': len(brand_churn_analysis),
+                'brand_churn_rates': dict(sorted_brands),
+                'summary_statistics': {
+                    'average_estimated_churn': round(sum(data['estimated_churn_rate'] for _, data in sorted_brands) / len(sorted_brands), 2) if sorted_brands else 0,
+                    'highest_churn_rate': highest_churn_rate if sorted_brands else 0,
+                    'brands_at_risk': len(high_risk_brands),
+                    'total_brands': len(sorted_brands)
+                },
+                'churn_insights': churn_insights,
+                'methodology_note': 'This analysis uses revenue decline patterns as a proxy for customer churn since direct customer retention data is not available in the dataset.'
+            }
+            
+            return json.dumps(analysis, indent=2)
+            
+        except Exception as e:
+            return f"Error in customer churn analysis: {str(e)}"
+    
+    def _assess_churn_risk(self, churn_rate: float, trend: float, volatility: float) -> str:
+        """Assess churn risk level based on multiple factors"""
+        if churn_rate >= 30 or trend <= -20:
+            return "Critical"
+        elif churn_rate >= 20 or trend <= -15:
+            return "High"
+        elif churn_rate >= 10 or trend <= -10:
+            return "Medium"
+        elif churn_rate >= 5 or trend <= -5:
+            return "Low"
+        else:
+            return "Minimal"
+
 # Additional tool instances for compatibility
 calculate_roi = CalculateROITool()
 analyze_kpis = AnalyzeKPIsTool()
 plan_budget = PlanBudgetTool()
 calculate_market_share = CalculateMarketShareTool()
+customer_churn_analysis = CustomerChurnAnalysisTool()
 meta_analysis_tool = MetaAnalysisTool()

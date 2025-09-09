@@ -115,13 +115,13 @@ class SmartToolSelector:
     def _initialize_essential_tools(self) -> Dict[str, List[str]]:
         """Initialize essential tools for each agent role."""
         return {
-            "data_analyst": ["profitability_analysis", "analyze_kpis", "time_series_analysis"],
+            "data_analyst": ["profitability_analysis", "analyze_kpis", "time_series_analysis", "customer_churn_analysis"],
             "market_research_analyst": ["beverage_market_analysis"],
             "forecasting_specialist": ["forecast_sales"],
-            "competitive_analyst": ["beverage_market_analysis", "analyze_brand_performance"],
+            "competitive_analyst": ["beverage_market_analysis", "analyze_brand_performance", "customer_churn_analysis"],
             "content_strategist": ["analyze_kpis"],
             "creative_copywriter": [],  # No essential analytical tools
-            "brand_performance_specialist": ["analyze_brand_performance"],
+            "brand_performance_specialist": ["analyze_brand_performance", "customer_churn_analysis"],
             "campaign_optimizer": ["calculate_roi", "plan_budget"]
         }
     

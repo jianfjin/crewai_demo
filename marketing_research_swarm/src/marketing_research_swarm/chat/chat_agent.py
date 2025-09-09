@@ -260,7 +260,10 @@ class ChatAgent:
             params["target_markets"] = regions
         
         # Extract analysis type
-        if any(word in message_lower for word in ["roi", "profitability", "profit"]):
+        if any(word in message_lower for word in ["churn", "retention", "customer loss", "attrition"]):
+            params["key_metrics"] = ["customer_churn", "brand_performance"]
+            params["analysis_type"] = "customer_churn"
+        elif any(word in message_lower for word in ["roi", "profitability", "profit"]):
             params["key_metrics"] = ["roi", "profitability_analysis"]
         elif any(word in message_lower for word in ["forecast", "predict"]):
             params["key_metrics"] = ["forecasting"]
@@ -545,7 +548,9 @@ class ChatAgent:
         
         # Determine analysis type
         analysis_type = "comprehensive"
-        if "roi" in message_lower or "profitability" in message_lower:
+        if "churn" in message_lower or "retention" in message_lower or "customer loss" in message_lower:
+            analysis_type = "customer_churn"
+        elif "roi" in message_lower or "profitability" in message_lower:
             analysis_type = "roi_focused"
         elif "brand" in message_lower or "performance" in message_lower:
             analysis_type = "brand_performance"
@@ -584,6 +589,7 @@ class ChatAgent:
         # Recommend agents based on analysis type
         agent_mapping = {
             "comprehensive": ["market_research_analyst", "competitive_analyst", "data_analyst"],
+            "customer_churn": ["data_analyst", "brand_performance_specialist", "competitive_analyst"],
             "roi_focused": ["data_analyst", "campaign_optimizer"],
             "brand_performance": ["competitive_analyst", "brand_performance_specialist"],
             "sales_forecast": ["forecasting_specialist", "data_analyst"],
@@ -925,7 +931,9 @@ The workflow is ready! You can now run the analysis.
         agents.append('market_research_analyst')
         
         # Add agents based on analysis type and content
-        if analysis_type == 'brand_performance' or brands:
+        if analysis_type == 'customer_churn' or any(metric in key_metrics for metric in ['customer_churn']):
+            agents.extend(['data_analyst', 'brand_performance_specialist', 'competitive_analyst'])
+        elif analysis_type == 'brand_performance' or brands:
             agents.extend(['competitive_analyst', 'brand_performance_specialist'])
         
         if analysis_type == 'roi_focused' or any(metric in key_metrics for metric in ['profitability_analysis', 'roi']):
