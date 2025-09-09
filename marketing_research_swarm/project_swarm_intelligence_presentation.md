@@ -249,6 +249,25 @@ graph TD
 *   **Benefit: The Right Tool for the Right Job, Every Time.**
     *   This hybrid model dramatically improves efficiency by avoiding unnecessary tool executions, leading to faster response times and lower token costs, while ensuring the agent has the precise analytical capabilities needed to answer the user's query.
 
+
+---
+
+#### **Innovation 4: Intelligent SQL & Reflective Summarization**
+
+*   **The Problem:** How can we ensure that data-heavy questions receive direct, accurate answers from our database instead of generic, qualitative responses from an LLM? Standard agent workflows often attempt the same conversational approach for all queries, leading to failure or vague answers for specific data requests.
+
+*   **Our Solution: A Reflective, SQL-Aware Workflow**
+    *   We've engineered a system that intelligently distinguishes between qualitative and quantitative queries. When a data-specific question is detected, the system bypasses standard conversational agents and routes the query directly to an intelligent SQL generation engine.
+
+*   **How it Works:**
+    1.  **Smart Query Detection:** The system first analyzes the query's intent. Keywords like "which brand," "highest revenue," or "compare performance" trigger the data-specific path.
+    2.  **Direct SQL Generation:** Instead of a generic retry, the system uses an LLM with full data context (schema, column types, sample values) to dynamically generate a precise SQL query.
+    3.  **Execution & Validation:** The generated SQL is automatically executed against the database.
+    4.  **Reflective Analysis:** The raw data result is then passed to a summarizer agent, which combines the quantitative facts with qualitative analysis to generate a comprehensive, data-grounded answer.
+
+*   **Benefit: From Generic Failure to Specific, Data-Driven Answers.**
+    *   This approach eliminates frustrating and generic "I was unable to generate a relevant response" errors. It ensures that when a user asks a question of the data, they get a direct, accurate answer from the data itself, dramatically improving the reliability and value of our insights.
+
 ---
 
 #### **Summary of Features**
