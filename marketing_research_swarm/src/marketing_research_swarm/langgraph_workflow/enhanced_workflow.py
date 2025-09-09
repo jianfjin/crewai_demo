@@ -744,7 +744,6 @@ class EnhancedMarketingWorkflow:
         budget: float,
         duration: str,
         analysis_focus: str,
-        callback_manager=None,
         **kwargs
     ) -> Dict[str, Any]:
         """Execute the enhanced workflow with context engineering."""
@@ -825,12 +824,6 @@ class EnhancedMarketingWorkflow:
             
             # Execute the workflow
             config = {"configurable": {"thread_id": initial_state["workflow_id"]}}
-            
-            # Add LangSmith callback manager if provided
-            if callback_manager:
-                config["callbacks"] = callback_manager
-                logger.info(f"🔍 LangSmith tracing enabled for workflow: {initial_state['workflow_id']}")
-            
             final_state = self.workflow.invoke(initial_state, config=config)
             
             # Return comprehensive result

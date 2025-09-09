@@ -1074,9 +1074,9 @@ class LangGraphDashboard:
     """
     """LangGraph Marketing Research Dashboard class."""
 
-    def __init__(self):
+    def __init__(self, langsmith_available: bool = False):
         """Initialize the dashboard."""
-        self.langsmith_available = LANGSMITH_AVAILABLE
+        self.langsmith_available = langsmith_available
         
         # Ensure LangSmith environment variables are set for tracing
         if LANGSMITH_AVAILABLE:
@@ -1473,13 +1473,8 @@ class LangGraphDashboard:
             # Create enhanced LangSmith tracer
             callback_manager = None
             if DASHBOARD_ENHANCEMENTS_AVAILABLE and enhanced_langsmith_monitor and enhanced_langsmith_monitor.available:
-                # Enhanced LangSmith monitor is available, use it
                 callback_manager = enhanced_langsmith_monitor.create_run_tracer(workflow_id)
-                logger.info(f"🔍 Created enhanced LangSmith tracer for workflow: {workflow_id}")
-            elif LANGSMITH_AVAILABLE and self.langsmith_available:
-                # Fallback to basic LangSmith tracer
-                callback_manager = create_langsmith_tracer(LANGSMITH_PROJECT)
-                logger.info(f"🔍 Created basic LangSmith tracer for workflow: {workflow_id}")
+                logger.info(f"🔍 Created LangSmith tracer for workflow: {workflow_id}")
             
             # Use the enhanced workflow that includes report_summarizer
             workflow = MarketingResearchWorkflow(context_strategy="smart")  # This is the enhanced MarketingResearchWorkflow
@@ -1550,7 +1545,6 @@ class LangGraphDashboard:
                         budget=optimized_config["budget"],
                         duration=optimized_config["duration"],
                         analysis_focus=optimized_config["analysis_focus"],
-                        callback_manager=callback_manager,  # Pass LangSmith callback manager
                         business_objective=optimized_config.get("business_objective", ""),
                         competitive_landscape=optimized_config.get("competitive_landscape", ""),
                         market_segments=optimized_config.get("market_segments", []),
@@ -1601,7 +1595,6 @@ class LangGraphDashboard:
                         'budget': optimized_config["budget"],
                         'duration': optimized_config["duration"],
                         'analysis_focus': optimized_config["analysis_focus"],
-                        'callback_manager': callback_manager,  # Pass LangSmith callback manager
                         'business_objective': optimized_config.get("business_objective", ""),
                         'competitive_landscape': optimized_config.get("competitive_landscape", ""),
                         'market_segments': optimized_config.get("market_segments", []),
