@@ -482,6 +482,8 @@ Current workflow context:
 - Market Segments: {', '.join(context.get('market_segments', []))}
 - Product Categories: {', '.join(context.get('product_categories', []))}
 
+{self._get_data_context_section(context)}
+
 Previous Agent Results (use these to inform your analysis):
 {self._format_previous_results(context)}
 
@@ -501,6 +503,78 @@ Format your response as a comprehensive analysis with these clearly marked secti
 """
         
         return SystemMessage(content=system_content)
+    
+    def _get_data_context_section(self, context: Dict[str, Any]) -> str:
+        """Get data context section for agent prompt."""
+        
+        data_context = context.get('data_context', {})
+        
+        if "error" in data_context or not data_context:
+            return """
+DATA CONTEXT:
+- Data context not available or failed to load
+- Use tools to access data as needed
+"""
+        
+        try:
+            # Get basic data info
+            schema = data_context.get('schema', {})
+            shape = schema.get('shape', {})
+            
+            data_section = f"""
+📊 DATA CONTEXT & SCHEMA AWARENESS:
+
+Dataset Information:
+- Rows: {shape.get('rows', 'Unknown'):,}
+- Columns: {shape.get('columns', 'Unknown')}
+- Data Quality: {data_context.get('data_quality', {}).get('completeness', 'Unknown'):.1f}% complete
+
+Key Columns Available:
+"""
+            
+            # Add column information
+            columns = schema.get('columns', [])
+            for col_info in columns[:8]:  # Show first 8 columns
+                col_name = col_info.get('name', 'Unknown')
+                col_type = col_info.get('dtype', 'Unknown')
+                unique_count = col_info.get('unique_count', 0)
+                sample_values = col_info.get('sample_values', [])
+                
+                data_section += f"- {col_name} ({col_type}): {unique_count} unique values"
+                if sample_values:
+                    data_section += f" | Examples: {', '.join(map(str, sample_values[:3]))}"
+                data_section += "\n"
+            
+            if len(columns) > 8:
+                data_section += f"... and {len(columns) - 8} more columns\n"
+            
+            # Add distinct values for key categorical columns
+            distinct_values = data_context.get('distinct_values', {})
+            if distinct_values:
+                data_section += "\nKey Categorical Values:\n"
+                for col, values in list(distinct_values.items())[:3]:  # Show first 3 categorical columns
+                    data_section += f"- {col}: {', '.join(map(str, values[:5]))}"
+                    if len(values) > 5:
+                        data_section += f" (and {len(values) - 5} more)"
+                    data_section += "\n"
+            
+            data_section += """
+IMPORTANT: Use this data context to:
+- Select tools that match available columns and data types
+- Use correct column names in your analysis
+- Understand data structure and relationships
+- Make data-informed recommendations
+"""
+            
+            return data_section
+            
+        except Exception as e:
+            logger.warning(f"Failed to format data context section: {e}")
+            return """
+DATA CONTEXT:
+- Data context available but could not be formatted
+- Use tools to access data as needed
+"""
     
     def _create_enhanced_task_with_smart_tools(
         self, 

@@ -761,6 +761,16 @@ class EnhancedMarketingWorkflow:
             workflow_id = str(uuid.uuid4())
             current_time = datetime.now()
             
+            # Get data context for all agents
+            try:
+                from .data_context_manager import get_data_context_manager
+                data_context_manager = get_data_context_manager()
+                data_context = data_context_manager.get_data_context("beverage_sales")
+                logger.info(f"📊 Data context loaded: {data_context.get('schema', {}).get('shape', 'Unknown shape')}")
+            except Exception as e:
+                logger.warning(f"Failed to load data context: {e}")
+                data_context = {"error": "Data context not available"}
+            
             initial_state = MarketingResearchState(
                 workflow_id=workflow_id,
                 workflow_type="enhanced_marketing_research",
@@ -775,6 +785,8 @@ class EnhancedMarketingWorkflow:
                 updated_at=current_time,
                 # Add required fields with defaults from kwargs or sensible defaults
                 initial_inputs=kwargs,
+                user_query=kwargs.get("user_query", ""),  # Add user_query for chat mode detection
+                data_context=data_context,  # Add data context for all agents
                 business_objective=kwargs.get("business_objective", ""),
                 competitive_landscape=kwargs.get("competitive_landscape", ""),
                 market_segments=kwargs.get("market_segments", ["premium", "mass_market"]),

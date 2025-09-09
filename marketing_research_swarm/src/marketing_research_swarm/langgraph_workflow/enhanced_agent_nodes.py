@@ -13,6 +13,7 @@ from datetime import datetime
 
 from .state import MarketingResearchState, store_agent_result, store_agent_error
 from .enhanced_agents import EnhancedLangGraphAgent
+from .reflective_report_summarizer import enhanced_reflective_report_summarizer_node
 
 logger = logging.getLogger(__name__)
 
@@ -709,7 +710,7 @@ ENHANCED_AGENT_NODES = {
     'campaign_optimizer': enhanced_campaign_optimizer_node,
     'brand_performance_specialist': enhanced_brand_performance_specialist_node,
     'forecasting_specialist': enhanced_forecasting_specialist_node,
-    'report_summarizer': enhanced_report_summarizer_node,
+    'report_summarizer': enhanced_reflective_report_summarizer_node,
     
     # Title case with spaces (dashboard format) - CRITICAL FIX
     'Market Research Analyst': enhanced_market_research_analyst_node,
@@ -721,5 +722,5 @@ ENHANCED_AGENT_NODES = {
     'Brand Performance Analyst': enhanced_brand_performance_specialist_node,
     'Sales Forecast Analyst': enhanced_forecasting_specialist_node,
     'ROI Analysis Expert': enhanced_forecasting_specialist_node,  # Using forecasting for ROI as well
-    'Report Summarizer': enhanced_report_summarizer_node,
+    'Report Summarizer': enhanced_reflective_report_summarizer_node,
 }

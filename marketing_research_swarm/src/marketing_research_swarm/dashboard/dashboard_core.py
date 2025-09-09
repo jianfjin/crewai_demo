@@ -522,38 +522,63 @@ try:
     except Exception as workflow_import_error:
         logger.warning(f"Real LangGraph workflows not available: {workflow_import_error}")
         
-        # Import mock workflow classes
-        # try:
-        #     from marketing_research_swarm.dashboard.components.mock_workflow import MockLangGraphWorkflow
+        # Try to use regular workflow instead of enhanced
+        try:
+            from marketing_research_swarm.langgraph_workflow.workflow import MarketingResearchWorkflow as RegularWorkflow
+            MarketingResearchWorkflow = RegularWorkflow
+            logger.info("✅ Using regular LangGraph workflow (REAL ANALYSIS)")
             
-        #     # Try to use regular workflow instead of mock
-        #     try:
-        #         from marketing_research_swarm.langgraph_workflow.workflow import MarketingResearchWorkflow as RegularWorkflow
-        #         MarketingResearchWorkflow = RegularWorkflow
-        #         logger.info("✅ Using regular LangGraph workflow (REAL ANALYSIS)")
-        #         st.info("✅ LangGraph components loaded successfully (using regular REAL workflow)")
-                
-        #     except Exception as regular_workflow_error:
-        #         logger.error(f"Failed to load regular workflow: {regular_workflow_error}")
-                
-        #         # Final fallback to mock
-        #         MarketingResearchWorkflow = MockLangGraphWorkflow
-        #         logger.info("✅ Using enhanced mock LangGraph workflows")
-                
-        # except ImportError as component_error:
-        #     logger.error(f"Failed to import workflow components: {component_error}")
+        except Exception as regular_workflow_error:
+            logger.error(f"Failed to load regular workflow: {regular_workflow_error}")
             
-        #     # Import fallback classes inline if imports fail
-        #     from marketing_research_swarm.dashboard.components.mock_workflow import MockLangGraphWorkflow
-            
-        #     MarketingResearchWorkflow = MockLangGraphWorkflow
-        #     logger.info("✅ Using mock workflow as final fallback")
+            # Final fallback to mock workflow
+            try:
+                from marketing_research_swarm.dashboard.components.mock_workflow import MockLangGraphWorkflow
+                MarketingResearchWorkflow = MockLangGraphWorkflow
+                logger.info("✅ Using mock LangGraph workflow as fallback")
+                
+            except ImportError as mock_error:
+                logger.error(f"Failed to import mock workflow: {mock_error}")
+                # Create a minimal fallback class
+                class MinimalWorkflow:
+                    def __init__(self, context_strategy="smart"):
+                        self.context_strategy = context_strategy
+                    
+                    def execute_enhanced_workflow(self, **kwargs):
+                        return {
+                            "success": False,
+                            "error": "No workflow implementation available",
+                            "agent_results": {},
+                            "summary": {"workflow_type": "fallback", "total_agents": 0}
+                        }
+                
+                MarketingResearchWorkflow = MinimalWorkflow
+                logger.warning("⚠️ Using minimal fallback workflow")
     
     LANGGRAPH_AVAILABLE = True
     logger.info("✅ LangGraph components loaded successfully (using mock workflow)")
 except ImportError as e:
     logger.warning(f"LangGraph components not available: {e}")
     LANGGRAPH_AVAILABLE = False
+    
+    # Ensure MarketingResearchWorkflow is always defined
+    class MinimalWorkflow:
+        def __init__(self, context_strategy="smart"):
+            self.context_strategy = context_strategy
+        
+        def execute_enhanced_workflow(self, **kwargs):
+            return {
+                "success": False,
+                "error": "LangGraph components not available. Please install: pip install langgraph",
+                "agent_results": {},
+                "summary": {"workflow_type": "fallback", "total_agents": 0}
+            }
+        
+        def execute_workflow(self, **kwargs):
+            return self.execute_enhanced_workflow(**kwargs)
+    
+    MarketingResearchWorkflow = MinimalWorkflow
+    logger.warning("⚠️ Using minimal fallback workflow due to import error")
 
 def _safe_get_nested(data, key1, key2, default=None):
     """Safely get nested dictionary values with type checking"""
@@ -1484,6 +1509,10 @@ class LangGraphDashboard:
             optimized_config = self._apply_optimization_strategies(config)
             optimized_config["workflow_id"] = workflow_id
             
+            # Ensure user_query is passed for chat mode detection in report summarizer
+            if "user_query" in config:
+                optimized_config["user_query"] = config["user_query"]
+            
             # Store run information for monitoring
             run_metadata = {
                 "workflow_id": workflow_id,
@@ -1545,6 +1574,7 @@ class LangGraphDashboard:
                         budget=optimized_config["budget"],
                         duration=optimized_config["duration"],
                         analysis_focus=optimized_config["analysis_focus"],
+                        user_query=optimized_config.get("user_query", ""),  # Explicitly pass user_query for chat mode detection
                         business_objective=optimized_config.get("business_objective", ""),
                         competitive_landscape=optimized_config.get("competitive_landscape", ""),
                         market_segments=optimized_config.get("market_segments", []),
@@ -1568,6 +1598,7 @@ class LangGraphDashboard:
                         budget=optimized_config["budget"],
                         duration=optimized_config["duration"],
                         analysis_focus=optimized_config["analysis_focus"],
+                        user_query=optimized_config.get("user_query", ""),  # Explicitly pass user_query for chat mode detection
                         business_objective=optimized_config.get("business_objective", ""),
                         competitive_landscape=optimized_config.get("competitive_landscape", ""),
                         market_segments=optimized_config.get("market_segments", []),
@@ -3327,7 +3358,28 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
             st.markdown("• *I want to analyze Coca-Cola's performance against Pepsi in North America*")
             st.markdown("• *How is Red Bull performing in the Energy drink category?*")
             st.markdown("• *Compare Gatorade vs Powerade market share in Sports drinks*")
-            
+            st.markdown("• *Which brands experienced the highest customer churn rates in the last quarter?*")
+            st.markdown("• *Identify the brands with the most significant client attrition over the past three months*")
+            st.markdown("• *What factors contributed to the highest client defection rates for specific brands in the last quarter?*")
+            st.markdown("• *Which brands demonstrated the weakest customer retention in the last quarter?*")
+            st.markdown("• *Where are we seeing the lowest levels of brand loyalty among our customer base this past quarter?*")
+            st.markdown("• *Investigate which brands are struggling most with customer loyalty and retention in the previous quarter.*")
+            st.markdown("• *Analyze brands with the highest rates of customer defection in the last quarter.*")
+            st.markdown("• *Explore the reasons behind the significant customer loss experienced by certain brands over the past three months.*")
+            st.markdown("• *Pinpoint the brands where customer satisfaction or perceived value may have declined most, leading to client departures last quarter.*")
+            st.markdown("• *Which brands had the most customers switch to competitors in the last quarter?*")
+            st.markdown("• *Brands with highest client churn (Q4)*")
+            st.markdown("• *Top brands for customer defection (last quarter).*")
+
+            st.markdown("**⚔️ Competitive Analysis:**")
+            st.markdown("• *Who are the top competitors in the beverage market?*")
+            st.markdown("• *Which brands faced the most intense competitive pressure resulting in customer migration last quarter?*")
+            st.markdown("• *What are the key differentiators for leading brands in the beverage industry?*")
+            st.markdown("• *Analyze the competitive landscape for energy drinks vs. traditional sodas.*")
+            st.markdown("• *Identify the brands that lost the most customers to competitors in the last quarter.*")
+            st.markdown("• *What competitive factors led to the highest customer churn rates among our brands last quarter?*")
+            st.markdown("• *Identify brands where competitor offerings appear to be drawing away the most customers recently.*")
+
             st.markdown("**📊 Regional & Market Analysis:**")
             st.markdown("• *Analyze beverage market trends in Europe and Asia Pacific*")
             st.markdown("• *What are the top performing brands in Latin America?*")
@@ -3347,6 +3399,7 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
             st.markdown("• *Create a marketing strategy for launching in new markets*")
             st.markdown("• *Develop content strategy for millennial beverage consumers*")
             st.markdown("• *Plan a campaign to increase market share in Energy drinks*")
+            st.markdown("• *What strategies can we implement to improve customer retention in the beverage industry?*")
             
             st.markdown("**📋 Quick Analysis:**")
             st.markdown("• *Give me a comprehensive overview of the beverage market*")
@@ -3618,6 +3671,16 @@ The integrated analysis provides a roadmap for achieving marketing objectives wh
     
     def _run_chat_analysis(self, config: Dict[str, Any]):
         """Run analysis with chat-generated configuration."""
+        
+        # Ensure user_query is included for chat mode detection
+        chat_agent = st.session_state.get("chat_agent")
+        if chat_agent and hasattr(chat_agent, 'last_user_query'):
+            config["user_query"] = chat_agent.last_user_query
+        elif "chat_messages" in st.session_state and st.session_state.chat_messages:
+            # Extract the last user message as the query
+            user_messages = [msg for msg in st.session_state.chat_messages if msg["role"] == "user"]
+            if user_messages:
+                config["user_query"] = user_messages[-1]["content"]
         
         # Show progress
         with st.spinner("Running chat-configured analysis..."):
