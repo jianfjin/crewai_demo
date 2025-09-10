@@ -108,7 +108,7 @@ class DataContextManager:
                 "null_count": int(df[col].isnull().sum()),
                 "null_percentage": float((df[col].isnull().sum() / len(df)) * 100),
                 "unique_count": int(df[col].nunique()),
-                "sample_values": [self._convert_to_serializable(val) for val in df[col].dropna().head(3).tolist()]
+                "sample_values": [self._ensure_serializable(val) for val in df[col].dropna().head(3).tolist()]
             }
             
             schema["columns"].append(col_info)

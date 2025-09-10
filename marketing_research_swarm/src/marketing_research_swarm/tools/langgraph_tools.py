@@ -413,13 +413,14 @@ def profitability_analysis(analysis_dimension: str = "brand") -> str:
         return f"Error in profitability analysis: {str(e)}"
 
 @tool(args_schema=CrossSectionalAnalysisInput)
-def cross_sectional_analysis(value_column: str = "sales") -> str:
+def cross_sectional_analysis(group_column: str = "brand", value_column: str = "sales") -> str:
     """Perform cross-sectional analysis across different segments"""
     try:
         # Load data using cached approach with fallback
         df = get_cached_data()
         
         # Set default parameters if not provided
+        segment_column = group_column  # Use the parameter from function signature
         if not segment_column:
             segment_column = 'brand'
         if not value_column:
