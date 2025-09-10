@@ -6,7 +6,7 @@ market_research_analyst:
     An expert in beverage market research with deep knowledge of market dynamics, seasonal consumption patterns, and competitive landscape. Specializes in understanding market structure, identifying cyclical behaviors, and providing market context that informs accurate forecasting models.
   llm: openai/gpt-4o-mini
   allow_delegation: false
-  tools: [beverage_market_analysis, time_series_analysis, cross_sectional_analysis]
+  tools: [beverage_market_analysis, time_series_analysis, cross_sectional_analysis, regional_performance_analysis, detailed_seasonal_analysis]
 
 competitive_analyst:
   role: "competitive_analyst"
@@ -16,7 +16,7 @@ competitive_analyst:
     An expert in competitive intelligence and market dynamics with deep knowledge of beverage industry competition. Specializes in analyzing market structure, competitive positioning, brand market share, and identifying competitive threats and opportunities in the beverage market.
   llm: openai/gpt-4o-mini
   allow_delegation: false
-  tools: [beverage_market_analysis, calculate_market_share, cross_sectional_analysis]
+  tools: [beverage_market_analysis, calculate_market_share, cross_sectional_analysis, regional_performance_analysis, customer_churn_analysis]
 
 content_strategist:
   role: "content_strategist"
@@ -46,7 +46,7 @@ data_analyst:
     A quantitative expert specializing in beverage industry analytics. The Data Analyst focuses on extracting insights from sales data, identifying trends, measuring performance, and providing the analytical foundation for strategic decision-making. Expert in statistical analysis and data interpretation.
   llm: openai/gpt-4o-mini
   allow_delegation: false
-  tools: [profitability_analysis, time_series_analysis, cross_sectional_analysis, analyze_kpis]
+  tools: [profitability_analysis, time_series_analysis, cross_sectional_analysis, analyze_kpis, detailed_seasonal_analysis, customer_churn_analysis]
 
 campaign_optimizer:
   role: "campaign_optimizer"
@@ -62,7 +62,7 @@ brand_performance_specialist:
   backstory: "An analytical professional specializing in beverage brand management and market dynamics. The Brand Performance Specialist tracks brand health, market share, category performance, and competitive positioning in the rapidly evolving beverage industry."
   llm: openai/gpt-4o-mini
   allow_delegation: false
-  tools: [search, web_search, analyze_brand_performance, calculate_market_share, beverage_market_analysis]
+  tools: [search, web_search, analyze_brand_performance, calculate_market_share, beverage_market_analysis, regional_performance_analysis, customer_churn_analysis]
 
 forecasting_specialist:
   role: "forecasting_specialist"
