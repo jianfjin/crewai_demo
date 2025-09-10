@@ -31,6 +31,7 @@ from ..context.intelligent_context_filter import get_intelligent_filter
 from ..context.compression_strategies import get_context_compressor, CompressionLevel
 from ..context.context_quality import ContextQualityMonitor, TokenBudgetManager
 from ..utils.token_tracker import TokenTracker
+from ..memory.mem0_integration import MarketingMemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,16 @@ class EnhancedMarketingWorkflow:
         # Initialize checkpointer with memory saver
         self.checkpointer = MemorySaver()
         
+        # Initialize mem0 memory manager for persistent learning
+        try:
+            self.memory_manager = MarketingMemoryManager()
+            self.mem0_available = True
+            logger.info("✅ mem0 integration initialized successfully")
+        except Exception as e:
+            logger.warning(f"⚠️ mem0 integration failed, continuing without persistent memory: {e}")
+            self.memory_manager = None
+            self.mem0_available = False
+        
         # Initialize other components
         self.blackboard = get_integrated_blackboard()
         self.token_tracker = TokenTracker()
@@ -80,7 +91,8 @@ class EnhancedMarketingWorkflow:
         # Build the enhanced workflow graph
         self.workflow = self._build_enhanced_workflow()
         
-        logger.info(f"🚀 Enhanced Marketing Workflow initialized with {context_strategy} context strategy")
+        mem0_status = "with mem0 persistent learning" if self.mem0_available else "without mem0 (session-only memory)"
+        logger.info(f"🚀 Enhanced Marketing Workflow initialized with {context_strategy} context strategy {mem0_status}")
     
     def _build_enhanced_workflow(self) -> StateGraph:
         """Build the enhanced LangGraph workflow with context engineering."""
@@ -179,9 +191,36 @@ class EnhancedMarketingWorkflow:
         return state
     
     def _context_preparation_node(self, state: MarketingResearchState) -> MarketingResearchState:
-        """Prepare context for the workflow using enhanced context engineering."""
+        """Prepare context for the workflow using enhanced context engineering and mem0."""
         
         workflow_id = state["workflow_id"]
+        
+        # Get historical context from mem0 if available
+        historical_context = {}
+        if self.mem0_available and self.memory_manager:
+            try:
+                # Create query for relevant historical context
+                analysis_query = f"{state.get('analysis_focus', '')} {state.get('campaign_type', '')} {state.get('target_audience', '')}"
+                
+                # Get relevant historical insights
+                historical_insights = self.memory_manager.get_relevant_context(
+                    query=analysis_query,
+                    user_id="marketing_team",
+                    limit=5
+                )
+                
+                if historical_insights:
+                    historical_context = {
+                        "relevant_insights": historical_insights,
+                        "historical_patterns": self._extract_patterns_from_insights(historical_insights),
+                        "previous_recommendations": self._extract_recommendations_from_insights(historical_insights)
+                    }
+                    logger.info(f"🧠 Retrieved {len(historical_insights)} relevant historical insights")
+                else:
+                    logger.info("🔍 No relevant historical insights found")
+                    
+            except Exception as e:
+                logger.warning(f"Failed to retrieve historical context from mem0: {e}")
         
         # Prepare global context for all agents
         global_context = {
@@ -189,7 +228,8 @@ class EnhancedMarketingWorkflow:
                 "workflow_id": workflow_id,
                 "workflow_type": state.get("workflow_type", "marketing_research"),
                 "selected_agents": state["selected_agents"],
-                "context_strategy": self.context_strategy
+                "context_strategy": self.context_strategy,
+                "mem0_enabled": self.mem0_available
             },
             "input_data": {
                 "target_audience": state.get("target_audience", ""),
@@ -206,7 +246,8 @@ class EnhancedMarketingWorkflow:
                 "current_step": state["current_step"],
                 "agent_steps": state["agent_steps"],
                 "agent_status": state["agent_status"]
-            }
+            },
+            "historical_context": historical_context
         }
         
         # Store global context in long-term memory
@@ -230,6 +271,178 @@ class EnhancedMarketingWorkflow:
         
         logger.info(f"🧠 Context preparation completed for workflow {workflow_id}")
         return state
+    
+    def _extract_patterns_from_insights(self, insights: List[Dict[str, Any]]) -> List[str]:
+        """Extract patterns from historical insights."""
+        patterns = []
+        for insight in insights:
+            content = insight.get('content', '')
+            if 'pattern' in content.lower() or 'trend' in content.lower():
+                # Extract pattern-related sentences
+                sentences = content.split('.')
+                for sentence in sentences:
+                    if any(keyword in sentence.lower() for keyword in ['pattern', 'trend', 'consistently', 'typically']):
+                        patterns.append(sentence.strip())
+        return patterns[:3]  # Limit to top 3 patterns
+    
+    def _extract_recommendations_from_insights(self, insights: List[Dict[str, Any]]) -> List[str]:
+        """Extract recommendations from historical insights."""
+        recommendations = []
+        for insight in insights:
+            content = insight.get('content', '')
+            if 'recommend' in content.lower() or 'suggest' in content.lower():
+                # Extract recommendation-related sentences
+                sentences = content.split('.')
+                for sentence in sentences:
+                    if any(keyword in sentence.lower() for keyword in ['recommend', 'suggest', 'should', 'consider']):
+                        recommendations.append(sentence.strip())
+        return recommendations[:3]  # Limit to top 3 recommendations
+    
+    def _extract_learnings_for_agent(self, insights: List[Dict[str, Any]], agent_name: str) -> List[str]:
+        """Extract agent-specific learnings from historical insights."""
+        learnings = []
+        agent_keywords = {
+            'market_research_analyst': ['market', 'research', 'analysis', 'trends'],
+            'data_analyst': ['data', 'metrics', 'statistics', 'analysis'],
+            'competitive_analyst': ['competitive', 'competition', 'market share', 'positioning'],
+            'brand_performance_specialist': ['brand', 'performance', 'awareness', 'equity'],
+            'content_strategist': ['content', 'strategy', 'messaging', 'communication'],
+            'forecasting_specialist': ['forecast', 'prediction', 'future', 'projection'],
+            'campaign_optimizer': ['campaign', 'optimization', 'performance', 'roi'],
+            'creative_copywriter': ['creative', 'copy', 'messaging', 'content']
+        }
+        
+        keywords = agent_keywords.get(agent_name, [])
+        
+        for insight in insights:
+            content = insight.get('content', '')
+            # Look for content relevant to this agent's domain
+            if any(keyword in content.lower() for keyword in keywords):
+                sentences = content.split('.')
+                for sentence in sentences:
+                    if any(keyword in sentence.lower() for keyword in keywords):
+                        learnings.append(sentence.strip())
+        
+        return learnings[:2]  # Limit to top 2 learnings
+    
+    def _format_insights_for_mem0(self, agent_result: Dict[str, Any], agent_name: str, state: MarketingResearchState) -> str:
+        """Format agent insights for storage in mem0."""
+        
+        # Extract key information from agent result
+        insights = agent_result.get("insights", "")
+        analysis = agent_result.get("analysis", "")
+        recommendations = agent_result.get("recommendations", [])
+        
+        # Create structured insight content
+        formatted_content = f"Agent: {agent_name}\n"
+        formatted_content += f"Analysis Focus: {state.get('analysis_focus', '')}\n"
+        formatted_content += f"Target Audience: {state.get('target_audience', '')}\n"
+        formatted_content += f"Campaign Type: {state.get('campaign_type', '')}\n\n"
+        
+        if insights:
+            formatted_content += f"Key Insights:\n{insights}\n\n"
+        
+        if analysis:
+            formatted_content += f"Analysis:\n{analysis}\n\n"
+        
+        if recommendations:
+            if isinstance(recommendations, list):
+                formatted_content += "Recommendations:\n"
+                for i, rec in enumerate(recommendations, 1):
+                    formatted_content += f"{i}. {rec}\n"
+            else:
+                formatted_content += f"Recommendations:\n{recommendations}\n"
+        
+        # Add tool results if available
+        if "tool_results" in agent_result:
+            tool_results = agent_result["tool_results"]
+            if tool_results:
+                formatted_content += "\nTool Results Summary:\n"
+                for tool_name, result in tool_results.items():
+                    if isinstance(result, dict) and "insights" in result:
+                        formatted_content += f"- {tool_name}: {result['insights']}\n"
+        
+        return formatted_content
+    
+    def _create_workflow_summary_for_mem0(self, state: MarketingResearchState, enhanced_summary: Dict[str, Any]) -> str:
+        """Create a comprehensive workflow summary for mem0 storage."""
+        
+        workflow_id = state["workflow_id"]
+        
+        summary_content = f"Workflow Summary - {workflow_id}\n"
+        summary_content += f"Analysis Type: {state.get('analysis_focus', '')}\n"
+        summary_content += f"Target Audience: {state.get('target_audience', '')}\n"
+        summary_content += f"Campaign Type: {state.get('campaign_type', '')}\n"
+        summary_content += f"Budget: ${state.get('budget', 0):,}\n"
+        summary_content += f"Duration: {state.get('duration', '')}\n\n"
+        
+        # Add execution metrics
+        exec_summary = enhanced_summary["execution_summary"]
+        summary_content += f"Execution Metrics:\n"
+        summary_content += f"- Agents Used: {', '.join(state['selected_agents'])}\n"
+        summary_content += f"- Success Rate: {exec_summary['success_rate']:.1%}\n"
+        summary_content += f"- Execution Time: {exec_summary['execution_time']:.1f} seconds\n"
+        summary_content += f"- Context Strategy: {self.context_strategy}\n\n"
+        
+        # Add key insights from each agent
+        agent_results = state.get("agent_results", {})
+        if agent_results:
+            summary_content += "Key Agent Insights:\n"
+            for agent_name, result in agent_results.items():
+                if isinstance(result, dict) and "insights" in result:
+                    insights = result["insights"]
+                    if insights:
+                        # Truncate long insights
+                        truncated_insights = insights[:200] + "..." if len(insights) > 200 else insights
+                        summary_content += f"- {agent_name}: {truncated_insights}\n"
+        
+        # Add optimization metrics
+        opt_metrics = enhanced_summary["optimization_metrics"]
+        summary_content += f"\nOptimization Results:\n"
+        summary_content += f"- Total Steps: {opt_metrics['total_steps']}\n"
+        summary_content += f"- Checkpoints Created: {opt_metrics['checkpoints_created']}\n"
+        summary_content += f"- Scratchpad Entries: {opt_metrics['scratchpad_entries']}\n"
+        
+        # Add token usage if available
+        token_usage = enhanced_summary.get("token_usage", {})
+        if token_usage:
+            summary_content += f"- Total Tokens Used: {token_usage.get('total_tokens', 0):,}\n"
+        
+        return summary_content
+    
+    def _extract_workflow_patterns(self, state: MarketingResearchState, enhanced_summary: Dict[str, Any]) -> str:
+        """Extract workflow patterns for future optimization."""
+        
+        patterns_content = f"Workflow Pattern Analysis\n"
+        patterns_content += f"Agent Combination: {', '.join(sorted(state['selected_agents']))}\n"
+        patterns_content += f"Context Strategy: {self.context_strategy}\n"
+        patterns_content += f"Optimization Level: {state.get('optimization_level', '')}\n\n"
+        
+        # Execution patterns
+        exec_summary = enhanced_summary["execution_summary"]
+        patterns_content += f"Execution Patterns:\n"
+        patterns_content += f"- Execution Order: {' → '.join(exec_summary.get('agent_execution_order', []))}\n"
+        patterns_content += f"- Success Rate: {exec_summary['success_rate']:.1%}\n"
+        patterns_content += f"- Average Time per Agent: {exec_summary['execution_time'] / len(state['selected_agents']):.1f}s\n\n"
+        
+        # Context engineering effectiveness
+        context_stats = enhanced_summary.get("context_engineering_stats", {})
+        if context_stats:
+            patterns_content += f"Context Engineering Effectiveness:\n"
+            scratchpad_stats = context_stats.get("scratchpads", {})
+            if scratchpad_stats:
+                patterns_content += f"- Total Scratchpad Entries: {scratchpad_stats.get('total_entries', 0)}\n"
+                patterns_content += f"- Agents with Scratchpads: {scratchpad_stats.get('total_agents', 0)}\n"
+        
+        # Performance insights
+        opt_metrics = enhanced_summary["optimization_metrics"]
+        if opt_metrics["agents_executed"] == len(state["selected_agents"]):
+            patterns_content += f"\nSuccess Pattern: All agents completed successfully with {self.context_strategy} strategy\n"
+        
+        patterns_content += f"\nRecommendation: This agent combination with {self.context_strategy} context strategy "
+        patterns_content += f"achieved {exec_summary['success_rate']:.1%} success rate and can be reused for similar analyses.\n"
+        
+        return patterns_content
     
     def _enhanced_agent_router(self, state: MarketingResearchState) -> MarketingResearchState:
         """Enhanced agent router with context-aware routing."""
@@ -387,12 +600,40 @@ class EnhancedMarketingWorkflow:
                     namespace="contexts"
                 ) if global_context_key else {}
                 
+                # Get agent-specific historical context from mem0
+                agent_historical_context = {}
+                if self.mem0_available and self.memory_manager:
+                    try:
+                        # Create agent-specific query
+                        agent_query = f"{agent_name} {state.get('analysis_focus', '')} {state.get('target_audience', '')}"
+                        
+                        # Get agent-specific historical insights
+                        agent_insights = self.memory_manager.get_relevant_context(
+                            query=agent_query,
+                            user_id=f"agent_{agent_name}",
+                            limit=3
+                        )
+                        
+                        if agent_insights:
+                            agent_historical_context = {
+                                "agent_specific_insights": agent_insights,
+                                "previous_learnings": self._extract_learnings_for_agent(agent_insights, agent_name)
+                            }
+                            logger.info(f"🧠 Retrieved {len(agent_insights)} historical insights for {agent_name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to retrieve agent-specific context for {agent_name}: {e}")
+                
+                # Merge historical context with global context
+                enhanced_global_context = {**global_context}
+                if agent_historical_context:
+                    enhanced_global_context["agent_historical_context"] = agent_historical_context
+                
                 # Get optimized context for this agent (includes isolation)
                 base_context = self.context_engine.get_context_for_agent(
                     agent_role=agent_name,
                     thread_id=workflow_id,
                     step=current_step,
-                    full_context={**state, **global_context},
+                    full_context={**state, **enhanced_global_context},
                     strategy=self.context_strategy
                 )
 
@@ -526,6 +767,44 @@ class EnhancedMarketingWorkflow:
                                 "timestamp": datetime.now().isoformat()
                             }
                         )
+                        
+                        # Store insights in mem0 for persistent learning
+                        if self.mem0_available and self.memory_manager:
+                            try:
+                                # Prepare insight data for mem0
+                                insight_content = self._format_insights_for_mem0(agent_result, agent_name, state)
+                                
+                                # Store agent-specific insights
+                                self.memory_manager.store_insights(
+                                    insights=insight_content,
+                                    context={
+                                        "agent_role": agent_name,
+                                        "workflow_id": workflow_id,
+                                        "analysis_focus": state.get("analysis_focus", ""),
+                                        "target_audience": state.get("target_audience", ""),
+                                        "campaign_type": state.get("campaign_type", ""),
+                                        "execution_step": current_step,
+                                        "timestamp": datetime.now().isoformat()
+                                    },
+                                    user_id=f"agent_{agent_name}"
+                                )
+                                
+                                # Also store in general marketing team memory
+                                self.memory_manager.store_insights(
+                                    insights=insight_content,
+                                    context={
+                                        "source_agent": agent_name,
+                                        "workflow_id": workflow_id,
+                                        "analysis_type": state.get("analysis_focus", ""),
+                                        "timestamp": datetime.now().isoformat()
+                                    },
+                                    user_id="marketing_team"
+                                )
+                                
+                                logger.info(f"💾 Stored {agent_name} insights in mem0 for persistent learning")
+                                
+                            except Exception as e:
+                                logger.warning(f"Failed to store insights in mem0 for {agent_name}: {e}")
                 
                 # Update agent status
                 state["agent_status"][agent_name] = AgentStatus.COMPLETED
@@ -705,6 +984,48 @@ class EnhancedMarketingWorkflow:
             },
             namespace="completed_workflows"
         )
+        
+        # Store comprehensive workflow insights in mem0
+        if self.mem0_available and self.memory_manager:
+            try:
+                # Create comprehensive workflow summary for mem0
+                workflow_insights = self._create_workflow_summary_for_mem0(state, enhanced_summary)
+                
+                # Store workflow-level insights
+                self.memory_manager.store_insights(
+                    insights=workflow_insights,
+                    context={
+                        "workflow_type": "completed_analysis",
+                        "workflow_id": workflow_id,
+                        "analysis_focus": state.get("analysis_focus", ""),
+                        "target_audience": state.get("target_audience", ""),
+                        "campaign_type": state.get("campaign_type", ""),
+                        "agents_used": state["selected_agents"],
+                        "success_rate": enhanced_summary["optimization_metrics"]["agents_executed"] / len(state["selected_agents"]),
+                        "completion_time": datetime.now().isoformat()
+                    },
+                    user_id="marketing_team"
+                )
+                
+                # Store workflow patterns for future optimization
+                if enhanced_summary["optimization_metrics"]["agents_executed"] == len(state["selected_agents"]):
+                    pattern_insights = self._extract_workflow_patterns(state, enhanced_summary)
+                    self.memory_manager.store_insights(
+                        insights=pattern_insights,
+                        context={
+                            "insight_type": "workflow_pattern",
+                            "context_strategy": self.context_strategy,
+                            "optimization_level": state.get("optimization_level", ""),
+                            "agents_combination": "_".join(sorted(state["selected_agents"])),
+                            "timestamp": datetime.now().isoformat()
+                        },
+                        user_id="workflow_optimizer"
+                    )
+                
+                logger.info(f"💾 Stored comprehensive workflow insights in mem0")
+                
+            except Exception as e:
+                logger.warning(f"Failed to store workflow insights in mem0: {e}")
         
         # Stop token tracking
         self.token_tracker.stop_tracking(workflow_id)

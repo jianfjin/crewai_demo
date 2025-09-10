@@ -318,18 +318,58 @@ class EnhancedLangGraphAgent(LangGraphAgent):
                 
                 # Filter parameters to only include those the tool accepts
                 import inspect
-                tool_signature = inspect.signature(tool_func)
-                valid_params = {k: v for k, v in tool_params.items() if k in tool_signature.parameters}
+                try:
+                    # For LangChain tools, we need to check the args_schema instead of function signature
+                    if hasattr(tool_func, 'args_schema') and tool_func.args_schema:
+                        # Get field names from Pydantic model
+                        schema_fields = tool_func.args_schema.__fields__.keys()
+                        valid_params = {k: v for k, v in tool_params.items() if k in schema_fields}
+                        logger.debug(f"Tool {tool_name} schema fields: {list(schema_fields)}")
+                        logger.debug(f"Filtered params for {tool_name}: {valid_params}")
+                    else:
+                        # Fallback to function signature inspection
+                        tool_signature = inspect.signature(tool_func)
+                        valid_params = {k: v for k, v in tool_params.items() if k in tool_signature.parameters}
+                        logger.debug(f"Tool {tool_name} signature params: {list(tool_signature.parameters.keys())}")
+                        logger.debug(f"Filtered params for {tool_name}: {valid_params}")
+                except Exception as e:
+                    logger.warning(f"Failed to inspect tool {tool_name} parameters: {e}")
+                    # Use all parameters as fallback
+                    valid_params = tool_params
+                    logger.debug(f"Using all params for {tool_name}: {valid_params}")
                 
                 # Execute the tool with proper method and config
-                if hasattr(tool_func, '_run'):
+                if hasattr(tool_func, 'invoke'):
+                    # Use invoke method for LangChain tools (preferred method)
+                    result = tool_func.invoke(valid_params)
+                elif hasattr(tool_func, '_run'):
                     # Add config parameter for StructuredTool._run()
                     try:
+                        # Try with config as keyword-only argument (required for newer LangChain versions)
                         result = tool_func._run(**valid_params, config={})
-                    except TypeError:
-                        result = tool_func._run(**valid_params)
-                elif hasattr(tool_func, 'invoke'):
-                    result = tool_func.invoke(valid_params)
+                    except TypeError as e:
+                        if "missing 1 required keyword-only argument: 'config'" in str(e):
+                            # Config is required as keyword-only argument
+                            try:
+                                # Ensure config is passed as keyword argument
+                                result = tool_func._run(config={}, **valid_params)
+                            except TypeError:
+                                # Try with empty config dict
+                                try:
+                                    import inspect
+                                    sig = inspect.signature(tool_func._run)
+                                    if 'config' in sig.parameters:
+                                        # Config parameter exists, pass it explicitly
+                                        result = tool_func._run(config={}, **valid_params)
+                                    else:
+                                        # No config parameter, try without it
+                                        result = tool_func._run(**valid_params)
+                                except:
+                                    # Final fallback: try without config
+                                    result = tool_func._run(**valid_params)
+                        else:
+                            # Other TypeError, try without config
+                            result = tool_func._run(**valid_params)
                 elif hasattr(tool_func, 'run'):
                     try:
                         result = tool_func.run(**valid_params)

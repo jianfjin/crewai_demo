@@ -894,7 +894,7 @@ class LangGraphDashboard:
                             fig.update_layout(xaxis_title=data.get("analysis_dimension", "segment"))
                             st.plotly_chart(fig, use_container_width=True)
                     if df is not None:
-                        st.dataframe(df, use_container_width=True)
+                        st.dataframe(df.astype(str), use_container_width=True)
                 return
             
             # Cross-Sectional Analysis
@@ -902,7 +902,7 @@ class LangGraphDashboard:
                 seg = data.get("segment_performance") or {}
                 df = self._df_from_dict_of_dicts(seg)
                 if df is not None:
-                    st.dataframe(df, use_container_width=True)
+                    st.dataframe(df.astype(str), use_container_width=True)
                     if is_plotly:
                         # plot sum column if exists
                         ycol = "sum" if "sum" in df.columns else None
@@ -959,7 +959,7 @@ class LangGraphDashboard:
                 if kpis:
                     if is_pandas:
                         df = pd.DataFrame([kpis])
-                        st.dataframe(df, use_container_width=True)
+                        st.dataframe(df.astype(str), use_container_width=True)
                     else:
                         st.json(kpis)
                 return
@@ -1002,7 +1002,7 @@ class LangGraphDashboard:
                 if is_plotly:
                     fig = px.bar(df, x="key", y=df.columns[1] if len(df.columns) > 1 else None, title=tool_name)
                     st.plotly_chart(fig, use_container_width=True)
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df.astype(str), use_container_width=True)
             else:
                 st.json(data)
         except Exception:
@@ -1058,7 +1058,7 @@ class LangGraphDashboard:
         
         if rows:
             df = pd.DataFrame(rows)
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df.astype(str), use_container_width=True)
             
             # Visual comparisons
             if PLOTLY_AVAILABLE and len(rows) > 0:
