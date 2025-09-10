@@ -338,3 +338,33 @@ The system will now learn from each analysis, provide contextual insights based 
 
 **Status**: ✅ **COMPLETE** - mem0 integration fully implemented and ready for testing
 **Next Steps**: Deploy and monitor performance improvements through A/B testing
+
+## 🧠 **Long-Term Memory Management: A Hybrid Approach**
+
+The long-term memory in the `enhanced_workflow.py` is managed through a sophisticated **hybrid approach**, leveraging both `mem0` for persistent, cross-session learning and an in-memory store for session-specific context and state management.
+
+### 1. `mem0` for Persistent, Strategic Learning
+
+-   **Role**: Serves as the true long-term memory, enabling the system to learn and improve across multiple workflow executions, even after restarts.
+-   **Mechanism**: The `MarketingMemoryManager` class integrates directly with `mem0`.
+-   **Usage**:
+    -   **Context Retrieval**: At the start of a workflow, it fetches relevant historical insights, patterns, and recommendations from past analyses to inform the current task.
+    -   **Insight Storage**: After each agent completes its execution, its key findings and insights are formatted and stored in `mem0`.
+    -   **Pattern Recognition**: At the end of a workflow, a comprehensive summary and identified success patterns (e.g., effective agent combinations, context strategies) are saved to `mem0` to guide future optimizations.
+
+### 2. In-Memory Store for Session-Level Management
+
+-   **Role**: Manages the operational state and context *during a single, active workflow run*. This memory is volatile and does not persist across sessions.
+-   **Mechanism**:
+    -   The `context_engine` utilizes an `InMemoryStore` to handle session-specific data like the global context, agent scratchpads, and checkpoints.
+    -   LangGraph's `MemorySaver` is used for in-memory checkpointing, allowing the workflow state to be saved and restored within the same session.
+-   **Usage**: Ensures seamless context passing between agents and provides the ability to pause and resume a workflow reliably during its execution.
+
+### Summary of the Hybrid System
+
+| Memory System      | Primary Purpose                      | Persistence      | Key Components                               |
+| ------------------ | ------------------------------------ | ---------------- | -------------------------------------------- |
+| **`mem0`**         | Strategic, long-term learning        | **Persistent**   | `MarketingMemoryManager`                     |
+| **In-Memory Store**| Operational, session-level context   | **Volatile**     | `context_engine`, LangGraph `MemorySaver`    |
+
+This dual-system architecture provides the best of both worlds: the stability and learning capability of a persistent memory store (`mem0`) combined with the speed and efficiency of in-memory management for active operations.
