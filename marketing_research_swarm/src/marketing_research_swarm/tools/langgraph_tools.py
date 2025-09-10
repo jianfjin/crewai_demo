@@ -1270,3 +1270,218 @@ def _assess_churn_risk(churn_rate: float, trend: float, volatility: float) -> st
         return "Low"
     else:
         return "Minimal"
+
+# Enhanced Regional Analysis Tool
+class RegionalPerformanceInput(BaseModel):
+    data_path: Optional[str] = Field(default=None, description="Path to data file")
+    analysis_type: str = Field(default="comprehensive", description="Type of regional analysis")
+
+@tool(args_schema=RegionalPerformanceInput)
+def regional_performance_analysis(analysis_type: str = "comprehensive") -> str:
+    """Perform detailed regional performance analysis with market share, growth trends, and competitive positioning"""
+    try:
+        # Load data using cached approach
+        df = get_cached_data()
+        
+        if df.empty:
+            return json.dumps({
+                'error': 'No data available',
+                'regional_insights': 'No data available for regional performance analysis'
+            })
+        
+        # Check required columns
+        if 'region' not in df.columns or 'total_revenue' not in df.columns:
+            return json.dumps({
+                'error': 'Missing required columns for regional analysis',
+                'available_columns': list(df.columns),
+                'regional_insights': 'Cannot perform regional analysis due to missing data columns'
+            })
+        
+        # Regional Performance Analysis
+        regional_metrics = df.groupby('region').agg({
+            'total_revenue': ['sum', 'mean', 'count'],
+            'profit': 'sum' if 'profit' in df.columns else 'first',
+            'profit_margin': 'mean' if 'profit_margin' in df.columns else 'first',
+            'units_sold': 'sum' if 'units_sold' in df.columns else 'first'
+        }).round(2)
+        
+        # Flatten column names
+        regional_metrics.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in regional_metrics.columns]
+        
+        # Calculate market share by region
+        total_market_revenue = df['total_revenue'].sum()
+        regional_metrics['market_share_pct'] = (regional_metrics['total_revenue_sum'] / total_market_revenue * 100).round(2)
+        
+        # Regional growth analysis (if date data available)
+        regional_growth = {}
+        if 'sale_date' in df.columns:
+            df['sale_date'] = pd.to_datetime(df['sale_date'])
+            df['year_month'] = df['sale_date'].dt.to_period('M')
+            
+            for region in df['region'].unique():
+                region_data = df[df['region'] == region]
+                monthly_revenue = region_data.groupby('year_month')['total_revenue'].sum()
+                
+                if len(monthly_revenue) >= 2:
+                    growth_rate = ((monthly_revenue.iloc[-1] - monthly_revenue.iloc[0]) / monthly_revenue.iloc[0] * 100)
+                    regional_growth[region] = round(growth_rate, 2)
+        
+        # Brand performance by region
+        regional_brand_performance = {}
+        if 'brand' in df.columns:
+            for region in df['region'].unique():
+                region_data = df[df['region'] == region]
+                brand_revenue = region_data.groupby('brand')['total_revenue'].sum().sort_values(ascending=False)
+                regional_brand_performance[region] = {
+                    'top_brand': brand_revenue.index[0] if len(brand_revenue) > 0 else 'N/A',
+                    'top_brand_revenue': float(brand_revenue.iloc[0]) if len(brand_revenue) > 0 else 0,
+                    'brand_count': len(brand_revenue),
+                    'market_concentration': 'High' if len(brand_revenue) > 0 and brand_revenue.iloc[0] > brand_revenue.sum() * 0.4 else 'Medium'
+                }
+        
+        # Competitive positioning
+        regional_ranking = regional_metrics.sort_values('total_revenue_sum', ascending=False)
+        
+        analysis = {
+            'regional_performance_metrics': regional_metrics.to_dict(),
+            'regional_market_share': regional_metrics['market_share_pct'].to_dict(),
+            'regional_growth_rates': regional_growth,
+            'regional_brand_leadership': regional_brand_performance,
+            'regional_ranking': {
+                'by_revenue': list(regional_ranking.index),
+                'by_market_share': list(regional_ranking.sort_values('market_share_pct', ascending=False).index)
+            },
+            'competitive_insights': {
+                'strongest_region': regional_ranking.index[0],
+                'strongest_region_revenue': float(regional_ranking['total_revenue_sum'].iloc[0]),
+                'weakest_region': regional_ranking.index[-1],
+                'revenue_gap': float(regional_ranking['total_revenue_sum'].iloc[0] - regional_ranking['total_revenue_sum'].iloc[-1]),
+                'market_concentration': 'High' if regional_ranking['market_share_pct'].iloc[0] > 40 else 'Medium'
+            },
+            'regional_insights': f"Regional analysis shows {regional_ranking.index[0]} as the strongest market with {regional_ranking['market_share_pct'].iloc[0]:.1f}% market share, while {len(regional_metrics)} regions show varying performance levels with significant growth opportunities in underperforming markets."
+        }
+        
+        return json.dumps(analysis, indent=2)
+        
+    except Exception as e:
+        return f"Error in regional performance analysis: {str(e)}"
+
+# Enhanced Seasonal Analysis Tool
+class SeasonalAnalysisInput(BaseModel):
+    data_path: Optional[str] = Field(default=None, description="Path to data file")
+    granularity: str = Field(default="monthly", description="Analysis granularity: monthly, quarterly, or weekly")
+
+@tool(args_schema=SeasonalAnalysisInput)
+def detailed_seasonal_analysis(granularity: str = "monthly") -> str:
+    """Perform detailed seasonal pattern analysis with month-over-month trends, holiday impacts, and campaign timing insights"""
+    try:
+        # Load data using cached approach
+        df = get_cached_data()
+        
+        if df.empty:
+            return json.dumps({
+                'error': 'No data available',
+                'seasonal_insights': 'No data available for seasonal analysis'
+            })
+        
+        # Check required columns
+        if 'sale_date' not in df.columns or 'total_revenue' not in df.columns:
+            return json.dumps({
+                'error': 'Missing required columns for seasonal analysis',
+                'available_columns': list(df.columns),
+                'seasonal_insights': 'Cannot perform seasonal analysis due to missing data columns'
+            })
+        
+        # Convert date column
+        df['sale_date'] = pd.to_datetime(df['sale_date'])
+        df['year'] = df['sale_date'].dt.year
+        df['month'] = df['sale_date'].dt.month
+        df['quarter'] = df['sale_date'].dt.quarter
+        df['week'] = df['sale_date'].dt.isocalendar().week
+        df['day_of_year'] = df['sale_date'].dt.dayofyear
+        
+        # Monthly seasonal patterns
+        monthly_patterns = df.groupby('month').agg({
+            'total_revenue': ['sum', 'mean', 'std'],
+            'units_sold': 'sum' if 'units_sold' in df.columns else 'first'
+        }).round(2)
+        
+        monthly_patterns.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in monthly_patterns.columns]
+        
+        # Calculate seasonal indices (compared to annual average)
+        annual_avg = df['total_revenue'].mean()
+        monthly_patterns['seasonal_index'] = (monthly_patterns['total_revenue_mean'] / annual_avg * 100).round(2)
+        
+        # Identify peak and low seasons
+        peak_month = monthly_patterns['total_revenue_sum'].idxmax()
+        low_month = monthly_patterns['total_revenue_sum'].idxmin()
+        
+        # Quarter-over-quarter analysis
+        quarterly_patterns = df.groupby(['year', 'quarter'])['total_revenue'].sum().reset_index()
+        quarterly_growth = quarterly_patterns.groupby('quarter')['total_revenue'].mean().round(2)
+        
+        # Brand seasonal performance
+        brand_seasonal = {}
+        if 'brand' in df.columns:
+            for brand in df['brand'].unique():
+                brand_data = df[df['brand'] == brand]
+                brand_monthly = brand_data.groupby('month')['total_revenue'].sum()
+                brand_peak = brand_monthly.idxmax()
+                brand_low = brand_monthly.idxmin()
+                
+                brand_seasonal[brand] = {
+                    'peak_month': int(brand_peak),
+                    'peak_revenue': float(brand_monthly.max()),
+                    'low_month': int(brand_low),
+                    'low_revenue': float(brand_monthly.min()),
+                    'seasonality_ratio': float(brand_monthly.max() / brand_monthly.min()) if brand_monthly.min() > 0 else 0
+                }
+        
+        # Campaign timing recommendations
+        month_names = {1: 'January', 2: 'February', 3: 'March', 4: 'April', 5: 'May', 6: 'June',
+                      7: 'July', 8: 'August', 9: 'September', 10: 'October', 11: 'November', 12: 'December'}
+        
+        # Identify optimal campaign periods
+        high_performance_months = monthly_patterns[monthly_patterns['seasonal_index'] > 110].index.tolist()
+        low_performance_months = monthly_patterns[monthly_patterns['seasonal_index'] < 90].index.tolist()
+        
+        # Regional seasonal variations
+        regional_seasonal = {}
+        if 'region' in df.columns:
+            for region in df['region'].unique():
+                region_data = df[df['region'] == region]
+                region_monthly = region_data.groupby('month')['total_revenue'].sum()
+                region_peak = region_monthly.idxmax()
+                
+                regional_seasonal[region] = {
+                    'peak_month': int(region_peak),
+                    'peak_month_name': month_names[region_peak],
+                    'peak_revenue': float(region_monthly.max()),
+                    'seasonal_variance': float(region_monthly.std())
+                }
+        
+        analysis = {
+            'monthly_seasonal_patterns': monthly_patterns.to_dict(),
+            'quarterly_averages': quarterly_growth.to_dict(),
+            'seasonal_summary': {
+                'peak_month': int(peak_month),
+                'peak_month_name': month_names[peak_month],
+                'low_month': int(low_month),
+                'low_month_name': month_names[low_month],
+                'seasonality_strength': float(monthly_patterns['total_revenue_sum'].max() / monthly_patterns['total_revenue_sum'].min()) if monthly_patterns['total_revenue_sum'].min() > 0 else 0
+            },
+            'brand_seasonal_performance': brand_seasonal,
+            'regional_seasonal_variations': regional_seasonal,
+            'campaign_timing_recommendations': {
+                'optimal_launch_months': [month_names[m] for m in high_performance_months],
+                'avoid_launch_months': [month_names[m] for m in low_performance_months],
+                'peak_season_strategy': f"Focus major campaigns in {month_names[peak_month]} when revenue peaks",
+                'off_season_strategy': f"Use {month_names[low_month]} for brand building and preparation"
+            },
+            'seasonal_insights': f"Detailed seasonal analysis reveals {month_names[peak_month]} as peak season with {monthly_patterns.loc[peak_month, 'seasonal_index']:.1f}% above average performance, while {month_names[low_month]} shows {monthly_patterns.loc[low_month, 'seasonal_index']:.1f}% of average performance. Strong seasonality patterns suggest strategic campaign timing opportunities."
+        }
+        
+        return json.dumps(analysis, indent=2)
+        
+    except Exception as e:
+        return f"Error in detailed seasonal analysis: {str(e)}"

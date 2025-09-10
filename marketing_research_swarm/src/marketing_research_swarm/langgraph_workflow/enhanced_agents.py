@@ -25,6 +25,8 @@ from ..tools.langgraph_tools import (
     beverage_market_analysis,
     customer_churn_analysis,
     profitability_analysis,
+    regional_performance_analysis,
+    detailed_seasonal_analysis,
 )
 # Temporarily disable context_aware_tools due to circular import
 # from ..tools.context_aware_tools import get_context_aware_tools
@@ -75,6 +77,8 @@ class EnhancedLangGraphAgent(LangGraphAgent):
                 "beverage_market_analysis": beverage_market_analysis,
                 "customer_churn_analysis": customer_churn_analysis,
                 "profitability_analysis": profitability_analysis,
+                "regional_performance_analysis": regional_performance_analysis,
+                "detailed_seasonal_analysis": detailed_seasonal_analysis,
             }
             logger.info(f"Initialized {len(self.available_tools)} available tools for enhanced agent")
         except Exception as e:
@@ -201,10 +205,10 @@ class EnhancedLangGraphAgent(LangGraphAgent):
         """
         # Role-based tool mapping based on agents.yaml and langgraph_tools.py
         role_tools = {
-            'market_research_analyst': ['beverage_market_analysis', 'time_series_analysis', 'cross_sectional_analysis'],
-            'competitive_analyst': ['beverage_market_analysis', 'calculate_market_share', 'cross_sectional_analysis', 'customer_churn_analysis'],
-            'data_analyst': ['profitability_analysis', 'time_series_analysis', 'cross_sectional_analysis', 'analyze_kpis', 'customer_churn_analysis'],
-            'brand_performance_specialist': ['analyze_brand_performance', 'calculate_market_share', 'beverage_market_analysis', 'customer_churn_analysis'],
+            'market_research_analyst': ['beverage_market_analysis', 'time_series_analysis', 'cross_sectional_analysis', 'regional_performance_analysis', 'detailed_seasonal_analysis'],
+            'competitive_analyst': ['beverage_market_analysis', 'calculate_market_share', 'cross_sectional_analysis', 'customer_churn_analysis', 'regional_performance_analysis'],
+            'data_analyst': ['profitability_analysis', 'time_series_analysis', 'cross_sectional_analysis', 'analyze_kpis', 'customer_churn_analysis', 'detailed_seasonal_analysis'],
+            'brand_performance_specialist': ['analyze_brand_performance', 'calculate_market_share', 'beverage_market_analysis', 'customer_churn_analysis', 'regional_performance_analysis'],
             'forecasting_specialist': ['forecast_sales', 'analyze_kpis'],
             'campaign_optimizer': ['plan_budget', 'calculate_roi'],
             'brand_strategist': ['analyze_brand_performance', 'profitability_analysis'],

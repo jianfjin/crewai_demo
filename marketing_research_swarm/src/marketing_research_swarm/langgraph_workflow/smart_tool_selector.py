@@ -109,19 +109,33 @@ class SmartToolSelector:
                 "weight": 0.7,
                 "execution_time": "medium",
                 "data_requirements": ["brand_data", "performance_data"]
+            },
+            "regional_performance_analysis": {
+                "keywords": ["regional", "region", "geographic", "location", "area", "territory", "market", "local", "geographical"],
+                "tier": 1,  # Essential for regional analysis
+                "weight": 1.0,
+                "execution_time": "medium",
+                "data_requirements": ["regional_data", "geographic_data"]
+            },
+            "detailed_seasonal_analysis": {
+                "keywords": ["seasonal", "season", "monthly", "quarterly", "holiday", "timing", "calendar", "cyclical", "periodic"],
+                "tier": 1,  # Essential for seasonal analysis
+                "weight": 1.0,
+                "execution_time": "medium",
+                "data_requirements": ["time_series_data", "seasonal_data"]
             }
         }
     
     def _initialize_essential_tools(self) -> Dict[str, List[str]]:
         """Initialize essential tools for each agent role."""
         return {
-            "data_analyst": ["profitability_analysis", "analyze_kpis", "time_series_analysis", "customer_churn_analysis", "cross_sectional_analysis"],
-            "market_research_analyst": ["beverage_market_analysis", "cross_sectional_analysis"],
+            "data_analyst": ["profitability_analysis", "analyze_kpis", "time_series_analysis", "customer_churn_analysis", "cross_sectional_analysis", "detailed_seasonal_analysis"],
+            "market_research_analyst": ["beverage_market_analysis", "cross_sectional_analysis", "regional_performance_analysis", "detailed_seasonal_analysis"],
             "forecasting_specialist": ["forecast_sales"],
-            "competitive_analyst": ["beverage_market_analysis", "analyze_brand_performance", "customer_churn_analysis", "cross_sectional_analysis", "calculate_market_share"],
+            "competitive_analyst": ["beverage_market_analysis", "analyze_brand_performance", "customer_churn_analysis", "cross_sectional_analysis", "calculate_market_share", "regional_performance_analysis"],
             "content_strategist": ["analyze_kpis"],
             "creative_copywriter": [],  # No essential analytical tools
-            "brand_performance_specialist": ["analyze_brand_performance", "customer_churn_analysis", "calculate_market_share"],
+            "brand_performance_specialist": ["analyze_brand_performance", "customer_churn_analysis", "calculate_market_share", "regional_performance_analysis"],
             "campaign_optimizer": ["calculate_roi", "plan_budget"]
         }
     
@@ -212,6 +226,25 @@ class SmartToolSelector:
                 # Boost market analysis if market segments are specified
                 if "market" in tool_name and context.get('market_segments'):
                     weighted_score *= 1.2
+                
+                # Boost regional analysis for comprehensive business analysis
+                if tool_name == "regional_performance_analysis":
+                    # Always boost regional analysis in business contexts
+                    if context.get('target_audience') or context.get('market_segments'):
+                        weighted_score *= 1.5
+                    # Extra boost if multiple regions or markets are involved
+                    if context.get('market_segments') and len(context.get('market_segments', [])) > 1:
+                        weighted_score *= 1.3
+                
+                # Boost seasonal analysis for time-based business planning
+                if tool_name == "detailed_seasonal_analysis":
+                    # Always boost seasonal analysis for campaign planning
+                    if context.get('campaign_type') or context.get('duration'):
+                        weighted_score *= 1.5
+                    # Extra boost for longer duration campaigns
+                    duration = context.get('duration', '')
+                    if any(period in duration.lower() for period in ['month', 'quarter', 'year', 'season']):
+                        weighted_score *= 1.3
             
             # Only include tools with meaningful scores
             if weighted_score > 0.1 or tool_info["tier"] == 1:
@@ -271,6 +304,25 @@ class SmartToolSelector:
         # Get essential tools for this agent
         essential_tools = self.agent_essential_tools.get(agent_role, [])
         essential_tools = [tool for tool in essential_tools if tool in available_tools]
+        
+        # For manual configuration mode, ensure comprehensive analysis by including regional and seasonal tools
+        # when no specific keywords are detected (comprehensive business analysis scenario)
+        if context and not any(keyword in query_text.lower() for keyword in ['chat', 'specific', 'which', 'what', 'how']):
+            # This appears to be a comprehensive business analysis (manual mode)
+            if agent_role == "market_research_analyst":
+                # Ensure regional and seasonal analysis are included for comprehensive market research
+                if "regional_performance_analysis" in available_tools and "regional_performance_analysis" not in essential_tools:
+                    essential_tools.append("regional_performance_analysis")
+                if "detailed_seasonal_analysis" in available_tools and "detailed_seasonal_analysis" not in essential_tools:
+                    essential_tools.append("detailed_seasonal_analysis")
+            elif agent_role == "data_analyst":
+                # Ensure seasonal analysis for comprehensive data analysis
+                if "detailed_seasonal_analysis" in available_tools and "detailed_seasonal_analysis" not in essential_tools:
+                    essential_tools.append("detailed_seasonal_analysis")
+            elif agent_role == "competitive_analyst":
+                # Ensure regional analysis for comprehensive competitive analysis
+                if "regional_performance_analysis" in available_tools and "regional_performance_analysis" not in essential_tools:
+                    essential_tools.append("regional_performance_analysis")
         
         # Calculate relevance scores for all available tools
         relevance_scores = self.calculate_tool_relevance_scores(
