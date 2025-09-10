@@ -8,7 +8,7 @@
 
 *   **Title:** Architecting Intelligence: A Multi-Agent Framework for Marketing Research
 *   **Subtitle:** Powered by AI Agents, Advanced RAG, and Contextual Engineering
-*   **Presenter:** Senior Software Developer & Marketing Intelligence Specialist
+*   **Presenter:** Jianfeng Jin
 *   **Date:** September 11, 2025
 
 
