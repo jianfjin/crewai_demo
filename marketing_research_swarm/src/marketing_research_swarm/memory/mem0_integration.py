@@ -413,6 +413,79 @@ class Mem0Integration:
                 'status': 'error',
                 'error': str(e)
             }
+    
+    def get_relevant_context(self, query: str, user_id: str = "marketing_analyst", limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Get relevant context from memory based on a query.
+        
+        Args:
+            query: Search query to find relevant context
+            user_id: User identifier
+            limit: Maximum number of context items to return
+            
+        Returns:
+            List of relevant context items
+        """
+        try:
+            # Use search_memories as the underlying implementation
+            memories = self.search_memories(query, user_id, limit)
+            
+            # Format memories as context items
+            context_items = []
+            for memory in memories:
+                # Handle both string and dict memory formats
+                if isinstance(memory, str):
+                    context_item = {
+                        "content": memory,
+                        "metadata": {},
+                        "relevance_score": 0.5,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                elif isinstance(memory, dict):
+                    context_item = {
+                        "content": memory.get("memory", memory.get("content", "")),
+                        "metadata": memory.get("metadata", {}),
+                        "relevance_score": memory.get("score", 0.5),
+                        "timestamp": memory.get("timestamp", datetime.now().isoformat())
+                    }
+                else:
+                    # Skip invalid memory formats
+                    continue
+                context_items.append(context_item)
+            
+            logger.info(f"🧠 Retrieved {len(context_items)} relevant context items for query: {query[:50]}...")
+            return context_items
+            
+        except Exception as e:
+            logger.error(f"❌ Error retrieving relevant context: {e}")
+            return []
+    
+    def store_insights(self, insights: Dict[str, Any], user_id: str = "marketing_analyst") -> bool:
+        """
+        Store workflow insights in memory.
+        
+        Args:
+            insights: Dictionary containing workflow insights
+            user_id: User identifier
+            
+        Returns:
+            bool: True if insights were stored successfully
+        """
+        try:
+            # Convert insights to a readable format
+            insights_content = f"Workflow Insights: {json.dumps(insights, indent=2)}"
+            
+            metadata = {
+                "type": "workflow_insights",
+                "timestamp": datetime.now().isoformat(),
+                "insights_keys": list(insights.keys()) if isinstance(insights, dict) else []
+            }
+            
+            return self.add_memory(insights_content, user_id, metadata)
+            
+        except Exception as e:
+            logger.error(f"❌ Error storing insights: {e}")
+            return False
 
 # Backward compatibility alias
 MarketingMemoryManager = Mem0Integration

@@ -989,11 +989,61 @@ class LangGraphDashboard:
             
             # Market Share
             if "market_share" in tname:
-                cols = st.columns(3)
-                with cols[0]: st.metric("Company Revenue", f"${data.get('company_revenue', 0):,.0f}")
-                with cols[1]: st.metric("Total Market", f"${data.get('total_market_revenue', 0):,.0f}")
-                with cols[2]: st.metric("Share %", f"{data.get('market_share_percentage', 0):,.2f}%")
-                if data.get("competitive_position"): st.info(f"Position: {data['competitive_position']}")
+                # Handle enhanced market share tool output
+                if 'brand_market_shares' in data:
+                    # New enhanced format with all brands
+                    st.subheader("📊 Market Share Analysis")
+                    
+                    # Overall market metrics
+                    cols = st.columns(3)
+                    with cols[0]: 
+                        st.metric("Total Market", f"${data.get('total_market_revenue', 0):,.0f}")
+                    with cols[1]: 
+                        st.metric("Brands Analyzed", data.get('total_brands_analyzed', 0))
+                    with cols[2]:
+                        concentration = data.get('market_concentration_metrics', {})
+                        st.metric("Top 3 Share", f"{concentration.get('top_3_market_share', 0):.1f}%")
+                    
+                    # Brand market shares table
+                    brand_shares = data.get('brand_market_shares', {})
+                    if brand_shares:
+                        st.subheader("🏆 Brand Rankings")
+                        
+                        # Convert to display format
+                        display_data = []
+                        for brand, info in brand_shares.items():
+                            display_data.append({
+                                'Rank': info.get('rank', 0),
+                                'Brand': info.get('brand_name', brand),
+                                'Revenue': f"${info.get('brand_revenue', 0):,.0f}",
+                                'Market Share': f"{info.get('market_share_percentage', 0):.2f}%",
+                                'Position': info.get('competitive_position', 'Unknown')
+                            })
+                        
+                        # Sort by rank and display
+                        display_data.sort(key=lambda x: x['Rank'])
+                        
+                        # Show top 10 brands in a nice table
+                        import pandas as pd
+                        df_display = pd.DataFrame(display_data[:10])
+                        st.dataframe(df_display, use_container_width=True, hide_index=True)
+                        
+                        # Market insights
+                        if data.get('market_insights'):
+                            with st.expander("📈 Market Insights"):
+                                st.text(data['market_insights'])
+                    
+                elif 'company_revenue' in data:
+                    # Legacy format - single company
+                    cols = st.columns(3)
+                    with cols[0]: st.metric("Company Revenue", f"${data.get('company_revenue', 0):,.0f}")
+                    with cols[1]: st.metric("Total Market", f"${data.get('total_market_revenue', 0):,.0f}")
+                    with cols[2]: st.metric("Share %", f"{data.get('market_share_percentage', 0):,.2f}%")
+                    if data.get("competitive_position"): st.info(f"Position: {data['competitive_position']}")
+                else:
+                    # Fallback - show raw data
+                    st.json(data)
+                
                 return
             
             # Fallback generic rendering

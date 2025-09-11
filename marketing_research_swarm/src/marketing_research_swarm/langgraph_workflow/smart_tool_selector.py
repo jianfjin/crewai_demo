@@ -152,6 +152,10 @@ class SmartToolSelector:
         """Extract relevant keywords from query text and context."""
         keywords = []
         
+        # Ensure query_text is a string
+        if not isinstance(query_text, str):
+            query_text = str(query_text)
+        
         # Clean and normalize query text
         cleaned_query = re.sub(r'[^\w\s]', ' ', query_text.lower())
         words = cleaned_query.split()
@@ -170,18 +174,26 @@ class SmartToolSelector:
         if context:
             # Add context-specific keywords
             if context.get('analysis_focus'):
-                focus_words = re.sub(r'[^\w\s]', ' ', context['analysis_focus'].lower()).split()
-                keywords.extend([word for word in focus_words if len(word) > 2 and word not in stop_words])
+                analysis_focus = context['analysis_focus']
+                if isinstance(analysis_focus, str):
+                    focus_words = re.sub(r'[^\w\s]', ' ', analysis_focus.lower()).split()
+                    keywords.extend([word for word in focus_words if len(word) > 2 and word not in stop_words])
             
             # Add brand and market segment keywords
             if context.get('brands'):
-                keywords.extend([brand.lower() for brand in context['brands']])
+                brands = context['brands']
+                if isinstance(brands, list):
+                    keywords.extend([str(brand).lower() for brand in brands])
             
             if context.get('market_segments'):
-                keywords.extend([segment.lower().replace(' ', '_') for segment in context['market_segments']])
+                segments = context['market_segments']
+                if isinstance(segments, list):
+                    keywords.extend([str(segment).lower().replace(' ', '_') for segment in segments])
             
             if context.get('product_categories'):
-                keywords.extend([cat.lower().replace(' ', '_') for cat in context['product_categories']])
+                categories = context['product_categories']
+                if isinstance(categories, list):
+                    keywords.extend([str(cat).lower().replace(' ', '_') for cat in categories])
         
         return list(set(keywords))  # Remove duplicates
     
@@ -243,8 +255,10 @@ class SmartToolSelector:
                         weighted_score *= 1.5
                     # Extra boost for longer duration campaigns
                     duration = context.get('duration', '')
-                    if any(period in duration.lower() for period in ['month', 'quarter', 'year', 'season']):
-                        weighted_score *= 1.3
+                    if isinstance(duration, (str, int, float)):
+                        duration_str = str(duration).lower()
+                        if any(period in duration_str for period in ['month', 'quarter', 'year', 'season']):
+                            weighted_score *= 1.3
             
             # Only include tools with meaningful scores
             if weighted_score > 0.1 or tool_info["tier"] == 1:

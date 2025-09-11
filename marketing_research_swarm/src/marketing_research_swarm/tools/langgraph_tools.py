@@ -855,39 +855,127 @@ def plan_budget(total_budget: float, channels: List[str] = None, priorities: Lis
 
 @tool(args_schema=MarketShareInput)
 def calculate_market_share(company_revenue: float = None, total_market_revenue: float = None) -> str:
-    """Calculate market share based on company and total market revenue"""
+    """Calculate market share for all brands or specific company based on actual data"""
     try:
-        # Set default values if not provided
-        if company_revenue is None:
-            company_revenue = 911325.29  # Sample Coca-Cola revenue from data
-        if total_market_revenue is None:
-            total_market_revenue = 5509749.08  # Sample total market revenue from data
-            
-        if total_market_revenue <= 0:
+        # Load data using cached approach with fallback
+        df = get_cached_data()
+        
+        if df.empty:
             return json.dumps({
-                'error': 'Total market revenue must be greater than 0',
-                'market_share_percentage': 0
+                'error': 'No data available',
+                'market_share_analysis': {},
+                'brand_market_shares': {},
+                'market_insights': 'No data available for market share analysis'
             })
         
-        market_share = (company_revenue / total_market_revenue) * 100
+        # Check if we have required columns
+        if 'brand' not in df.columns or 'total_revenue' not in df.columns:
+            return json.dumps({
+                'error': 'Missing required columns for market share analysis',
+                'available_columns': list(df.columns),
+                'market_insights': 'Cannot calculate market share without brand and revenue data'
+            })
         
-        # Determine competitive position
-        if market_share >= 40:
-            position = 'Market Leader'
-        elif market_share >= 20:
-            position = 'Strong Competitor'
-        elif market_share >= 10:
-            position = 'Moderate Player'
+        # Calculate total market revenue from actual data
+        actual_total_market_revenue = df['total_revenue'].sum()
+        
+        # Calculate market share for all brands
+        brand_revenues = df.groupby('brand')['total_revenue'].sum().sort_values(ascending=False)
+        brand_market_shares = {}
+        
+        for brand, revenue in brand_revenues.items():
+            market_share = (revenue / actual_total_market_revenue) * 100
+            
+            # Determine competitive position
+            if market_share >= 40:
+                position = 'Market Leader'
+            elif market_share >= 20:
+                position = 'Strong Competitor'
+            elif market_share >= 10:
+                position = 'Moderate Player'
+            else:
+                position = 'Niche Player'
+            
+            brand_market_shares[brand] = {
+                'brand_name': brand,
+                'brand_revenue': round(revenue, 2),
+                'market_share_percentage': round(market_share, 2),
+                'competitive_position': position,
+                'rank': list(brand_revenues.index).index(brand) + 1
+            }
+        
+        # If specific company revenue is provided, calculate for that specific case
+        if company_revenue is not None and total_market_revenue is not None:
+            specific_market_share = (company_revenue / total_market_revenue) * 100
+            
+            if specific_market_share >= 40:
+                specific_position = 'Market Leader'
+            elif specific_market_share >= 20:
+                specific_position = 'Strong Competitor'
+            elif specific_market_share >= 10:
+                specific_position = 'Moderate Player'
+            else:
+                specific_position = 'Niche Player'
+            
+            specific_analysis = {
+                'company_revenue': company_revenue,
+                'total_market_revenue': total_market_revenue,
+                'market_share_percentage': round(specific_market_share, 2),
+                'competitive_position': specific_position,
+                'market_concentration': 'High' if specific_market_share >= 25 else 'Medium' if specific_market_share >= 10 else 'Low'
+            }
         else:
-            position = 'Niche Player'
+            specific_analysis = None
+        
+        # Market concentration analysis
+        top_3_share = sum([data['market_share_percentage'] for data in list(brand_market_shares.values())[:3]])
+        top_5_share = sum([data['market_share_percentage'] for data in list(brand_market_shares.values())[:5]])
+        
+        # Identify market leaders
+        market_leaders = [brand for brand, data in brand_market_shares.items() 
+                         if data['market_share_percentage'] >= 15]
+        
+        # Generate comprehensive insights
+        top_brand = list(brand_revenues.index)[0]
+        top_brand_share = brand_market_shares[top_brand]['market_share_percentage']
+        
+        market_insights = f"""Market Share Analysis Results:
+
+MARKET LEADERS:
+• {top_brand}: {top_brand_share}% market share (Rank #1)
+• Top 3 brands control {top_3_share:.1f}% of total market
+• Top 5 brands control {top_5_share:.1f}% of total market
+
+MARKET STRUCTURE:
+• Total brands analyzed: {len(brand_market_shares)}
+• Market leaders (>15% share): {len(market_leaders)} brands
+• Market concentration: {'High' if top_3_share > 60 else 'Medium' if top_3_share > 40 else 'Low'}
+
+COMPETITIVE LANDSCAPE:
+• Total market value: ${actual_total_market_revenue:,.2f}
+• Average market share per brand: {100/len(brand_market_shares):.1f}%
+• Market fragmentation: {'Low' if len(market_leaders) <= 3 else 'Medium' if len(market_leaders) <= 5 else 'High'}"""
         
         analysis = {
-            'company_revenue': company_revenue,
-            'total_market_revenue': total_market_revenue,
-            'market_share_percentage': round(market_share, 2),
-            'competitive_position': position,
-            'market_concentration': 'High' if market_share >= 25 else 'Medium' if market_share >= 10 else 'Low',
-            'market_insights': f"Market share of {market_share:.2f}% positions company as {position.lower()}"
+            'analysis_method': 'Actual data-based market share calculation',
+            'total_market_revenue': actual_total_market_revenue,
+            'total_brands_analyzed': len(brand_market_shares),
+            'brand_market_shares': brand_market_shares,
+            'market_concentration_metrics': {
+                'top_3_market_share': round(top_3_share, 2),
+                'top_5_market_share': round(top_5_share, 2),
+                'market_leaders_count': len(market_leaders),
+                'herfindahl_index': round(sum([data['market_share_percentage']**2 for data in brand_market_shares.values()]), 2)
+            },
+            'competitive_rankings': {
+                'by_market_share': [{'rank': i+1, 'brand': brand, 'market_share': data['market_share_percentage']} 
+                                   for i, (brand, data) in enumerate(brand_market_shares.items())],
+                'market_leaders': market_leaders,
+                'niche_players': [brand for brand, data in brand_market_shares.items() 
+                                if data['market_share_percentage'] < 5]
+            },
+            'specific_company_analysis': specific_analysis,
+            'market_insights': market_insights
         }
         
         return json.dumps(analysis, indent=2)
