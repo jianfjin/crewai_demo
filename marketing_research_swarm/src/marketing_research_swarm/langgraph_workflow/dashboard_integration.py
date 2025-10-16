@@ -14,7 +14,8 @@ import json
 
 from .workflow import MarketingResearchWorkflow
 from .state import MarketingResearchState, WorkflowStatus, AgentStatus
-from ..blackboard.integrated_blackboard import get_integrated_blackboard
+# Removed blackboard integration for performance optimization
+# from ..blackboard.integrated_blackboard import get_integrated_blackboard
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,8 @@ class DashboardWorkflowManager:
     
     def __init__(self):
         self.workflow = MarketingResearchWorkflow()
-        self.blackboard = get_integrated_blackboard()
+        # Removed blackboard initialization for performance optimization
+        # self.blackboard = get_integrated_blackboard()
         self.active_workflows: Dict[str, Dict[str, Any]] = {}
     
     def get_available_agents(self) -> List[Dict[str, Any]]:

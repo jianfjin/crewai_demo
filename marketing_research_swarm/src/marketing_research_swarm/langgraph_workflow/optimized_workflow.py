@@ -18,7 +18,8 @@ from langgraph.graph import StateGraph, END
 from .state import MarketingResearchState, WorkflowStatus, AgentStatus
 from .agents import AGENT_NODES
 from .enhanced_agent_nodes import ENHANCED_AGENT_NODES
-from ..blackboard.integrated_blackboard import get_integrated_blackboard
+# Removed blackboard integration for performance optimization
+# from ..blackboard.integrated_blackboard import get_integrated_blackboard
 from ..optimization_manager import OptimizationManager
 from ..utils.token_tracker import TokenTracker
 from ..performance.context_optimizer import ContextOptimizer
@@ -42,7 +43,8 @@ class OptimizedMarketingWorkflow:
         self.checkpoint_path = checkpoint_path or "cache/workflow_checkpoints.db"
         # Disable checkpointer to avoid API compatibility issues
         self.checkpointer = None
-        self.blackboard = get_integrated_blackboard()
+        # Removed blackboard initialization for performance optimization
+        # self.blackboard = get_integrated_blackboard()
         self.optimization_level = optimization_level
         self.enable_smart_tools = enable_smart_tools
         
@@ -1351,8 +1353,9 @@ class OptimizedMarketingWorkflow:
         # Generate final summary with enhanced optimization data
         state["final_summary"] = self._generate_optimized_summary(state, final_token_usage, optimization_metrics, enhanced_context_stats)
         
+        # Removed blackboard state storage for performance optimization
         # Store final state in blackboard
-        self.blackboard.store_workflow_state(state["workflow_id"], state)
+        # self.blackboard.store_workflow_state(state["workflow_id"], state)
         
         logger.info(f"Optimized workflow completed: {state['workflow_id']}")
         logger.info(f"Token usage: {final_token_usage.get('total_tokens', 0)} tokens")
